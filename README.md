@@ -5,7 +5,7 @@ across synchronized spatial and temporal views.
 
 ## Development
 
-Requires Node.js 22 or newer.
+Requires Node.js 22.12 or newer.
 
 ```bash
 npm install
