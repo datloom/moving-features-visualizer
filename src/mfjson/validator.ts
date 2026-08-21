@@ -224,24 +224,38 @@ const validateTemporalGeometry = (
     })
   }
 
-  const datetimes = validateDatetimes(
+  if (value.interpolation !== undefined && value.interpolation !== 'Linear') {
+    addIssue(context, {
+      path: `${path}.interpolation`,
+      code: 'unsupported_value',
+      message: 'Only Linear geometry interpolation is currently supported.',
+      expected: 'Linear',
+      actual: value.interpolation,
+    })
+  }
+
+  validateDatetimes(
     value.datetimes,
     `${path}.datetimes`,
     context,
   )
-  const coordinates = validateCoordinates(
+  validateCoordinates(
     value.coordinates,
     `${path}.coordinates`,
     context,
   )
 
-  if (datetimes && coordinates && datetimes.length !== coordinates.length) {
+  if (
+    isUnknownArray(value.datetimes) &&
+    isUnknownArray(value.coordinates) &&
+    value.datetimes.length !== value.coordinates.length
+  ) {
     addIssue(context, {
       path,
       code: 'count_mismatch',
       message: 'Temporal geometry must have one coordinate per datetime.',
-      expected: datetimes.length,
-      actual: coordinates.length,
+      expected: value.datetimes.length,
+      actual: value.coordinates.length,
     })
   }
 }
@@ -364,7 +378,7 @@ const validateTemporalProperties = (
       return
     }
 
-    const datetimes = validateDatetimes(
+    validateDatetimes(
       group.datetimes,
       `${groupPath}.datetimes`,
       context,
@@ -387,7 +401,7 @@ const validateTemporalProperties = (
       validatePropertyDefinition(
         definition,
         `${groupPath}.${name}`,
-        datetimes?.length,
+        isUnknownArray(group.datetimes) ? group.datetimes.length : undefined,
         context,
       ),
     )
