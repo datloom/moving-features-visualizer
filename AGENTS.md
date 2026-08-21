@@ -1,995 +1,352 @@
-# MF-JSON Visualizer — Development Instructions
+# Moving Features Visualizer - AGENTS.md
 
 ## 1. Project Overview
 
-This project is a web application for visualizing **OGC Moving Features JSON (MF-JSON)**.
+This project is a web application for visualizing OGC Moving Features JSON (MF-JSON).
 
-The application visualizes both:
+The application combines:
 
-- spatial movement over time
-- temporal properties associated with moving objects
+- temporal geometry
+- moving objects and trajectories
+- temporal properties such as speed, temperature, and status
+- a shared application timeline
+- synchronized spatial and temporal visualization
 
-Typical moving objects include:
-
-- people
-- vehicles
-- ships
-- aircraft
-- robots
-- IoT devices
-- mobile sensors
-
-The application should allow users to explore:
-
-```text
-WHERE
-Spatial position
-
-WHEN
-Time
-
-WHAT
-Temporal properties
-```
-
-Examples of temporal properties:
-
-- speed
-- acceleration
-- temperature
-- status
-- sensor values
-- categorical state
-
-The core objective is to build a reusable **spatiotemporal visualization platform**, not merely a trajectory viewer.
-
----
-
-# 2. Primary Technology Stack
-
-Use the following stack unless there is a strong technical reason not to.
-
-## Frontend
+Primary stack:
 
 - React
 - TypeScript
 - Vite
-
-## Spatial Visualization
-
 - CesiumJS
-
-## Temporal Visualization
-
 - Apache ECharts
-
-## State Management
-
 - Zustand
-
-## Validation
-
-Preferred:
-
 - Zod
-
-or:
-
-- JSON Schema
-- Ajv
-
-## Testing
-
 - Vitest
-- React Testing Library
 - Playwright
-
-## Code Quality
-
 - ESLint
 - Prettier
 
-Do not introduce additional major frameworks without justification.
+The product should become a reusable spatiotemporal visualization platform, not merely a trajectory viewer.
 
----
+## 2. Core Architecture
 
-# 3. Architecture
-
-The application must follow this architecture.
+Preserve this separation:
 
 ```text
-MF-JSON
-   │
-   ▼
+Raw MF-JSON
+    |
+    v
 Validator
-   │
-   ▼
-Parser
-   │
-   ▼
-Normalizer
-   │
-   ▼
+    |
+    v
+Parser / Normalizer
+    |
+    v
 Normalized MovingFeature Model
-   │
-   ├───────────────┐
-   │               │
-   ▼               ▼
-Cesium Adapter   ECharts Adapter
-   │               │
-   ▼               ▼
-Map View       Temporal Charts
-        │
-        ▼
-   Time Controller
+    |
+    +------------------+
+    |                  |
+    v                  v
+Cesium Adapter     ECharts Adapter
+    |                  |
+    v                  v
+Spatial View       Temporal View
+        \            /
+         \          /
+          Time Store
 ```
 
-The most important architectural principle is:
+### Non-negotiable architecture rules
 
-> MF-JSON parsing, visualization libraries, and React UI must remain separated.
+1. Never parse raw MF-JSON inside React components.
+2. Do not import Cesium from `src/mfjson/*`.
+3. Do not import ECharts from `src/mfjson/*`.
+4. Do not use Cesium types as the application domain model.
+5. Do not synchronize geometry and temporal properties by array index.
+6. Resolve geometry and temporal-property values by timestamp.
+7. Use one shared application time source.
+8. Do not recreate the Cesium Viewer for normal state updates.
+9. Do not rebuild chart data merely to move a current-time indicator.
+10. Avoid `any`; validate `unknown` input before use.
 
----
+## 3. Domain Model Expectations
 
-# 4. Architecture Rules
+The normalized model must remain visualization-library independent.
 
-## Rule 1 — Never parse MF-JSON inside React components
+At minimum support:
 
-Bad:
+- MovingFeature
+- TemporalGeometry
+- MovingPoint
+- PositionSample
+- TemporalProperty
+- TemporalPropertySample
 
-```typescript
-const speed =
-  data.temporalProperties[0].speed.values;
-```
+Use numeric application timestamps such as Unix epoch milliseconds internally.
 
-Good:
+Preserve interpolation metadata.
 
-```typescript
-const speed =
-  feature.getTemporalProperty("speed");
-```
-
-Raw MF-JSON must first pass through:
-
-```text
-validation
-→ parsing
-→ normalization
-```
-
----
-
-## Rule 2 — The domain model must not depend on Cesium
-
-Do not store objects such as:
-
-```typescript
-Cesium.Cartesian3
-Cesium.JulianDate
-Cesium.SampledPositionProperty
-```
-
-inside the application domain model.
-
-Use plain application types.
-
-Example:
-
-```typescript
-interface PositionSample {
-  time: number;
-  longitude: number;
-  latitude: number;
-  height?: number;
-}
-```
-
-Convert to Cesium objects only inside the Cesium adapter.
-
----
-
-## Rule 3 — The domain model must not depend on ECharts
-
-Do not store:
-
-```typescript
-EChartsOption
-SeriesOption
-```
-
-inside MF-JSON parser or model code.
-
-Chart options are generated only inside visualization adapters or chart renderers.
-
----
-
-## Rule 4 — Use one global application time
-
-Cesium, charts, property panels, and timeline controls must share one logical time.
-
-```text
-currentTime
-     │
- ┌───┼─────────────┐
- ▼   ▼             ▼
-Map Chart     Property Panel
-```
-
-Do not maintain independent time states for each component.
-
----
-
-## Rule 5 — Do not synchronize geometry and properties by array index
-
-The following assumption is invalid:
-
-```text
-temporalGeometry[5]
-=
-temporalProperties[5]
-```
-
-Temporal geometry and temporal properties can have different sampling timestamps.
-
-Always resolve values using timestamps.
-
-Correct concept:
-
-```text
-currentTime
-   │
-   ├─ lookup/interpolate geometry
-   │
-   └─ lookup/interpolate temporal property
-```
-
----
-
-## Rule 6 — Preserve interpolation semantics
-
-Geometry interpolation and temporal property interpolation are not identical concepts.
-
-Support the MF-JSON interpolation metadata.
-
-Initial implementation should support:
-
-### Geometry
+Initial geometry interpolation:
 
 - Linear
 
-### Measure property
+Initial temporal-property support:
 
-- Discrete
-- Step
-- Linear
+- Measure: Discrete, Step, Linear
+- Text: Discrete, Step
 
-### Text property
+Future-friendly design should allow additional geometry and property types.
 
-- Discrete
-- Step
+## 4. Project Structure
 
-Design interfaces so additional interpolation strategies can be added later.
-
----
-
-# 5. MF-JSON Input
-
-The application should initially support:
-
-```text
-Feature
-FeatureCollection
-```
-
-The primary geometry type for Phase 1 is:
-
-```text
-MovingPoint
-```
-
-The implementation should be designed so future geometry types can be added:
-
-```text
-MovingLineString
-MovingPolygon
-```
-
-Do not tightly couple the complete application to `MovingPoint`.
-
----
-
-# 6. MF-JSON Compatibility
-
-Different generations of MF-JSON examples may contain slightly different structures.
-
-For example, input data may use:
-
-```json
-{
-  "type": "Feature"
-}
-```
-
-while older data may contain structures such as:
-
-```json
-{
-  "type": "MovingFeature"
-}
-```
-
-Do not scatter compatibility checks throughout the application.
-
-Create an adapter/normalization layer.
-
-Example:
-
-```text
-Raw Input
-   │
-   ▼
-MFJsonParser
-   │
-   ▼
-MFJsonNormalizer
-   │
-   ▼
-NormalizedMovingFeature
-```
-
-Compatibility handling must remain inside the MF-JSON core module.
-
----
-
-# 7. Recommended Domain Model
-
-Use plain TypeScript models.
-
-Example:
-
-```typescript
-export interface MovingFeature {
-  id: string;
-
-  staticProperties: Record<string, unknown>;
-
-  geometry: TemporalGeometry;
-
-  temporalProperties: TemporalProperty[];
-}
-
-export interface TemporalGeometry {
-  type: "MovingPoint";
-
-  samples: PositionSample[];
-
-  interpolation: GeometryInterpolation;
-}
-
-export interface PositionSample {
-  time: number;
-
-  longitude: number;
-
-  latitude: number;
-
-  height?: number;
-}
-
-export type GeometryInterpolation =
-  | "Linear";
-
-export interface TemporalProperty {
-  name: string;
-
-  type: TemporalPropertyType;
-
-  unit?: string;
-
-  interpolation: PropertyInterpolation;
-
-  samples: TemporalPropertySample[];
-}
-
-export type TemporalPropertyType =
-  | "Measure"
-  | "Text"
-  | "Image";
-
-export type PropertyInterpolation =
-  | "Discrete"
-  | "Step"
-  | "Linear"
-  | "Regression";
-
-export interface TemporalPropertySample {
-  time: number;
-
-  value:
-    | number
-    | string
-    | boolean
-    | null;
-}
-```
-
-These types may evolve, but their responsibilities must remain library-independent.
-
----
-
-# 8. Source Directory Structure
-
-Use approximately the following structure.
+Prefer approximately:
 
 ```text
 src/
-│
 ├── components/
-│   │
 │   ├── map/
-│   │   ├── CesiumViewer.tsx
-│   │   ├── MovingFeatureEntity.tsx
-│   │   └── TrajectoryRenderer.ts
-│   │
 │   ├── chart/
-│   │   ├── TemporalChart.tsx
-│   │   ├── MeasureChart.tsx
-│   │   └── StateTimeline.tsx
-│   │
 │   ├── timeline/
-│   │   ├── Timeline.tsx
-│   │   ├── PlayerControls.tsx
-│   │   └── PlaybackSpeed.tsx
-│   │
 │   └── feature/
-│       ├── FeatureList.tsx
-│       └── FeatureInfo.tsx
-│
 ├── mfjson/
 │   ├── parser.ts
 │   ├── validator.ts
 │   ├── normalizer.ts
 │   ├── interpolation.ts
 │   └── types.ts
-│
 ├── visualization/
-│   │
 │   ├── cesium/
-│   │   ├── CesiumAdapter.ts
-│   │   └── positionConverter.ts
-│   │
 │   └── chart/
-│       ├── EChartsAdapter.ts
-│       └── PropertyRenderer.ts
-│
 ├── store/
-│   ├── timeStore.ts
-│   ├── featureStore.ts
-│   └── visualizationStore.ts
-│
 ├── services/
-│   ├── FileDataSource.ts
-│   └── HttpDataSource.ts
-│
 ├── utils/
-│   ├── time.ts
-│   └── coordinate.ts
-│
 ├── App.tsx
 └── main.tsx
 ```
 
-This structure may be refined when necessary.
+Keep modules small and explicit. Avoid giant generic utility files and giant React components.
 
-Avoid putting unrelated logic into large generic utility files.
+## 5. Application Time
 
----
+The application Time Store is the source of truth.
 
-# 9. Time Store
+It should contain at least:
 
-The application time state is central to the system.
+- startTime
+- endTime
+- currentTime
+- playing
+- playbackRate
 
-Implement approximately:
+All of the following must synchronize through this store:
 
-```typescript
-interface TimeState {
-  startTime: number;
+- Cesium position
+- trajectory time context
+- ECharts current-time marker
+- current temporal-property values
+- timeline controls
 
-  endTime: number;
+Cesium Clock may be used as an adapter detail but must not become a competing source of truth.
 
-  currentTime: number;
+## 6. UI/UX Skill Requirement
 
-  playing: boolean;
-
-  playbackRate: number;
-
-  setCurrentTime(time: number): void;
-
-  setRange(
-    startTime: number,
-    endTime: number
-  ): void;
-
-  setPlaybackRate(rate: number): void;
-
-  play(): void;
-
-  pause(): void;
-}
-```
-
-The Time Store must be usable without Cesium.
-
-Cesium may subscribe to this state.
-
-Charts may subscribe to this state.
-
----
-
-# 10. Cesium Requirements
-
-Convert normalized `MovingPoint` samples to a Cesium representation through an adapter.
-
-Use:
+For Task 14 and any significant UI design, redesign, or polish work, use the repository skill:
 
 ```text
-SampledPositionProperty
+$mf-visualizer-ui
 ```
 
-for time-based positions.
-
-Use:
+The skill should live at:
 
 ```text
-PathGraphics
+.agents/skills/mf-visualizer-ui/
 ```
 
-or equivalent Entity properties to show trajectories.
+Read its `SKILL.md` and referenced design/QA documents before major UI changes.
 
-Do not construct Cesium entities inside the MF-JSON parser.
+If the OpenAI `Build Web Apps` plugin and `frontend-app-builder` skill are available, use `frontend-app-builder` for concept-first visual design and browser-fidelity workflow, while treating `$mf-visualizer-ui` as the project-specific constraints.
 
-Initial map features:
+For significant React component work, apply React best practices when that skill is available.
 
-- show trajectory
-- show current moving object
-- animate object over time
-- allow feature selection
-- zoom to loaded features
+## 7. UI Product Direction
 
-Future compatibility should allow:
+This is a professional geospatial analysis application, not a generic SaaS dashboard.
 
-- billboard
-- point
-- 3D model
-- camera tracking
-- property-driven styling
+The visual hierarchy must be:
 
----
+1. Cesium map and current moving feature
+2. current time and playback state
+3. selected feature context
+4. temporal-property charts
+5. feature explorer and secondary tools
 
-# 11. Temporal Property Visualization
+The map should occupy the majority of the useful desktop workspace.
 
-Implement property visualization according to property type.
-
-## Measure
-
-Examples:
+Prefer a compact workspace layout:
 
 ```text
-speed
-temperature
-acceleration
++-------------------------------------------------------------+
+| Header / dataset / primary actions                          |
++-------------+-----------------------------------------------+
+| Feature     |                                               |
+| Explorer    |               Cesium Map                      |
+|             |                                               |
+|             |                                   Map tools   |
++-------------+-----------------------------------------------+
+| Temporal property panel / charts                            |
++-------------------------------------------------------------+
+| Playback controls + shared timeline                         |
++-------------------------------------------------------------+
 ```
 
-Recommended renderer:
+## 8. UI Technology Direction
 
-```text
-line chart
-scatter chart
-step line
-```
+When suitable and already configured, prefer:
 
-depending on interpolation.
+- Tailwind CSS for layout and design tokens
+- shadcn/ui for conventional UI primitives
+- Lucide for icons
+- Motion only for restrained, meaningful transitions
 
----
+Do not introduce another broad component framework without a clear reason.
 
-## Text
+Use shadcn primitives as building blocks, not as an excuse to turn every region into a card.
 
-Examples:
-
-```text
-STOPPED
-MOVING
-IDLE
-ERROR
-```
-
-Render as a categorical state timeline.
-
-Do not convert text states into artificial numeric line charts.
-
----
-
-## Image
-
-Not required for MVP.
-
-However, architecture must allow a future image timeline renderer.
-
----
-
-# 12. Property Renderer Architecture
-
-Use strategy/factory style architecture.
-
-Example:
-
-```typescript
-interface PropertyRenderer {
-  supports(
-    property: TemporalProperty
-  ): boolean;
-
-  createOption(
-    property: TemporalProperty
-  ): unknown;
-}
-```
-
-Possible implementations:
-
-```text
-MeasurePropertyRenderer
-
-TextPropertyRenderer
-
-ImagePropertyRenderer
-```
-
-Do not implement all property rendering in one large conditional component.
-
----
-
-# 13. Input Sources
-
-Phase 1 must support:
-
-```text
-local JSON file
-
-HTTP URL/API
-```
-
-Create a data source abstraction.
-
-Example:
-
-```typescript
-interface MovingFeatureDataSource {
-  load(): Promise<unknown>;
-}
-```
-
-Implement:
-
-```text
-FileDataSource
-
-HttpDataSource
-```
-
-This architecture should eventually allow:
-
-```text
-OGC API - Moving Features
-streaming source
-paginated source
-```
-
----
-
-# 14. Error Handling
-
-Validation errors must provide useful information.
-
-Bad:
-
-```text
-Invalid JSON
-```
-
-Preferred:
-
-```text
-MF-JSON Validation Error
-
-Feature:
-vehicle-001
-
-Path:
-temporalGeometry.coordinates
-
-Problem:
-coordinates count does not match datetimes count.
-
-datetimes:
-125
-
-coordinates:
-124
-```
-
-Errors should provide, when possible:
-
-- feature ID
-- JSON path
-- error code
-- human-readable message
-- expected value
-- actual value
-
----
-
-# 15. Performance Rules
-
-Do not repeatedly parse MF-JSON during animation.
-
-Wrong:
-
-```text
-animation frame
-→ parse JSON
-→ create normalized model
-→ render
-```
-
-Correct:
-
-```text
-load
-
-→ validate
-
-→ parse
-
-→ normalize
-
-→ cache
-
-→ render many times
-```
-
-During animation, only application state such as `currentTime` should normally change.
-
-Avoid creating a new complete trajectory object every animation frame.
-
----
-
-# 16. React Performance
-
-Do not use React state for every Cesium rendering detail.
-
-Cesium is an imperative rendering engine.
-
-React should manage:
-
-- application state
-- UI
-- feature selection
-- time controls
-- configuration
-
-Cesium should manage:
-
-- entities
-- visual primitives
-- camera
-- scene updates
-
-Avoid rebuilding the Cesium Viewer on React re-render.
-
----
-
-# 17. Test Requirements
-
-MF-JSON parser and normalizer are critical and require unit tests.
-
-Minimum test cases:
-
-```text
-valid MovingPoint
-
-invalid JSON
-
-missing temporalGeometry
-
-2D coordinate
-
-3D coordinate
-
-invalid datetime
-
-unordered datetime
-
-different coordinate/datetime lengths
-
-empty temporalProperties
-
-Measure property
-
-Text property
-
-missing interpolation
-
-Linear interpolation
-
-Step interpolation
-
-multiple properties
-
-multiple temporal property groups
-
-FeatureCollection
-```
-
-Tests must verify behavior, not implementation details.
-
----
-
-# 18. Phase 1 Scope
-
-Implement:
-
-- React + TypeScript + Vite application
-- Cesium initialization
-- ECharts initialization
-- MF-JSON validator
-- MF-JSON parser
-- MF-JSON normalizer
-- Feature input
-- FeatureCollection input
-- MovingPoint
-- 2D coordinate
-- 3D coordinate
-- Linear geometry interpolation
-- Measure temporal property
-- Text temporal property
-- trajectory visualization
-- moving object visualization
-- Play
-- Pause
-- seek
-- playback rate
-- map/chart time synchronization
-- feature selection
-- basic validation errors
-
-Do not implement unless required by foundational architecture:
-
-- MovingPolygon
-- MovingLineString
-- streaming
-- WebSocket
-- large-scale GPU optimization
-- deck.gl
-- authentication
-- database
-- backend service
-- advanced styling editor
-
----
-
-# 19. Definition of Done
-
-Phase 1 is considered complete when the following scenario works.
-
-Given an MF-JSON object containing:
-
-```text
-Vehicle A
-
-1000 position samples
-
-speed
-
-temperature
-
-status
-```
-
-the user can:
-
-1. load the MF-JSON file
-2. see the vehicle trajectory
-3. see the current vehicle position
-4. press Play
-5. see the vehicle move
-6. inspect speed on a chart
-7. inspect temperature on a chart
-8. inspect status over time
-9. seek to a different time
-10. see map and charts immediately synchronize
-11. select a moving feature
-12. see useful validation errors for invalid input
-
----
-
-# 20. Coding Style
+## 9. UI Design Rules
 
 Prefer:
 
-- small modules
-- explicit types
-- pure functions for parsing
-- immutable normalized input data
-- interfaces around external libraries
-- meaningful names
+- restrained dark/dark-neutral technical theme
+- strong typography hierarchy
+- subtle borders
+- compact controls
+- consistent spacing
+- semantic design tokens
+- limited accent colors
+- clear current/selected states
+- readable overlays on top of map imagery
 
 Avoid:
 
-- `any`
-- giant React components
-- global mutable objects
-- parsing inside rendering components
-- duplicated date conversion logic
-- duplicated interpolation logic
-- hardcoded property names such as `"speed"`
-- tightly coupled Cesium/MF-JSON code
+- generic admin dashboard templates
+- card soup
+- excessive rounded rectangles
+- excessive badges/pills
+- decorative purple/blue gradients
+- glassmorphism everywhere
+- oversized marketing headings
+- emoji icons
+- random component-specific colors
+- unnecessary animation
 
-When `unknown` input enters the application, validate and narrow it before use.
+## 10. Cesium UI Rules
 
----
+The map is an analytical canvas.
 
-# 21. Git Workflow
+Map overlays must:
 
-Use small commits.
+- use minimal screen area
+- remain readable over bright and dark basemaps
+- use controlled background opacity
+- expose accessible labels/tooltips for icon-only controls
+- avoid covering selected moving features where practical
 
-Recommended commit examples:
+Keep DOM UI concerns separated from Cesium rendering concerns.
 
-```text
-feat: initialize React and Cesium application
+## 11. Temporal Visualization Rules
 
-feat: add MF-JSON domain types
+Charts must:
 
-feat: implement MovingPoint parser
+- share application currentTime
+- show an obvious current-time indicator
+- use consistent temporal formatting
+- show units where appropriate
+- distinguish current/selected values clearly
+- preserve interpolation semantics
+- render Text properties as categorical/state timelines, not arbitrary numeric lines
 
-feat: add MF-JSON validation
+Charts should support spatial interpretation, not visually compete with the map.
 
-feat: add normalized temporal properties
+## 12. Responsive Rules
 
-feat: render MovingPoint in Cesium
+Desktop is the primary workspace.
 
-feat: add application time store
+Desktop:
 
-feat: synchronize Cesium with time store
+- keep map, feature explorer, temporal panel, and playback accessible together where practical
+- allow panels to resize/collapse if implemented
 
-feat: add temporal measure chart
+Tablet/narrow:
 
-feat: add text state timeline
+- prioritize map + playback
+- move feature explorer into a drawer/sheet if needed
+- allow charts to use an expandable bottom region
 
-test: add MovingPoint parser tests
+Mobile:
+
+- preserve basic map inspection, feature selection, and playback
+- do not rely on hover
+- maintain practical touch targets
+
+## 13. Accessibility
+
+- Use semantic HTML for DOM controls.
+- Provide accessible names for icon-only buttons.
+- Keep keyboard focus visible.
+- Do not encode state using color alone.
+- Maintain sufficient contrast.
+- Respect reduced-motion preferences when practical.
+- Keep important current values available as text as well as graphics.
+
+## 14. Testing and Verification
+
+MF-JSON core tests must run without Cesium.
+
+Before completing a meaningful change, run relevant checks such as:
+
+```bash
+npm run lint
+npm run test
+npm run build
 ```
 
-Avoid combining unrelated changes in a single commit.
+For UI tasks, also perform browser/visual verification when the environment supports it.
 
----
+For Task 14 specifically, follow the `$mf-visualizer-ui` visual QA checklist.
 
-# 22. Development Priority
+Do not claim a check passed unless it was actually executed.
 
-When choosing between UI polish and architecture correctness, prioritize:
+## 15. Task 14 Definition of Done
+
+Task 14 is complete only when the initial application UI:
+
+- presents Cesium as the dominant workspace
+- provides a compact feature explorer
+- integrates temporal-property visualization
+- provides clear playback/timeline controls
+- uses a consistent design-token system
+- uses consistent iconography
+- handles selected/no-selection/loading/error states relevant to the implemented scope
+- behaves acceptably at desktop and narrow/tablet widths
+- has no obvious clipping, overlap, contrast, spacing, or alignment defects
+- preserves all architecture rules above
+- passes lint/tests/build relevant to the project
+- has been visually inspected and corrected
+
+## 16. Git and Scope Discipline
+
+Work only on the requested issue unless a prerequisite is genuinely required.
+
+Use small focused commits.
+
+For Task 14:
 
 ```text
-1. correct MF-JSON interpretation
+Issue:
+feat: create initial application UI
 
-2. normalized data model
-
-3. time synchronization
-
-4. testability
-
-5. visualization correctness
-
-6. performance
-
-7. UI polish
+Branch:
+feat/14-initial-ui
 ```
 
-The first implementation should be simple, readable, and extensible rather than visually elaborate.
+Do not opportunistically rewrite MF-JSON core logic while implementing UI.
