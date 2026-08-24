@@ -1,5 +1,11 @@
-import { useEffect, useRef } from 'react'
-import { Cartesian3, type Entity, Viewer } from 'cesium'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Cartesian3,
+  type Entity,
+  ImageryLayer,
+  OpenStreetMapImageryProvider,
+  Viewer,
+} from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 
 import type { MovingFeature } from '../../mfjson/types'
@@ -11,6 +17,7 @@ import {
 } from '../../visualization/cesium/adapters'
 
 const INITIAL_CAMERA = Cartesian3.fromDegrees(0, 20, 20_000_000)
+const OPEN_STREET_MAP_URL = 'https://tile.openstreetmap.org/'
 const EMPTY_FEATURES: readonly MovingFeature[] = []
 
 export interface CesiumMapProps {
@@ -25,14 +32,20 @@ export function CesiumMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const featureEntitiesRef = useRef<Entity[]>([])
+  const [imageryFailed, setImageryFailed] = useState(false)
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
+    const imageryProvider = new OpenStreetMapImageryProvider({
+      url: OPEN_STREET_MAP_URL,
+    })
+    const removeImageryErrorListener =
+      imageryProvider.errorEvent.addEventListener(() => setImageryFailed(true))
     const viewer = new Viewer(container, {
       animation: false,
-      baseLayer: false,
+      baseLayer: new ImageryLayer(imageryProvider),
       baseLayerPicker: false,
       fullscreenButton: false,
       geocoder: false,
@@ -55,6 +68,7 @@ export function CesiumMap({
     })
 
     return () => {
+      removeImageryErrorListener()
       unsubscribe()
       viewerRef.current = null
       if (!viewer.isDestroyed()) viewer.destroy()
@@ -98,11 +112,18 @@ export function CesiumMap({
   }, [focusRevision])
 
   return (
-    <div
-      aria-label="Moving features map"
-      className="cesium-map"
-      ref={containerRef}
-      role="application"
-    />
+    <>
+      <div
+        aria-label="Moving features map"
+        className="cesium-map"
+        ref={containerRef}
+        role="application"
+      />
+      {imageryFailed ? (
+        <div className="map-imagery-error" role="status">
+          OpenStreetMap imagery is temporarily unavailable.
+        </div>
+      ) : null}
+    </>
   )
 }

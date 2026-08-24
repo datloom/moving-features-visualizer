@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   add,
   destroy,
+  ImageryLayer,
+  imageryErrorListeners,
   movingFeatureToEntity,
+  osmImageryLayer,
+  OpenStreetMapImageryProvider,
+  removeImageryErrorListener,
   remove,
   setView,
   timestampToJulianDate,
@@ -15,6 +20,22 @@ const {
   const add = vi.fn((entity: unknown) => entity)
   const destroy = vi.fn()
   const isDestroyed = vi.fn(() => false)
+  const imageryErrorListeners: (() => void)[] = []
+  const removeImageryErrorListener = vi.fn()
+  const OpenStreetMapImageryProvider = vi.fn(function () {
+    return {
+      errorEvent: {
+        addEventListener: vi.fn((listener: () => void) => {
+          imageryErrorListeners.push(listener)
+          return removeImageryErrorListener
+        }),
+      },
+    }
+  })
+  const osmImageryLayer = { kind: 'osm-imagery-layer' }
+  const ImageryLayer = vi.fn(function () {
+    return osmImageryLayer
+  })
   const movingFeatureToEntity = vi.fn((feature: { id: string }) => ({
     id: feature.id,
   }))
@@ -36,7 +57,12 @@ const {
   return {
     add,
     destroy,
+    ImageryLayer,
+    imageryErrorListeners,
     movingFeatureToEntity,
+    osmImageryLayer,
+    OpenStreetMapImageryProvider,
+    removeImageryErrorListener,
     remove,
     setView,
     timestampToJulianDate,
@@ -47,6 +73,8 @@ const {
 
 vi.mock('cesium', () => ({
   Cartesian3: { fromDegrees: vi.fn(() => 'initial-camera') },
+  ImageryLayer,
+  OpenStreetMapImageryProvider,
   Viewer,
 }))
 
@@ -106,15 +134,35 @@ describe('CesiumMap', () => {
     expect(Viewer).toHaveBeenCalledTimes(1)
     expect(Viewer).toHaveBeenCalledWith(
       container.querySelector('.cesium-map'),
-      expect.objectContaining({ animation: false, timeline: false }),
+      expect.objectContaining({
+        animation: false,
+        baseLayer: osmImageryLayer,
+        timeline: false,
+      }),
     )
+    expect(OpenStreetMapImageryProvider).toHaveBeenCalledWith({
+      url: 'https://tile.openstreetmap.org/',
+    })
+    expect(ImageryLayer).toHaveBeenCalledTimes(1)
     expect(setView).toHaveBeenCalledWith({ destination: 'initial-camera' })
 
     rerender(<CesiumMap />)
     expect(Viewer).toHaveBeenCalledTimes(1)
 
     unmount()
+    expect(removeImageryErrorListener).toHaveBeenCalledTimes(1)
     expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports OpenStreetMap imagery loading failures without removing the map', () => {
+    const { container } = render(<CesiumMap />)
+
+    act(() => imageryErrorListeners.at(-1)?.())
+
+    expect(container.querySelector('.cesium-map')).toBeInTheDocument()
+    expect(container.querySelector('.map-imagery-error')).toHaveTextContent(
+      'OpenStreetMap imagery is temporarily unavailable.',
+    )
   })
 
   it('cleans up each Viewer created during React Strict Mode checks', () => {

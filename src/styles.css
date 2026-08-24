@@ -395,6 +395,16 @@ select {
   background: rgb(4 8 10 / 70%);
   font-size: 0.55rem;
 }
+.map-imagery-error {
+  position: absolute;
+  right: 14px;
+  bottom: 30px;
+  padding: 6px 9px;
+  border: 1px solid var(--destructive);
+  color: var(--foreground);
+  background: rgb(38 23 25 / 92%);
+  font-size: 0.65rem;
+}
 .temporal-panel {
   display: grid;
   grid-template-rows: 38px minmax(0, 1fr);
