@@ -7,6 +7,11 @@ const file = (name: string, contents: string): File =>
   ({ name, text: vi.fn().mockResolvedValue(contents) }) as unknown as File
 
 describe('FileDataSource', () => {
+  it('identifies itself as a complete local-file source', () => {
+    expect(new FileDataSource(new File(['{}'], 'route.json')).origin).toEqual({
+      type: 'file',
+    })
+  })
   it.each(['dataset.json', 'dataset.mfjson', 'DATASET.MFJSON'])(
     'parses supported file %s as unknown JSON',
     async (name) => {

@@ -395,24 +395,72 @@ select {
   font-family: ui-monospace, monospace;
   font-size: 0.62rem;
 }
-.selected-feature-overlay dl {
+.selected-feature-overlay > dl {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   margin: 11px 0 0;
 }
-.selected-feature-overlay dt {
+.selected-feature-overlay > dl dt {
   color: var(--muted);
   font-size: 0.56rem;
   text-transform: uppercase;
 }
-.selected-feature-overlay dd {
+.selected-feature-overlay > dl dd {
   margin: 3px 0 0;
   overflow: hidden;
   font-size: 0.63rem;
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.feature-temporal-status {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+.feature-temporal-status > strong {
+  font-size: 0.61rem;
+  text-transform: uppercase;
+}
+.feature-temporal-status dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+}
+.feature-temporal-status dt {
+  color: var(--muted);
+  font-size: 0.55rem;
+}
+.feature-temporal-status dd {
+  margin: 2px 0 0;
+  font-size: 0.61rem;
+  font-variant-numeric: tabular-nums;
+}
+.feature-temporal-status button {
+  min-height: 29px;
+  border: 1px solid var(--primary);
+  border-radius: 2px;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.feature-temporal-status button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.feature-temporal-status > span {
+  color: var(--success);
+  font-size: 0.59rem;
+}
+.feature-temporal-status p {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 0.58rem;
 }
 .map-toolbar {
   position: absolute;

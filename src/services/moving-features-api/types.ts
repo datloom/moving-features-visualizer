@@ -18,6 +18,7 @@ export interface FeatureQueryOptions {
 
 export interface ChildResourceQueryOptions {
   readonly limit?: number
+  readonly offset?: number
   readonly datetime?: DateTimeInterval
 }
 
@@ -74,11 +75,36 @@ export interface TemporalGeometrySequenceResponse {
   readonly type: 'TemporalGeometrySequence'
   readonly geometrySequence: readonly unknown[]
   readonly links?: readonly ApiLink[]
+  readonly numberMatched?: number
+  readonly numberReturned?: number
 }
 
 export interface TemporalPropertiesResponse {
   readonly temporalProperties: readonly unknown[]
   readonly links?: readonly ApiLink[]
+  readonly numberMatched?: number
+  readonly numberReturned?: number
+}
+
+export interface TemporalResourcePaginationSeed {
+  readonly offset: number
+  readonly limit: number
+  readonly numberMatched?: number
+  readonly numberReturned?: number
+  readonly next?: ApiLink
+  readonly hasMore: boolean
+  readonly error?: string
+}
+
+export interface FeatureTemporalPaginationSeed {
+  readonly featureId: string
+  readonly metadata: FeatureMetadata
+  readonly datetime: DateTimeInterval
+  readonly normalizationGeometry: unknown
+  readonly geometryKeys: readonly string[]
+  readonly propertyGroupKeys: readonly string[]
+  readonly geometry: TemporalResourcePaginationSeed
+  readonly properties: TemporalResourcePaginationSeed
 }
 
 export type FeatureLoadFailureStage =
@@ -102,4 +128,5 @@ export interface CollectionLoadResult {
   readonly features: readonly unknown[]
   readonly failures: readonly FeatureLoadFailure[]
   readonly pagination: PaginationMetadata
+  readonly temporalPagination?: readonly FeatureTemporalPaginationSeed[]
 }

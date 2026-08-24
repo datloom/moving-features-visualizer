@@ -61,20 +61,16 @@ export const createFeatureComparisonSeries = (
 ): readonly MeasureComparisonSeries[] =>
   features.flatMap((feature) => {
     if (!selectedFeatureIds.has(feature.id)) return []
-    const property = getMeasurePropertiesForFeature(feature).find(
-      (candidate) => candidate.name === propertyName,
-    )
-    if (!property) return []
-    return [
-      {
-        id: `feature:${feature.id}:${propertyName}`,
+    return getMeasurePropertiesForFeature(feature)
+      .filter((candidate) => candidate.name === propertyName)
+      .map((property, segmentIndex) => ({
+        id: `feature:${feature.id}:${propertyName}:${segmentIndex}`,
         label: feature.id,
         featureId: feature.id,
         propertyName,
         property,
         focused: feature.id === focusedFeatureId,
-      },
-    ]
+      }))
   })
 
 export const createPropertyComparisonSeries = (
@@ -83,8 +79,8 @@ export const createPropertyComparisonSeries = (
 ): readonly MeasureComparisonSeries[] =>
   getMeasurePropertiesForFeature(feature)
     .filter((property) => selectedPropertyNames.has(property.name))
-    .map((property) => ({
-      id: `property:${feature.id}:${property.name}`,
+    .map((property, segmentIndex) => ({
+      id: `property:${feature.id}:${property.name}:${segmentIndex}`,
       label: property.name,
       featureId: feature.id,
       propertyName: property.name,

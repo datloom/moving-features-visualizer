@@ -40,6 +40,16 @@ export function TemporalPropertiesPanel({
     () => getMeasurePropertiesForFeature(selectedFeature),
     [selectedFeature],
   )
+  const logicalMeasureProperties = useMemo(
+    () =>
+      measureProperties.filter(
+        (property, index) =>
+          measureProperties.findIndex(
+            (candidate) => candidate.name === property.name,
+          ) === index,
+      ),
+    [measureProperties],
+  )
   const [selectedPropertyNames, setSelectedPropertyNames] = useState<
     Set<string>
   >(() => new Set(measureProperties[0] ? [measureProperties[0].name] : []))
@@ -67,8 +77,8 @@ export function TemporalPropertiesPanel({
   }, [eligibleFeatureIds, selectedFeatureId])
 
   const measurePropertyNames = useMemo(
-    () => measureProperties.map((property) => property.name),
-    [measureProperties],
+    () => logicalMeasureProperties.map((property) => property.name),
+    [logicalMeasureProperties],
   )
   useEffect(() => {
     setSelectedPropertyNames((current) =>
@@ -219,7 +229,7 @@ export function TemporalPropertiesPanel({
               </p>
               <fieldset className="comparison-checklist">
                 <legend>Properties</legend>
-                {measureProperties.map((property) => (
+                {logicalMeasureProperties.map((property) => (
                   <label key={property.name} title={property.name}>
                     <input
                       checked={selectedPropertyNames.has(property.name)}

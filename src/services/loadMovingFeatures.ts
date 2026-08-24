@@ -2,6 +2,7 @@ import { normalizeMovingFeature } from '../mfjson/normalizer'
 import type { MovingFeature } from '../mfjson/types'
 import { validateMfJson, type ValidationIssue } from '../mfjson/validator'
 import { useFeatureStore } from '../store/featureStore'
+import { useFeatureTemporalPaginationStore } from '../store/featureTemporalPaginationStore'
 import { useTimeStore } from '../store/timeStore'
 import {
   MovingFeatureDataSourceError,
@@ -134,6 +135,7 @@ export const loadMovingFeatures = async (
         .setRange(combinedRange.startTime, combinedRange.endTime)
     }
   } else {
+    useFeatureTemporalPaginationStore.getState().clear()
     useFeatureStore.getState().replaceFeatures(features)
     const timeStore = useTimeStore.getState()
     timeStore.pause()

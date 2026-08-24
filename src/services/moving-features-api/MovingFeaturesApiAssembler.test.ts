@@ -57,6 +57,9 @@ describe('MovingFeaturesApiAssembler', () => {
       getTemporalGeometry: vi.fn().mockResolvedValue({
         type: 'TemporalGeometrySequence',
         geometrySequence: [segment(), segment(2)],
+        numberMatched: 5,
+        numberReturned: 2,
+        links: [{ rel: 'next', href: '/geometry-next' }],
       }),
       getTemporalProperties: vi.fn().mockResolvedValue({
         temporalProperties: [
@@ -75,6 +78,8 @@ describe('MovingFeaturesApiAssembler', () => {
             },
           },
         ],
+        numberMatched: 3,
+        numberReturned: 2,
       }),
     })
     const result = await new MovingFeaturesApiAssembler(api).loadCollection(
@@ -96,6 +101,12 @@ describe('MovingFeaturesApiAssembler', () => {
       numberMatched: 2,
       numberReturned: 1,
     })
+    expect(result.temporalPagination?.[0]).toMatchObject({
+      featureId: 'one',
+      geometry: { offset: 2, numberMatched: 5, hasMore: true },
+      properties: { offset: 2, numberMatched: 3, hasMore: true },
+      geometryKeys: ['id:tg-0', 'id:tg-2'],
+    })
     expect(mocks(api).getTemporalGeometry).toHaveBeenCalledWith(
       'routes',
       'one',
@@ -115,6 +126,30 @@ describe('MovingFeaturesApiAssembler', () => {
           end: metadata('one').time[1],
         },
       }),
+    )
+  })
+
+  it('intersects the collection datetime once and stores it for later pages', async () => {
+    const api = client()
+    const datetime = {
+      start: '2011-07-14T22:30:00Z',
+      end: '2011-07-14T23:00:00Z',
+    }
+    const result = await new MovingFeaturesApiAssembler(api).loadCollection(
+      'routes',
+      { limit: 10, datetime },
+    )
+
+    expect(result.temporalPagination?.[0]?.datetime).toEqual(datetime)
+    expect(mocks(api).getTemporalGeometry).toHaveBeenCalledWith(
+      'routes',
+      'one',
+      expect.objectContaining({ datetime }),
+    )
+    expect(mocks(api).getTemporalProperties).toHaveBeenCalledWith(
+      'routes',
+      'one',
+      expect.objectContaining({ datetime }),
     )
   })
 
@@ -155,6 +190,12 @@ describe('MovingFeaturesApiAssembler', () => {
         }),
       ]),
     )
+    expect(result.temporalPagination).toHaveLength(1)
+    expect(result.temporalPagination?.[0]?.properties).toMatchObject({
+      offset: 0,
+      hasMore: true,
+      error: 'properties failed',
+    })
   })
 
   it('does not exceed configured feature concurrency', async () => {

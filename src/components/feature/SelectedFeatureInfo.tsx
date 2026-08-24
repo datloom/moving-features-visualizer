@@ -1,4 +1,5 @@
 import type { MovingFeature } from '../../mfjson/types'
+import { FeatureTemporalDataStatus } from './FeatureTemporalDataStatus'
 
 const formatTime = (timestamp: number) =>
   new Date(timestamp).toISOString().slice(11, 19)
@@ -47,6 +48,7 @@ export function SelectedFeatureInfo({
           </dd>
         </div>
       </dl>
+      <FeatureTemporalDataStatus featureId={feature.id} />
     </section>
   )
 }

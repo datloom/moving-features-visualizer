@@ -246,6 +246,7 @@ describe('CesiumMap', () => {
     })
 
     add.mockClear()
+    zoomTo.mockClear()
     rerender(
       <CesiumMap
         features={[...loadedFeatures, { ...feature, id: 'vehicle-11' }]}
@@ -255,6 +256,28 @@ describe('CesiumMap', () => {
     expect(add).toHaveBeenCalledTimes(11)
     expect(add).toHaveBeenCalledWith({ id: 'vehicle-1' })
     expect(add).toHaveBeenCalledWith({ id: 'vehicle-11' })
+    expect(zoomTo).toHaveBeenCalledOnce()
+
+    zoomTo.mockClear()
+    rerender(
+      <CesiumMap
+        features={[
+          ...loadedFeatures,
+          {
+            ...feature,
+            id: 'vehicle-11',
+            temporalGeometry: {
+              segments: [
+                ...feature.temporalGeometry.segments,
+                feature.temporalGeometry.segments[0]!,
+              ],
+            },
+          },
+        ]}
+        selectedFeatureId="vehicle-2"
+      />,
+    )
+    expect(zoomTo).not.toHaveBeenCalled()
   })
 
   it('does not create duplicate entities for duplicate Feature IDs', () => {

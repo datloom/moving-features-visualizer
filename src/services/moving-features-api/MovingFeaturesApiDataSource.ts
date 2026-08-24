@@ -9,6 +9,10 @@ import type { CollectionLoadResult, FeatureQueryOptions } from './types'
 export class MovingFeaturesApiDataSource implements MovingFeatureDataSource {
   private result?: CollectionLoadResult
 
+  get origin() {
+    return { type: 'server' as const, collectionId: this.collectionId }
+  }
+
   constructor(
     client: MovingFeaturesApiClient,
     private readonly collectionId: string,

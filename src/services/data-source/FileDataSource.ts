@@ -13,6 +13,8 @@ const hasSupportedExtension = (filename: string): boolean => {
 }
 
 export class FileDataSource implements MovingFeatureDataSource {
+  readonly origin = { type: 'file' as const }
+
   constructor(private readonly file: File) {}
 
   async load(): Promise<unknown> {

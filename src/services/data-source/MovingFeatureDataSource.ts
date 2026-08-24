@@ -1,4 +1,7 @@
 export interface MovingFeatureDataSource {
+  readonly origin?:
+    | { readonly type: 'file' }
+    | { readonly type: 'server'; readonly collectionId: string }
   load(): Promise<unknown>
 }
 

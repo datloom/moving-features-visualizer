@@ -90,6 +90,21 @@ describe('Measure comparison transformations', () => {
     expect(series[1]?.property.samples[0]?.time).toBe(1_500)
   })
 
+  it('keeps repeated logical properties as separate gap-preserving series', () => {
+    const selected = feature('one', [
+      measure('speed', 'KMH', 'Linear'),
+      measure('speed', 'KMH', 'Linear', 10_000),
+    ])
+    const series = createPropertyComparisonSeries(selected, new Set(['speed']))
+
+    expect(series).toHaveLength(2)
+    expect(new Set(series.map(({ id }) => id)).size).toBe(2)
+    expect(series.map(({ label }) => label)).toEqual(['speed', 'speed'])
+    expect(series[0]?.property.samples.at(-1)?.time).toBeLessThan(
+      series[1]?.property.samples[0]?.time ?? 0,
+    )
+  })
+
   it('groups matching explicit units and separates incompatible units', () => {
     const selected = feature('one', [
       measure('speed', 'KMH'),

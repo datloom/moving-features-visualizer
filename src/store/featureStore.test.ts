@@ -56,4 +56,27 @@ describe('useFeatureStore', () => {
     expect(useFeatureStore.getState().features[0]).toBe(original)
     expect(useFeatureStore.getState().selectedFeatureId).toBe('two')
   })
+
+  it('appends temporal segments to one Feature and removes exact duplicates', () => {
+    const original = feature('one')
+    const geometry = original.temporalGeometry.segments[0]!
+    const property = {
+      type: 'Measure' as const,
+      name: 'speed',
+      interpolation: 'Linear' as const,
+      samples: [{ time: 2, value: 10 }],
+    }
+    useFeatureStore.getState().replaceFeatures([original, feature('two')])
+    useFeatureStore
+      .getState()
+      .appendTemporalData('one', [geometry, geometry], [property, property])
+
+    expect(useFeatureStore.getState().features).toHaveLength(2)
+    expect(
+      useFeatureStore.getState().features[0]?.temporalGeometry.segments,
+    ).toHaveLength(1)
+    expect(useFeatureStore.getState().features[0]?.temporalProperties).toEqual([
+      property,
+    ])
+  })
 })

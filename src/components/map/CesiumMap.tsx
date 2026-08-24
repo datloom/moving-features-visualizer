@@ -39,6 +39,7 @@ export function CesiumMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const featureEntitiesRef = useRef<Entity[]>([])
+  const renderedFeatureIdsRef = useRef('')
   const previousMapModeRef = useRef(mapMode)
   const [imageryFailed, setImageryFailed] = useState(false)
 
@@ -103,13 +104,16 @@ export function CesiumMap({
       }).map((entity) => viewer.entities.add(entity)),
     )
     featureEntitiesRef.current = entities
+    const featureIds = uniqueFeatures.map(({ id }) => id).join('\u0000')
+    const featureSetChanged = renderedFeatureIdsRef.current !== featureIds
+    renderedFeatureIdsRef.current = featureIds
 
     if (uniqueFeatures.length > 0) {
       const ranges = uniqueFeatures.map(getFeatureTimeRange)
       const startTime = Math.min(...ranges.map((range) => range.startTime))
       const endTime = Math.max(...ranges.map((range) => range.endTime))
       useTimeStore.getState().setRange(startTime, endTime)
-      void viewer.zoomTo(entities)
+      if (featureSetChanged) void viewer.zoomTo(entities)
     }
 
     return () => {

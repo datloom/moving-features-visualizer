@@ -8,6 +8,7 @@ import type {
 } from '../services/moving-features-api/types'
 import { loadMovingFeatures } from '../services/loadMovingFeatures'
 import { useFeatureStore } from './featureStore'
+import { useFeatureTemporalPaginationStore } from './featureTemporalPaginationStore'
 
 export interface ServerCollectionSession {
   readonly baseUrl: string
@@ -58,6 +59,14 @@ export const useServerCollectionStore = create<ServerCollectionState>(
     loadingMore: false,
     error: undefined,
     installSession: (base, result) => {
+      useFeatureTemporalPaginationStore
+        .getState()
+        .installFromCollection(
+          base.baseUrl,
+          base.collectionId,
+          result,
+          'replace',
+        )
       const returned = result.pagination.numberReturned ?? 0
       const serverPosition = returned
       const nextHref = nextLink(result)
@@ -79,8 +88,10 @@ export const useServerCollectionStore = create<ServerCollectionState>(
         },
       })
     },
-    clearSession: () =>
-      set({ session: undefined, loadingMore: false, error: undefined }),
+    clearSession: () => {
+      useFeatureTemporalPaginationStore.getState().clear()
+      set({ session: undefined, loadingMore: false, error: undefined })
+    },
     loadMore: async () => {
       const current = get()
       if (!current.session || current.loadingMore || !current.session.hasMore)
@@ -109,6 +120,14 @@ export const useServerCollectionStore = create<ServerCollectionState>(
         })
         return
       }
+      useFeatureTemporalPaginationStore
+        .getState()
+        .installFromCollection(
+          session.baseUrl,
+          session.collectionId,
+          result,
+          'append',
+        )
       const returned = result.pagination.numberReturned ?? 0
       const serverPosition = session.serverPosition + returned
       const nextHref = nextLink(result)

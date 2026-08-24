@@ -5,13 +5,24 @@ import {
   CHILD_RESOURCE_LIMIT,
   DEFAULT_FEATURE_CONCURRENCY,
   type CollectionLoadResult,
+  type DateTimeInterval,
   type FeatureLoadFailure,
   type FeatureMetadata,
   type FeatureQueryOptions,
+  type FeatureTemporalPaginationSeed,
+  type TemporalResourcePaginationSeed,
 } from './types'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const geometryKey = (value: unknown): string =>
+  isRecord(value) && typeof value.id === 'string'
+    ? `id:${value.id}`
+    : `content:${JSON.stringify(value)}`
+
+const propertyGroupKey = (value: unknown): string =>
+  `content:${JSON.stringify(value)}`
 
 const validateMetadata = (value: FeatureMetadata): string | undefined => {
   if (
@@ -36,6 +47,48 @@ const validateMetadata = (value: FeatureMetadata): string | undefined => {
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : 'Unknown feature loading error.'
 
+const effectiveDatetime = (
+  featureTime: FeatureMetadata['time'],
+  query: DateTimeInterval | undefined,
+): DateTimeInterval => {
+  const featureStart = featureTime[0].trim()
+  const featureEnd = featureTime[1].trim()
+  if (!query) return { start: featureStart, end: featureEnd }
+  const queryStart = query.start.trim()
+  const queryEnd = query.end.trim()
+  return {
+    start:
+      Date.parse(queryStart) > Date.parse(featureStart)
+        ? queryStart
+        : featureStart,
+    end: Date.parse(queryEnd) < Date.parse(featureEnd) ? queryEnd : featureEnd,
+  }
+}
+
+const resourcePagination = (
+  offset: number,
+  limit: number,
+  numberMatched: number | undefined,
+  numberReturned: number,
+  links: readonly { readonly href: string; readonly rel: string }[] | undefined,
+  error?: string,
+): TemporalResourcePaginationSeed => {
+  const next = links?.find((link) => link.rel === 'next')
+  const nextOffset = offset + numberReturned
+  return {
+    offset: nextOffset,
+    limit,
+    numberMatched,
+    numberReturned,
+    next,
+    hasMore:
+      error !== undefined ||
+      next !== undefined ||
+      (numberMatched !== undefined && nextOffset < numberMatched),
+    error,
+  }
+}
+
 export class MovingFeaturesApiAssembler {
   constructor(
     private readonly client: MovingFeaturesApiClient,
@@ -53,6 +106,9 @@ export class MovingFeaturesApiAssembler {
   ): Promise<CollectionLoadResult> {
     const items = await this.client.getFeatures(collectionId, options)
     const featureSlots: unknown[] = new Array(items.features.length)
+    const paginationSlots = Array.from<
+      FeatureTemporalPaginationSeed | undefined
+    >({ length: items.features.length })
     const failures: FeatureLoadFailure[] = []
     let cursor = 0
 
@@ -60,8 +116,14 @@ export class MovingFeaturesApiAssembler {
       while (cursor < items.features.length) {
         const index = cursor++
         const metadata = items.features[index]!
-        const result = await this.loadFeature(collectionId, metadata)
+        const result = await this.loadFeature(
+          collectionId,
+          metadata,
+          options.datetime,
+        )
         if (result.feature !== undefined) featureSlots[index] = result.feature
+        if (result.pagination !== undefined)
+          paginationSlots[index] = result.pagination
         failures.push(...result.failures)
       }
     }
@@ -87,15 +149,20 @@ export class MovingFeaturesApiAssembler {
           (items.numberMatched !== undefined &&
             items.numberMatched > numberReturned),
       },
+      temporalPagination: paginationSlots.filter(
+        (state): state is FeatureTemporalPaginationSeed => state !== undefined,
+      ),
     }
   }
 
   private async loadFeature(
     collectionId: string,
     metadata: FeatureMetadata,
+    collectionDatetime?: DateTimeInterval,
   ): Promise<{
     readonly feature?: unknown
     readonly failures: readonly FeatureLoadFailure[]
+    readonly pagination?: FeatureTemporalPaginationSeed
   }> {
     const metadataError = validateMetadata(metadata)
     if (metadataError) {
@@ -112,7 +179,7 @@ export class MovingFeaturesApiAssembler {
       }
     }
 
-    const datetime = { start: metadata.time[0], end: metadata.time[1] }
+    const datetime = effectiveDatetime(metadata.time, collectionDatetime)
     let temporalGeometry: Awaited<
       ReturnType<MovingFeaturesApiClient['getTemporalGeometry']>
     >
@@ -159,6 +226,10 @@ export class MovingFeaturesApiAssembler {
 
     const failures: FeatureLoadFailure[] = []
     let temporalProperties: readonly unknown[] = []
+    let propertiesResponse:
+      | Awaited<ReturnType<MovingFeaturesApiClient['getTemporalProperties']>>
+      | undefined
+    let propertiesError: string | undefined
     try {
       const response = await this.client.getTemporalProperties(
         collectionId,
@@ -174,12 +245,14 @@ export class MovingFeaturesApiAssembler {
           'Temporal properties response is missing temporalProperties.',
         )
       }
+      propertiesResponse = response
       temporalProperties = response.temporalProperties
     } catch (error) {
+      propertiesError = errorMessage(error)
       failures.push({
         featureId: metadata.id,
         stage: 'temporal-properties',
-        message: errorMessage(error),
+        message: propertiesError,
         retained: true,
       })
     }
@@ -209,6 +282,37 @@ export class MovingFeaturesApiAssembler {
       }
     }
 
-    return { feature: assembled, failures }
+    const geometryReturned =
+      temporalGeometry.numberReturned ??
+      temporalGeometry.geometrySequence.length
+    const propertiesReturned =
+      propertiesResponse?.numberReturned ?? temporalProperties.length
+    return {
+      feature: assembled,
+      failures,
+      pagination: {
+        featureId: metadata.id,
+        metadata,
+        datetime,
+        normalizationGeometry: temporalGeometry.geometrySequence[0],
+        geometryKeys: temporalGeometry.geometrySequence.map(geometryKey),
+        propertyGroupKeys: temporalProperties.map(propertyGroupKey),
+        geometry: resourcePagination(
+          0,
+          this.childResourceLimit,
+          temporalGeometry.numberMatched,
+          geometryReturned,
+          temporalGeometry.links,
+        ),
+        properties: resourcePagination(
+          0,
+          this.childResourceLimit,
+          propertiesResponse?.numberMatched,
+          propertiesReturned,
+          propertiesResponse?.links,
+          propertiesError,
+        ),
+      },
+    }
   }
 }

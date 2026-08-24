@@ -26,6 +26,12 @@ export const validateLimit = (limit: number): void => {
   }
 }
 
+const validateOffset = (offset: number): void => {
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new RangeError('Feature offset must be a non-negative integer.')
+  }
+}
+
 export const serializeDateTimeInterval = ({
   start,
   end,
@@ -72,6 +78,10 @@ export class MovingFeaturesApiClient {
         'datetime',
         serializeDateTimeInterval(options.datetime),
       )
+    }
+    if (options?.offset !== undefined) {
+      validateOffset(options.offset)
+      url.searchParams.set('offset', String(options.offset))
     }
     return url
   }
@@ -145,19 +155,10 @@ export class MovingFeaturesApiClient {
     options: FeatureQueryOptions,
   ): Promise<FeaturesResponse> {
     validateLimit(options.limit)
-    if (
-      options.offset !== undefined &&
-      (!Number.isInteger(options.offset) || options.offset < 0)
-    ) {
-      throw new RangeError('Feature offset must be a non-negative integer.')
-    }
     const url = this.createUrl(
       `/collections/${encodeURIComponent(collectionId)}/items`,
       options,
     )
-    if (options.offset !== undefined) {
-      url.searchParams.set('offset', String(options.offset))
-    }
     const response = await this.request<unknown>(url)
     if (
       !isRecord(response) ||
