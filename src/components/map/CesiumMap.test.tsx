@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { act, render } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -134,6 +134,9 @@ describe('CesiumMap', () => {
       endTime: 200,
       currentTime: 100,
     })
+
+    act(() => useTimeStore.getState().setCurrentTime(150))
+    expect(timestampToJulianDate).toHaveBeenLastCalledWith(150)
 
     rerender(<CesiumMap features={[]} />)
 
