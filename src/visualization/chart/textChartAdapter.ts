@@ -1,6 +1,10 @@
 import type { EChartsOption, SeriesOption } from 'echarts'
 
 import type { TextTemporalProperty } from '../../mfjson/types'
+import {
+  PROPERTY_COMPARISON_CATEGORY_LABEL,
+  PROPERTY_COMPARISON_GRID,
+} from './propertyComparisonLayout'
 
 const COLOR = '#f3b85b'
 
@@ -100,7 +104,7 @@ export const buildTextChartOption = (
 ): EChartsOption => ({
   animation: false,
   backgroundColor: 'transparent',
-  grid: { top: 16, right: 24, bottom: 50, left: 76 },
+  grid: PROPERTY_COMPARISON_GRID,
   tooltip: {
     trigger: 'item',
     formatter: (params: unknown) => {
@@ -121,7 +125,7 @@ export const buildTextChartOption = (
   yAxis: {
     type: 'category',
     data: [...getTextCategories(properties)],
-    axisLabel: { color: '#b8c3ca' },
+    axisLabel: { color: '#b8c3ca', ...PROPERTY_COMPARISON_CATEGORY_LABEL },
     axisLine: { lineStyle: { color: '#44515a' } },
     splitLine: { lineStyle: { color: '#263139' } },
   },

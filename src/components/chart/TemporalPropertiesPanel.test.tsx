@@ -86,7 +86,7 @@ describe('TemporalPropertiesPanel', () => {
     ])
     useFeatureStore.getState().replaceFeatures([imageOnly])
     render(<TemporalPropertiesPanel feature={imageOnly} />)
-    expect(screen.getByRole('checkbox', { name: 'state · Text' })).toBeChecked()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'state · Text' }))
     expect(screen.getByTestId('text-chart')).toHaveTextContent('state:1')
     expect(screen.queryByTestId('comparison-chart')).not.toBeInTheDocument()
   })
@@ -110,6 +110,7 @@ describe('TemporalPropertiesPanel', () => {
     useFeatureStore.getState().replaceFeatures([localFeature])
     render(<TemporalPropertiesPanel feature={localFeature} />)
 
+    fireEvent.click(screen.getByRole('checkbox', { name: 'status · Text' }))
     expect(screen.getByTestId('text-chart')).toHaveTextContent('status:2')
   })
 
@@ -126,5 +127,23 @@ describe('TemporalPropertiesPanel', () => {
     expect(screen.getByTestId('comparison-chart')).toHaveTextContent('speed')
     expect(screen.getByTestId('text-chart')).toHaveTextContent('status:1')
     expect(screen.queryByRole('button', { name: 'Text Timeline' })).toBeNull()
+  })
+
+  it('renders and removes a Text chart immediately from its checkbox', () => {
+    const mixed = featureWith('mixed', [
+      speed(),
+      { type: 'Text', name: 'status', interpolation: 'Step', samples: [] },
+    ])
+    useFeatureStore.getState().replaceFeatures([mixed])
+    render(<TemporalPropertiesPanel feature={mixed} />)
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'speed (KMH) · Measure' }),
+    )
+    fireEvent.click(screen.getByRole('checkbox', { name: 'status · Text' }))
+    expect(screen.getByTestId('text-chart')).toHaveTextContent('status:1')
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'status · Text' }))
+    expect(screen.queryByTestId('text-chart')).toBeNull()
   })
 })

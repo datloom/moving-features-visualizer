@@ -1,6 +1,7 @@
 import type { EChartsOption, SeriesOption } from 'echarts'
 
 import type { MeasureComparisonSeries } from './measureComparison'
+import { PROPERTY_COMPARISON_GRID } from './propertyComparisonLayout'
 
 const COLORS = [
   '#35d4c7',
@@ -66,7 +67,7 @@ export const buildMeasureComparisonChartOption = (
   animation: false,
   backgroundColor: 'transparent',
   color: COLORS,
-  grid: { top: 34, right: 24, bottom: 46, left: 56 },
+  grid: PROPERTY_COMPARISON_GRID,
   legend: {
     top: 0,
     type: 'scroll',

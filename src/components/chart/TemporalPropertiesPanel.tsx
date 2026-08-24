@@ -107,7 +107,7 @@ export function TemporalPropertiesPanel({
       reconcileSelection(
         current,
         logicalProperties.map((property) => property.key),
-        logicalProperties[0]?.key,
+        current.size > 0 ? logicalProperties[0]?.key : undefined,
       ),
     )
   }, [logicalProperties])
