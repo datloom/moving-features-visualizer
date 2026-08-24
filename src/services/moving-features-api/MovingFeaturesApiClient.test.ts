@@ -191,6 +191,26 @@ describe('MovingFeaturesApiClient', () => {
     ).rejects.toMatchObject({ kind: 'invalid-response' })
   })
 
+  it('validates refreshed Feature metadata used by source-derived ranges', async () => {
+    const valid = {
+      id: 'mf-1',
+      type: 'Feature',
+      time: ['2026-01-01T10:00:00Z', '2026-01-01T11:05:00Z'],
+    }
+    await expect(
+      new MovingFeaturesApiClient(
+        'http://localhost:5050',
+        vi.fn().mockResolvedValue(response(valid)),
+      ).getFeature('routes', 'mf-1'),
+    ).resolves.toEqual(valid)
+    await expect(
+      new MovingFeaturesApiClient(
+        'http://localhost:5050',
+        vi.fn().mockResolvedValue(response({ id: 'mf-1', type: 'Feature' })),
+      ).getFeature('routes', 'mf-1'),
+    ).rejects.toMatchObject({ kind: 'invalid-response' })
+  })
+
   it('classifies a lost fetch invocation context as a client error', async () => {
     const detachedFetch = vi
       .fn()

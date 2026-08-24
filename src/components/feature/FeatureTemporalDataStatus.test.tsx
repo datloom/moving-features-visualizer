@@ -21,6 +21,7 @@ const paginationResult: CollectionLoadResult = {
         start: '2026-01-01T10:00:00Z',
         end: '2026-01-01T11:00:00Z',
       },
+      queryRangeMode: 'fixed',
       normalizationGeometry: {},
       geometryKeys: [],
       propertyGroupKeys: [],
@@ -102,5 +103,74 @@ describe('FeatureTemporalDataStatus', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Properties: Properties offline.',
     )
+  })
+
+  it('keeps caught-up server cursors and exposes Check for New Data', () => {
+    const refresh = vi.fn().mockResolvedValue(undefined)
+    useFeatureTemporalPaginationStore
+      .getState()
+      .installFromCollection(
+        'http://localhost:5050',
+        'routes',
+        paginationResult,
+        'replace',
+      )
+    const current =
+      useFeatureTemporalPaginationStore.getState().features['server-feature']!
+    useFeatureTemporalPaginationStore.setState({
+      refresh,
+      features: {
+        'server-feature': {
+          ...current,
+          geometry: {
+            ...current.geometry,
+            offset: 35,
+            numberMatched: 35,
+            hasMore: false,
+          },
+          properties: {
+            ...current.properties,
+            offset: 12,
+            numberMatched: 12,
+            hasMore: false,
+          },
+        },
+      },
+    })
+    render(<FeatureTemporalDataStatus featureId="server-feature" />)
+
+    expect(screen.getByText('Up to date')).toBeInTheDocument()
+    expect(screen.getByText('35 / 35 loaded')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Check for New Data' }))
+    expect(refresh).toHaveBeenCalledWith('server-feature')
+  })
+
+  it('shows the checking state without removing existing progress', () => {
+    useFeatureTemporalPaginationStore
+      .getState()
+      .installFromCollection(
+        'http://localhost:5050',
+        'routes',
+        paginationResult,
+        'replace',
+      )
+    const current =
+      useFeatureTemporalPaginationStore.getState().features['server-feature']!
+    useFeatureTemporalPaginationStore.setState({
+      features: {
+        'server-feature': {
+          ...current,
+          refreshing: true,
+          geometry: { ...current.geometry, hasMore: false },
+          properties: { ...current.properties, hasMore: false },
+        },
+      },
+    })
+    render(<FeatureTemporalDataStatus featureId="server-feature" />)
+
+    expect(
+      screen.getByRole('button', { name: 'Checking for new data…' }),
+    ).toBeDisabled()
+    expect(screen.getByText('10 / 35 loaded')).toBeInTheDocument()
   })
 })

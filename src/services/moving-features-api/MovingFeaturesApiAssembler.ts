@@ -294,6 +294,7 @@ export class MovingFeaturesApiAssembler {
         featureId: metadata.id,
         metadata,
         datetime,
+        queryRangeMode: collectionDatetime ? 'fixed' : 'source-derived',
         normalizationGeometry: temporalGeometry.geometrySequence[0],
         geometryKeys: temporalGeometry.geometrySequence.map(geometryKey),
         propertyGroupKeys: temporalProperties.map(propertyGroupKey),

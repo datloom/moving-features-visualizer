@@ -9,6 +9,7 @@ import type {
   DateTimeInterval,
   FeatureMetadata,
   FeatureTemporalPaginationSeed,
+  TemporalQueryRangeMode,
 } from '../services/moving-features-api/types'
 import { getDatasetTimeRange } from '../services/datasetTimeRange'
 import { useFeatureStore } from './featureStore'
@@ -33,16 +34,21 @@ export interface FeatureTemporalPaginationState {
   readonly collectionId: string
   readonly queryKey: string
   readonly datetime: DateTimeInterval
+  readonly queryRangeMode: TemporalQueryRangeMode
   readonly metadata: FeatureMetadata
   readonly normalizationGeometry: unknown
   readonly geometryKeys: readonly string[]
   readonly propertyGroupKeys: readonly string[]
   readonly geometry: TemporalResourcePaginationState
   readonly properties: TemporalResourcePaginationState
+  readonly refreshing: boolean
+  readonly refreshError?: string
+  readonly lastRefreshResult?: 'new-data' | 'no-new-data'
 }
 
 interface FeatureTemporalPaginationStore {
   readonly features: Readonly<Record<string, FeatureTemporalPaginationState>>
+  readonly queryRevision: number
   installFromCollection: (
     baseUrl: string,
     collectionId: string,
@@ -51,13 +57,20 @@ interface FeatureTemporalPaginationStore {
   ) => void
   clear: () => void
   loadMore: (featureId: string) => Promise<void>
+  refresh: (featureId: string) => Promise<void>
+  requestResources: (
+    featureId: string,
+    suppliedInitial?: FeatureTemporalPaginationState,
+    suppliedResources?: readonly TemporalResourceKind[],
+  ) => Promise<void>
 }
 
 const queryKey = (
   baseUrl: string,
   collectionId: string,
   datetime: DateTimeInterval,
-) => `${baseUrl}|${collectionId}|${datetime.start}/${datetime.end}`
+  revision: number,
+) => `${revision}|${baseUrl}|${collectionId}|${datetime.start}/${datetime.end}`
 
 const resourceState = (
   seed: FeatureTemporalPaginationSeed['geometry'],
@@ -145,6 +158,23 @@ const validateCount = (
   return value
 }
 
+/** Offset refresh assumes stable ordering with records appended after the cursor. */
+const validateAppendOnlyPagination = (
+  previous: TemporalResourcePaginationState,
+  numberReturned: number,
+  numberMatched: number | undefined,
+): void => {
+  if (
+    numberMatched !== undefined &&
+    (numberMatched < previous.offset ||
+      numberMatched < previous.offset + numberReturned)
+  ) {
+    throw new Error(
+      'Server pagination became inconsistent with the consumed temporal cursor. Reload the collection query to recover.',
+    )
+  }
+}
+
 const nextResourceState = (
   previous: TemporalResourcePaginationState,
   numberReturned: number,
@@ -173,44 +203,164 @@ const errorMessage = (error: unknown) =>
 export const useFeatureTemporalPaginationStore =
   create<FeatureTemporalPaginationStore>((set, get) => ({
     features: {},
+    queryRevision: 0,
     installFromCollection: (baseUrl, collectionId, result, mode) =>
       set((state) => {
+        const queryRevision =
+          mode === 'replace' ? state.queryRevision + 1 : state.queryRevision
         const features = mode === 'replace' ? {} : { ...state.features }
         for (const seed of result.temporalPagination ?? []) {
           features[seed.featureId] = {
             featureId: seed.featureId,
             baseUrl,
             collectionId,
-            queryKey: queryKey(baseUrl, collectionId, seed.datetime),
+            queryKey: queryKey(
+              baseUrl,
+              collectionId,
+              seed.datetime,
+              queryRevision,
+            ),
             datetime: seed.datetime,
+            queryRangeMode: seed.queryRangeMode,
             metadata: seed.metadata,
             normalizationGeometry: seed.normalizationGeometry,
             geometryKeys: seed.geometryKeys,
             propertyGroupKeys: seed.propertyGroupKeys,
             geometry: resourceState(seed.geometry),
             properties: resourceState(seed.properties),
+            refreshing: false,
           }
         }
-        return { features }
+        return { features, queryRevision }
       }),
-    clear: () => set({ features: {} }),
-    loadMore: async (featureId) => {
+    clear: () =>
+      set((state) => ({
+        features: {},
+        queryRevision: state.queryRevision + 1,
+      })),
+    loadMore: async (featureId) => get().requestResources(featureId),
+    refresh: async (featureId) => {
       const initial = get().features[featureId]
+      if (
+        !initial ||
+        initial.refreshing ||
+        initial.geometry.loading ||
+        initial.properties.loading ||
+        initial.geometry.hasMore ||
+        initial.properties.hasMore
+      )
+        return
+
+      const kinds = ['geometry', 'properties'] as const
+      const failed = kinds.filter((kind) => initial[kind].error !== undefined)
+      const resources = failed.length > 0 ? failed : [...kinds]
+      set((state) => {
+        const feature = state.features[featureId]
+        if (!feature || feature.queryKey !== initial.queryKey) return state
+        return {
+          features: {
+            ...state.features,
+            [featureId]: {
+              ...feature,
+              refreshing: true,
+              refreshError: undefined,
+              lastRefreshResult: undefined,
+            },
+          },
+        }
+      })
+
+      let refreshed = initial
+      if (initial.queryRangeMode === 'source-derived') {
+        try {
+          const metadata = await new MovingFeaturesApiClient(
+            initial.baseUrl,
+          ).getFeature(initial.collectionId, featureId)
+          if (get().features[featureId]?.queryKey !== initial.queryKey) return
+          const latestEnd = metadata.time[1].trim()
+          const end =
+            Date.parse(latestEnd) > Date.parse(initial.datetime.end)
+              ? latestEnd
+              : initial.datetime.end
+          const datetime = { start: initial.datetime.start, end }
+          refreshed = {
+            ...initial,
+            metadata,
+            datetime,
+            queryKey: queryKey(
+              initial.baseUrl,
+              initial.collectionId,
+              datetime,
+              get().queryRevision,
+            ),
+          }
+          set((state) => {
+            const feature = state.features[featureId]
+            if (!feature || feature.queryKey !== initial.queryKey) return state
+            return {
+              features: {
+                ...state.features,
+                [featureId]: { ...feature, ...refreshed, refreshing: true },
+              },
+            }
+          })
+        } catch (error) {
+          set((state) => {
+            const feature = state.features[featureId]
+            if (!feature || feature.queryKey !== initial.queryKey) return state
+            return {
+              features: {
+                ...state.features,
+                [featureId]: {
+                  ...feature,
+                  refreshing: false,
+                  refreshError: errorMessage(error),
+                },
+              },
+            }
+          })
+          return
+        }
+      }
+
+      const geometryKeyCount = refreshed.geometryKeys.length
+      const propertyKeyCount = refreshed.propertyGroupKeys.length
+      await get().requestResources(featureId, refreshed, resources)
+      set((state) => {
+        const feature = state.features[featureId]
+        if (!feature || feature.queryKey !== refreshed.queryKey) return state
+        const found =
+          feature.geometryKeys.length > geometryKeyCount ||
+          feature.propertyGroupKeys.length > propertyKeyCount
+        return {
+          features: {
+            ...state.features,
+            [featureId]: {
+              ...feature,
+              refreshing: false,
+              lastRefreshResult: found ? 'new-data' : 'no-new-data',
+            },
+          },
+        }
+      })
+    },
+    requestResources: async (featureId, suppliedInitial, suppliedResources) => {
+      const initial = suppliedInitial ?? get().features[featureId]
       if (!initial) return
       const kinds = ['geometry', 'properties'] as const
       const retries = kinds.filter(
-        (kind) =>
-          initial[kind].hasMore &&
-          !initial[kind].loading &&
-          initial[kind].error !== undefined,
+        (kind) => !initial[kind].loading && initial[kind].error !== undefined,
       )
-      const resources =
-        retries.length > 0
+      const resources = suppliedResources
+        ? [...suppliedResources]
+        : retries.length > 0
           ? retries
           : kinds.filter(
               (kind) => initial[kind].hasMore && !initial[kind].loading,
             )
       if (resources.length === 0) return
+      const geometryKeyCount = initial.geometryKeys.length
+      const propertyKeyCount = initial.propertyGroupKeys.length
 
       set((state) => {
         const feature = state.features[featureId]
@@ -255,6 +405,11 @@ export const useFeatureTemporalPaginationStore =
               response.numberReturned,
               response.geometrySequence.length,
               'Temporal geometry numberReturned',
+            )
+            validateAppendOnlyPagination(
+              previous,
+              returned,
+              response.numberMatched,
             )
             if (get().features[featureId]?.queryKey !== initial.queryKey) return
             const uniqueGeometry = unseenValues(
@@ -312,6 +467,11 @@ export const useFeatureTemporalPaginationStore =
               response.numberReturned,
               response.temporalProperties.length,
               'Temporal properties numberReturned',
+            )
+            validateAppendOnlyPagination(
+              previous,
+              returned,
+              response.numberMatched,
             )
             if (get().features[featureId]?.queryKey !== initial.queryKey) return
             const uniqueProperties = unseenValues(
@@ -379,8 +539,16 @@ export const useFeatureTemporalPaginationStore =
       }
 
       await Promise.all(resources.map(loadResource))
-      const range = getDatasetTimeRange(useFeatureStore.getState().features)
-      if (range)
-        useTimeStore.getState().setRange(range.startTime, range.endTime)
+      const current = get().features[featureId]
+      if (
+        current &&
+        current.queryKey === initial.queryKey &&
+        (current.geometryKeys.length > geometryKeyCount ||
+          current.propertyGroupKeys.length > propertyKeyCount)
+      ) {
+        const range = getDatasetTimeRange(useFeatureStore.getState().features)
+        if (range)
+          useTimeStore.getState().setRange(range.startTime, range.endTime)
+      }
     },
   }))

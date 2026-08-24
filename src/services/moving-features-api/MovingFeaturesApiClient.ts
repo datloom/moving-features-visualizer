@@ -4,6 +4,7 @@ import type {
   CollectionsResponse,
   DateTimeInterval,
   FeatureQueryOptions,
+  FeatureMetadata,
   FeaturesResponse,
   TemporalGeometrySequenceResponse,
   TemporalPropertiesResponse,
@@ -173,12 +174,32 @@ export class MovingFeaturesApiClient {
     return response as unknown as FeaturesResponse
   }
 
-  getFeature(collectionId: string, featureId: string): Promise<unknown> {
-    return this.request(
+  async getFeature(
+    collectionId: string,
+    featureId: string,
+  ): Promise<FeatureMetadata> {
+    const response = await this.request<unknown>(
       this.createUrl(
         `/collections/${encodeURIComponent(collectionId)}/items/${encodeURIComponent(featureId)}`,
       ),
     )
+    if (
+      !isRecord(response) ||
+      response.type !== 'Feature' ||
+      response.id !== featureId ||
+      !Array.isArray(response.time) ||
+      response.time.length !== 2 ||
+      response.time.some(
+        (value) =>
+          typeof value !== 'string' || !Number.isFinite(Date.parse(value)),
+      )
+    ) {
+      throw new MovingFeaturesApiError(
+        'invalid-response',
+        'Feature metadata response is malformed.',
+      )
+    }
+    return response as unknown as FeatureMetadata
   }
 
   getTemporalGeometry(

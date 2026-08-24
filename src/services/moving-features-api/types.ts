@@ -10,6 +10,8 @@ export interface DateTimeInterval {
   readonly end: string
 }
 
+export type TemporalQueryRangeMode = 'fixed' | 'source-derived'
+
 export interface FeatureQueryOptions {
   readonly limit: number
   readonly offset?: number
@@ -100,6 +102,7 @@ export interface FeatureTemporalPaginationSeed {
   readonly featureId: string
   readonly metadata: FeatureMetadata
   readonly datetime: DateTimeInterval
+  readonly queryRangeMode: TemporalQueryRangeMode
   readonly normalizationGeometry: unknown
   readonly geometryKeys: readonly string[]
   readonly propertyGroupKeys: readonly string[]

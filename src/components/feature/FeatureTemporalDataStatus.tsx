@@ -31,13 +31,15 @@ export function FeatureTemporalDataStatus({
   )
   if (!state) return null
 
-  const loading = state.geometry.loading || state.properties.loading
+  const loading =
+    state.refreshing || state.geometry.loading || state.properties.loading
   const hasMore = state.geometry.hasMore || state.properties.hasMore
   const errors = [
     state.geometry.error ? `Geometry: ${state.geometry.error}` : undefined,
     state.properties.error
       ? `Properties: ${state.properties.error}`
       : undefined,
+    state.refreshError ? `Refresh: ${state.refreshError}` : undefined,
   ].filter((message): message is string => message !== undefined)
 
   return (
@@ -53,21 +55,31 @@ export function FeatureTemporalDataStatus({
           <dd>{progress('Properties', state.properties)}</dd>
         </div>
       </dl>
-      {hasMore ? (
-        <button
-          disabled={loading}
-          onClick={() =>
-            void useFeatureTemporalPaginationStore
-              .getState()
-              .loadMore(featureId)
-          }
-          type="button"
-        >
-          {loading ? 'Loading more temporal data…' : 'Load More Temporal Data'}
-        </button>
-      ) : (
-        <span>Temporal data complete</span>
-      )}
+      {!hasMore ? (
+        <span>
+          {state.lastRefreshResult === 'no-new-data'
+            ? 'No new data · Up to date'
+            : state.lastRefreshResult === 'new-data'
+              ? 'New temporal data loaded · Up to date'
+              : 'Up to date'}
+        </span>
+      ) : null}
+      <button
+        disabled={loading}
+        onClick={() => {
+          const store = useFeatureTemporalPaginationStore.getState()
+          void (hasMore ? store.loadMore(featureId) : store.refresh(featureId))
+        }}
+        type="button"
+      >
+        {loading
+          ? hasMore
+            ? 'Loading more temporal data…'
+            : 'Checking for new data…'
+          : hasMore
+            ? 'Load More Temporal Data'
+            : 'Check for New Data'}
+      </button>
       {errors.length > 0 ? <p role="alert">{errors.join(' ')}</p> : null}
     </div>
   )

@@ -103,6 +103,7 @@ describe('MovingFeaturesApiAssembler', () => {
     })
     expect(result.temporalPagination?.[0]).toMatchObject({
       featureId: 'one',
+      queryRangeMode: 'source-derived',
       geometry: { offset: 2, numberMatched: 5, hasMore: true },
       properties: { offset: 2, numberMatched: 3, hasMore: true },
       geometryKeys: ['id:tg-0', 'id:tg-2'],
@@ -141,6 +142,7 @@ describe('MovingFeaturesApiAssembler', () => {
     )
 
     expect(result.temporalPagination?.[0]?.datetime).toEqual(datetime)
+    expect(result.temporalPagination?.[0]?.queryRangeMode).toBe('fixed')
     expect(mocks(api).getTemporalGeometry).toHaveBeenCalledWith(
       'routes',
       'one',
