@@ -37,6 +37,7 @@ const asFeatureInputs = (input: unknown): readonly unknown[] =>
 
 export const loadMovingFeatures = async (
   dataSource: MovingFeatureDataSource,
+  options: { readonly mode?: 'replace' | 'append' } = {},
 ): Promise<MovingFeatureLoadResult> => {
   let rawData: unknown
 
@@ -61,6 +62,14 @@ export const loadMovingFeatures = async (
 
   const inputs = asFeatureInputs(rawData)
   if (inputs.length === 0) {
+    if (options.mode === 'append') {
+      const time = useTimeStore.getState()
+      return {
+        success: true,
+        features: [],
+        timeRange: { startTime: time.startTime, endTime: time.endTime },
+      }
+    }
     return {
       success: false,
       error: {
@@ -113,11 +122,24 @@ export const loadMovingFeatures = async (
     }
   }
 
-  useFeatureStore.getState().replaceFeatures(features)
-  const timeStore = useTimeStore.getState()
-  timeStore.pause()
-  timeStore.setRange(timeRange.startTime, timeRange.endTime)
-  useTimeStore.getState().setCurrentTime(timeRange.startTime)
+  if (options.mode === 'append') {
+    const featureStore = useFeatureStore.getState()
+    featureStore.appendFeatures(features)
+    const combinedRange = getDatasetTimeRange(
+      useFeatureStore.getState().features,
+    )
+    if (combinedRange) {
+      useTimeStore
+        .getState()
+        .setRange(combinedRange.startTime, combinedRange.endTime)
+    }
+  } else {
+    useFeatureStore.getState().replaceFeatures(features)
+    const timeStore = useTimeStore.getState()
+    timeStore.pause()
+    timeStore.setRange(timeRange.startTime, timeRange.endTime)
+    useTimeStore.getState().setCurrentTime(timeRange.startTime)
+  }
 
   return { success: true, features, timeRange }
 }

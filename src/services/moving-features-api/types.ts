@@ -12,6 +12,7 @@ export interface DateTimeInterval {
 
 export interface FeatureQueryOptions {
   readonly limit: number
+  readonly offset?: number
   readonly datetime?: DateTimeInterval
 }
 

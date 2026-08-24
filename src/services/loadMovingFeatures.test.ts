@@ -95,6 +95,35 @@ describe('loadMovingFeatures', () => {
     })
   })
 
+  it('appends unique Features while preserving current time, playback, and selection', async () => {
+    await loadMovingFeatures(source(rawFeature('existing')))
+    useFeatureStore.getState().selectFeature('existing')
+    const currentTime = Date.parse('2026-01-01T10:03:00Z')
+    useTimeStore.getState().setCurrentTime(currentTime)
+    useTimeStore.getState().play()
+
+    const result = await loadMovingFeatures(
+      source([
+        rawFeature('existing'),
+        rawFeature('new', '2026-01-01T09:55:00Z', '2026-01-01T10:10:00Z'),
+      ]),
+      { mode: 'append' },
+    )
+
+    expect(result.success).toBe(true)
+    expect(useFeatureStore.getState().features.map(({ id }) => id)).toEqual([
+      'existing',
+      'new',
+    ])
+    expect(useFeatureStore.getState().selectedFeatureId).toBe('existing')
+    expect(useTimeStore.getState()).toMatchObject({
+      currentTime,
+      playing: true,
+      startTime: Date.parse('2026-01-01T09:55:00Z'),
+      endTime: Date.parse('2026-01-01T10:10:00Z'),
+    })
+  })
+
   it('returns structured validation issues without replacing state', async () => {
     await loadMovingFeatures(source(rawFeature('existing')))
     const beforeFeatures = useFeatureStore.getState().features

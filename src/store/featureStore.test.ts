@@ -39,4 +39,21 @@ describe('useFeatureStore', () => {
 
     expect(useFeatureStore.getState()).toMatchObject(initialFeatureState)
   })
+
+  it('appends unique Features and preserves selection and existing duplicates', () => {
+    const original = feature('one')
+    useFeatureStore.getState().replaceFeatures([original, feature('two')])
+    useFeatureStore.getState().selectFeature('two')
+    useFeatureStore
+      .getState()
+      .appendFeatures([feature('one'), feature('three')])
+
+    expect(useFeatureStore.getState().features.map(({ id }) => id)).toEqual([
+      'one',
+      'two',
+      'three',
+    ])
+    expect(useFeatureStore.getState().features[0]).toBe(original)
+    expect(useFeatureStore.getState().selectedFeatureId).toBe('two')
+  })
 })

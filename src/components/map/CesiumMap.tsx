@@ -25,12 +25,14 @@ export type MapMode = '2d' | '3d'
 
 export interface CesiumMapProps {
   readonly features?: readonly MovingFeature[]
+  readonly selectedFeatureId?: string
   readonly focusRevision?: number
   readonly mapMode?: MapMode
 }
 
 export function CesiumMap({
   features = EMPTY_FEATURES,
+  selectedFeatureId,
   focusRevision = 0,
   mapMode = '3d',
 }: CesiumMapProps) {
@@ -89,15 +91,21 @@ export function CesiumMap({
       viewer.entities.remove(entity)
     }
 
-    const entities = features.flatMap((feature) =>
-      movingFeatureToEntities(feature).map((entity) =>
-        viewer.entities.add(entity),
-      ),
+    const seenFeatureIds = new Set<string>()
+    const uniqueFeatures = features.filter((feature) => {
+      if (seenFeatureIds.has(feature.id)) return false
+      seenFeatureIds.add(feature.id)
+      return true
+    })
+    const entities = uniqueFeatures.flatMap((feature) =>
+      movingFeatureToEntities(feature, {
+        selected: feature.id === selectedFeatureId,
+      }).map((entity) => viewer.entities.add(entity)),
     )
     featureEntitiesRef.current = entities
 
-    if (features.length > 0) {
-      const ranges = features.map(getFeatureTimeRange)
+    if (uniqueFeatures.length > 0) {
+      const ranges = uniqueFeatures.map(getFeatureTimeRange)
       const startTime = Math.min(...ranges.map((range) => range.startTime))
       const endTime = Math.max(...ranges.map((range) => range.endTime))
       useTimeStore.getState().setRange(startTime, endTime)
@@ -110,7 +118,7 @@ export function CesiumMap({
       }
       featureEntitiesRef.current = []
     }
-  }, [features])
+  }, [features, selectedFeatureId])
 
   useEffect(() => {
     if (previousMapModeRef.current === mapMode) return
@@ -127,8 +135,17 @@ export function CesiumMap({
 
   useEffect(() => {
     if (focusRevision === 0 || featureEntitiesRef.current.length === 0) return
-    void viewerRef.current?.zoomTo(featureEntitiesRef.current)
-  }, [focusRevision])
+    const selectedEntities = selectedFeatureId
+      ? featureEntitiesRef.current.filter((entity) => {
+          const entityId = String(entity.id)
+          return (
+            entityId === selectedFeatureId ||
+            entityId.startsWith(`${selectedFeatureId}--segment-`)
+          )
+        })
+      : featureEntitiesRef.current
+    void viewerRef.current?.zoomTo(selectedEntities)
+  }, [focusRevision, selectedFeatureId])
 
   return (
     <>

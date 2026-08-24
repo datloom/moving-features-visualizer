@@ -9,6 +9,7 @@ export interface FeatureState {
 
 export interface FeatureActions {
   replaceFeatures: (features: readonly MovingFeature[]) => void
+  appendFeatures: (features: readonly MovingFeature[]) => void
   selectFeature: (featureId: string | undefined) => void
 }
 
@@ -25,6 +26,14 @@ export const useFeatureStore = create<FeatureStore>((set) => ({
     set({
       features: [...features],
       selectedFeatureId: features[0]?.id,
+    }),
+  appendFeatures: (features) =>
+    set((state) => {
+      const existingIds = new Set(state.features.map(({ id }) => id))
+      const additions = features.filter(({ id }) => !existingIds.has(id))
+      return additions.length === 0
+        ? state
+        : { ...state, features: [...state.features, ...additions] }
     }),
   selectFeature: (selectedFeatureId) => set({ selectedFeatureId }),
 }))

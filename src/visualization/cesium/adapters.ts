@@ -91,6 +91,7 @@ export const movingFeatureToEntity = (feature: MovingFeature): Entity => {
 
 export const movingFeatureToEntities = (
   feature: MovingFeature,
+  options: { readonly selected?: boolean } = {},
 ): readonly Entity[] =>
   feature.temporalGeometry.segments.map((segment, index) => {
     const samples = segment.samples
@@ -116,17 +117,21 @@ export const movingFeatureToEntities = (
       ]),
       position: samplesToPositionProperty(samples),
       point: {
-        color: Color.fromCssColorString('#35d4c7'),
+        color: Color.fromCssColorString(
+          options.selected ? '#f3b85b' : '#35d4c7',
+        ),
         outlineColor: Color.fromCssColorString('#071b1c'),
-        outlineWidth: 3,
-        pixelSize: 12,
+        outlineWidth: options.selected ? 4 : 3,
+        pixelSize: options.selected ? 15 : 11,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       path: {
         leadTime: durationSeconds,
         trailTime: durationSeconds,
-        material: Color.fromCssColorString('#35d4c7').withAlpha(0.75),
-        width: 3,
+        material: Color.fromCssColorString(
+          options.selected ? '#f3b85b' : '#35d4c7',
+        ).withAlpha(0.75),
+        width: options.selected ? 4 : 2,
       },
     })
   })

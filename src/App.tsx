@@ -63,7 +63,7 @@ export function App() {
         <div className="primary-workspace">
           {mode === 'demo' ? (
             <>
-              <MapWorkspace feature={selectedFeature} />
+              <MapWorkspace feature={selectedFeature} features={features} />
               <TemporalPropertiesPanel feature={selectedFeature} />
             </>
           ) : (
@@ -78,6 +78,7 @@ export function App() {
         onLoaded={(filename) => {
           setDatasetName(filename)
           setMode('demo')
+          setFileLoaderOpen(false)
         }}
         open={fileLoaderOpen}
       />

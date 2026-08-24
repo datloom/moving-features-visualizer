@@ -40,9 +40,12 @@ const {
   const ImageryLayer = vi.fn(function () {
     return osmImageryLayer
   })
-  const movingFeatureToEntity = vi.fn((feature: { id: string }) => ({
-    id: feature.id,
-  }))
+  const movingFeatureToEntity = vi.fn(
+    (feature: { id: string }, options?: { selected?: boolean }) => {
+      void options
+      return { id: feature.id }
+    },
+  )
   const remove = vi.fn()
   const setView = vi.fn()
   const timestampToJulianDate = vi.fn((timestamp: number) => timestamp)
@@ -97,9 +100,10 @@ vi.mock('../../visualization/cesium/adapters', () => ({
       endTime: samples.at(-1)!.time,
     }
   },
-  movingFeatureToEntities: (feature: { id: string }) => [
-    movingFeatureToEntity(feature),
-  ],
+  movingFeatureToEntities: (
+    feature: { id: string },
+    options: { selected?: boolean },
+  ) => [movingFeatureToEntity(feature, options)],
   timestampToJulianDate,
 }))
 
@@ -204,7 +208,9 @@ describe('CesiumMap', () => {
   it('renders normalized features without recreating the Viewer', () => {
     const { rerender } = render(<CesiumMap features={[feature]} />)
 
-    expect(movingFeatureToEntity).toHaveBeenCalledWith(feature)
+    expect(movingFeatureToEntity).toHaveBeenCalledWith(feature, {
+      selected: false,
+    })
     expect(add).toHaveBeenCalledWith({ id: 'vehicle-1' })
     expect(zoomTo).toHaveBeenCalledWith([{ id: 'vehicle-1' }])
     expect(useTimeStore.getState()).toMatchObject({
@@ -220,6 +226,40 @@ describe('CesiumMap', () => {
 
     expect(Viewer).toHaveBeenCalledTimes(1)
     expect(remove).toHaveBeenCalledWith({ id: 'vehicle-1' })
+  })
+
+  it('renders every loaded Feature while styling selection independently', () => {
+    const loadedFeatures = Array.from({ length: 10 }, (_, index) => ({
+      ...feature,
+      id: `vehicle-${index + 1}`,
+    }))
+    const { rerender } = render(
+      <CesiumMap features={loadedFeatures} selectedFeatureId="vehicle-1" />,
+    )
+
+    expect(add).toHaveBeenCalledTimes(10)
+    expect(movingFeatureToEntity).toHaveBeenCalledWith(loadedFeatures[0], {
+      selected: true,
+    })
+    expect(movingFeatureToEntity).toHaveBeenCalledWith(loadedFeatures[1], {
+      selected: false,
+    })
+
+    add.mockClear()
+    rerender(
+      <CesiumMap
+        features={[...loadedFeatures, { ...feature, id: 'vehicle-11' }]}
+        selectedFeatureId="vehicle-2"
+      />,
+    )
+    expect(add).toHaveBeenCalledTimes(11)
+    expect(add).toHaveBeenCalledWith({ id: 'vehicle-1' })
+    expect(add).toHaveBeenCalledWith({ id: 'vehicle-11' })
+  })
+
+  it('does not create duplicate entities for duplicate Feature IDs', () => {
+    render(<CesiumMap features={[feature, { ...feature }]} />)
+    expect(add).toHaveBeenCalledTimes(1)
   })
 
   it('refocuses existing entities without recreating the Viewer', () => {

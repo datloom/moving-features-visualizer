@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 import type { MovingFeature } from '../../mfjson/types'
 import { SelectedFeatureInfo } from '../feature/SelectedFeatureInfo'
@@ -8,12 +8,17 @@ import { SpaceTimeMap } from './SpaceTimeMap'
 
 type VisualizationMode = 'map' | 'space-time'
 
-export function MapWorkspace({ feature }: { readonly feature: MovingFeature }) {
+export function MapWorkspace({
+  feature,
+  features,
+}: {
+  readonly feature: MovingFeature
+  readonly features: readonly MovingFeature[]
+}) {
   const [focusRevision, setFocusRevision] = useState(0)
   const [mapMode, setMapMode] = useState<MapMode>('3d')
   const [visualizationMode, setVisualizationMode] =
     useState<VisualizationMode>('map')
-  const features = useMemo(() => [feature], [feature])
   return (
     <section aria-label="Primary map workspace" className="map-workspace">
       {visualizationMode === 'map' ? (
@@ -21,6 +26,7 @@ export function MapWorkspace({ feature }: { readonly feature: MovingFeature }) {
           features={features}
           focusRevision={focusRevision}
           mapMode={mapMode}
+          selectedFeatureId={feature.id}
         />
       ) : (
         <SpaceTimeMap />

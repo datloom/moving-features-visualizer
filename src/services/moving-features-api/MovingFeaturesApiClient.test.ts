@@ -69,6 +69,32 @@ describe('MovingFeaturesApiClient', () => {
     )
   })
 
+  it('serializes a validated Feature offset with URLSearchParams', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(response({ type: 'FeatureCollection', features: [] }))
+    await new MovingFeaturesApiClient(
+      'http://localhost:5050',
+      fetchMock,
+    ).getFeatures('routes', { limit: 10, offset: 20 })
+
+    expect(
+      (fetchMock.mock.calls[0]![0] as URL).searchParams.get('offset'),
+    ).toBe('20')
+  })
+
+  it.each([-1, 1.5, Number.NaN])(
+    'rejects invalid Feature offset %s',
+    async (offset) => {
+      await expect(
+        new MovingFeaturesApiClient(
+          'http://localhost:5050',
+          vi.fn(),
+        ).getFeatures('routes', { limit: 10, offset }),
+      ).rejects.toThrow(RangeError)
+    },
+  )
+
   it.each([0, 1001, 1.5, Number.NaN])(
     'rejects invalid feature limit %s',
     async (limit) => {

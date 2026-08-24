@@ -6,6 +6,7 @@ import {
   loadMovingFeatures,
   type MovingFeatureLoadError,
 } from '../../services/loadMovingFeatures'
+import { useServerCollectionStore } from '../../store/serverCollectionStore'
 import { Icon } from '../ui/Icon'
 import { ServerDataSourcePanel } from './ServerDataSourcePanel'
 
@@ -82,6 +83,7 @@ export function LocalFileLoader({
     setState({ status: 'loading', filename: file.name })
     const result = await loadMovingFeatures(new FileDataSource(file))
     if (result.success) {
+      useServerCollectionStore.getState().clearSession()
       setState({
         status: 'success',
         filename: file.name,

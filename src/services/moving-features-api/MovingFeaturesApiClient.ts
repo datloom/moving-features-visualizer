@@ -145,12 +145,20 @@ export class MovingFeaturesApiClient {
     options: FeatureQueryOptions,
   ): Promise<FeaturesResponse> {
     validateLimit(options.limit)
-    const response = await this.request<unknown>(
-      this.createUrl(
-        `/collections/${encodeURIComponent(collectionId)}/items`,
-        options,
-      ),
+    if (
+      options.offset !== undefined &&
+      (!Number.isInteger(options.offset) || options.offset < 0)
+    ) {
+      throw new RangeError('Feature offset must be a non-negative integer.')
+    }
+    const url = this.createUrl(
+      `/collections/${encodeURIComponent(collectionId)}/items`,
+      options,
     )
+    if (options.offset !== undefined) {
+      url.searchParams.set('offset', String(options.offset))
+    }
+    const response = await this.request<unknown>(url)
     if (
       !isRecord(response) ||
       response.type !== 'FeatureCollection' ||

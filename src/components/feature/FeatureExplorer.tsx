@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import type { MovingFeature } from '../../mfjson/types'
 import { Icon } from '../ui/Icon'
+import { ServerCollectionStatus } from './ServerCollectionStatus'
 
 const featureLabel = (feature: MovingFeature): string =>
   typeof feature.properties.label === 'string'
@@ -93,6 +94,7 @@ export function FeatureExplorer({
       {filteredFeatures.length === 0 ? (
         <p className="compact-empty">No matching features.</p>
       ) : null}
+      <ServerCollectionStatus />
     </aside>
   )
 }

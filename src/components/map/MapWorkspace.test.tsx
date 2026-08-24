@@ -42,7 +42,7 @@ describe('MapWorkspace map mode control', () => {
   })
 
   it('defaults to 3D and switches between 2D and 3D', () => {
-    render(<MapWorkspace feature={feature} />)
+    render(<MapWorkspace feature={feature} features={[feature]} />)
 
     expect(screen.getByTestId('cesium-map-mode')).toHaveTextContent('3d')
     expect(screen.getByRole('button', { name: '3D' })).toHaveAttribute(
@@ -59,7 +59,7 @@ describe('MapWorkspace map mode control', () => {
   })
 
   it('mounts only the selected Cesium visualization', () => {
-    render(<MapWorkspace feature={feature} />)
+    render(<MapWorkspace feature={feature} features={[feature]} />)
     expect(screen.getByTestId('cesium-map-mode')).toBeInTheDocument()
     expect(screen.queryByTestId('space-time-map')).not.toBeInTheDocument()
 

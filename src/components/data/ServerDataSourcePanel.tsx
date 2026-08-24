@@ -10,6 +10,7 @@ import {
   type MovingFeatureCollection,
 } from '../../services/moving-features-api/types'
 import { loadMovingFeatures } from '../../services/loadMovingFeatures'
+import { useServerCollectionStore } from '../../store/serverCollectionStore'
 import { Icon } from '../ui/Icon'
 
 type ServerState =
@@ -83,6 +84,7 @@ export function ServerDataSourcePanel({
     const client = new MovingFeaturesApiClient(serverUrl)
     const source = new MovingFeaturesApiDataSource(client, selectedId, {
       limit: parsedLimit,
+      offset: 0,
     })
     const result = await loadMovingFeatures(source)
     if (!result.success) {
@@ -93,6 +95,18 @@ export function ServerDataSourcePanel({
     const selected = collections.find(
       (collection) => collection.id === selectedId,
     )
+    if (summary) {
+      useServerCollectionStore.getState().installSession(
+        {
+          baseUrl: serverUrl,
+          collectionId: selectedId,
+          collectionTitle: selected?.title ?? selectedId,
+          limit: parsedLimit,
+          numberMatched: summary.pagination.numberMatched,
+        },
+        summary,
+      )
+    }
     setState({
       status: 'success',
       count: result.features.length,

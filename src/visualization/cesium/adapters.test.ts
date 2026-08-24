@@ -5,6 +5,7 @@ import {
   coordinateToCartesian3,
   getFeatureTimeRange,
   movingFeatureToEntity,
+  movingFeatureToEntities,
   samplesToPositionProperty,
   timestampToJulianDate,
 } from './adapters'
@@ -133,6 +134,21 @@ describe('Cesium adapters', () => {
         ),
       ),
     ).toBe(true)
+  })
+
+  it('gives the selected Feature a stronger style without changing its identity', () => {
+    const normal = movingFeatureToEntities(movingFeature)[0]!
+    const selected = movingFeatureToEntities(movingFeature, {
+      selected: true,
+    })[0]!
+
+    expect(selected.id).toBe(normal.id)
+    expect(Number(selected.point?.pixelSize?.getValue())).toBeGreaterThan(
+      Number(normal.point?.pixelSize?.getValue() ?? 0),
+    )
+    expect(Number(selected.path?.width?.getValue())).toBeGreaterThan(
+      Number(normal.path?.width?.getValue() ?? 0),
+    )
   })
 
   it('rejects MovingPoint geometry without samples', () => {
