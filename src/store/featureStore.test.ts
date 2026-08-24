@@ -7,9 +7,13 @@ const feature = (id: string): MovingFeature => ({
   id,
   type: 'MovingFeature',
   temporalGeometry: {
-    type: 'MovingPoint',
-    interpolation: 'Linear',
-    samples: [{ time: 1, longitude: 0, latitude: 0 }],
+    segments: [
+      {
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [{ time: 1, longitude: 0, latitude: 0 }],
+      },
+    ],
   },
   temporalProperties: [],
   properties: {},

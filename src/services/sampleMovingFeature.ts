@@ -21,32 +21,36 @@ export const sampleMovingFeature: MovingFeature = {
   id: 'tokyo-survey-01',
   type: 'MovingFeature',
   temporalGeometry: {
-    type: 'MovingPoint',
-    interpolation: 'Linear',
-    samples: [
+    segments: [
       {
-        time: Date.parse('2026-08-24T09:00:00Z'),
-        longitude: 139.7528,
-        latitude: 35.6852,
-        height: 80,
-      },
-      {
-        time: Date.parse('2026-08-24T09:02:00Z'),
-        longitude: 139.761,
-        latitude: 35.6762,
-        height: 140,
-      },
-      {
-        time: Date.parse('2026-08-24T09:04:00Z'),
-        longitude: 139.7708,
-        latitude: 35.6809,
-        height: 95,
-      },
-      {
-        time: Date.parse('2026-08-24T09:06:00Z'),
-        longitude: 139.7815,
-        latitude: 35.6896,
-        height: 180,
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          {
+            time: Date.parse('2026-08-24T09:00:00Z'),
+            longitude: 139.7528,
+            latitude: 35.6852,
+            height: 80,
+          },
+          {
+            time: Date.parse('2026-08-24T09:02:00Z'),
+            longitude: 139.761,
+            latitude: 35.6762,
+            height: 140,
+          },
+          {
+            time: Date.parse('2026-08-24T09:04:00Z'),
+            longitude: 139.7708,
+            latitude: 35.6809,
+            height: 95,
+          },
+          {
+            time: Date.parse('2026-08-24T09:06:00Z'),
+            longitude: 139.7815,
+            latitude: 35.6896,
+            height: 180,
+          },
+        ],
       },
     ],
   },
@@ -83,32 +87,36 @@ export const harborMovingFeature: MovingFeature = {
   id: 'yokohama-inspection-02',
   type: 'MovingFeature',
   temporalGeometry: {
-    type: 'MovingPoint',
-    interpolation: 'Linear',
-    samples: [
+    segments: [
       {
-        time: Date.parse('2026-08-24T09:00:00Z'),
-        longitude: 139.638,
-        latitude: 35.452,
-        height: 12,
-      },
-      {
-        time: Date.parse('2026-08-24T09:02:00Z'),
-        longitude: 139.648,
-        latitude: 35.447,
-        height: 18,
-      },
-      {
-        time: Date.parse('2026-08-24T09:04:00Z'),
-        longitude: 139.659,
-        latitude: 35.455,
-        height: 15,
-      },
-      {
-        time: Date.parse('2026-08-24T09:06:00Z'),
-        longitude: 139.67,
-        latitude: 35.462,
-        height: 10,
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          {
+            time: Date.parse('2026-08-24T09:00:00Z'),
+            longitude: 139.638,
+            latitude: 35.452,
+            height: 12,
+          },
+          {
+            time: Date.parse('2026-08-24T09:02:00Z'),
+            longitude: 139.648,
+            latitude: 35.447,
+            height: 18,
+          },
+          {
+            time: Date.parse('2026-08-24T09:04:00Z'),
+            longitude: 139.659,
+            latitude: 35.455,
+            height: 15,
+          },
+          {
+            time: Date.parse('2026-08-24T09:06:00Z'),
+            longitude: 139.67,
+            latitude: 35.462,
+            height: 10,
+          },
+        ],
       },
     ],
   },

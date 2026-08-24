@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { parseMovingPoint } from './parser'
+import { parseTemporalGeometryTrack } from './parser'
 import type {
   MovingFeature,
   TemporalProperty,
@@ -131,7 +131,7 @@ export const normalizeTemporalProperties = (
 export const normalizeMovingFeature = (
   input: unknown,
 ): MovingFeatureNormalizationResult => {
-  const geometry = parseMovingPoint(input)
+  const geometry = parseTemporalGeometryTrack(input)
   if (!geometry.success) return geometry
 
   const temporalProperties = normalizeTemporalProperties(input)

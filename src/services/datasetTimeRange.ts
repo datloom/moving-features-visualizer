@@ -13,7 +13,7 @@ export const getDatasetTimeRange = (
 
   for (const feature of features) {
     const sampleGroups = [
-      feature.temporalGeometry.samples,
+      ...feature.temporalGeometry.segments.map((segment) => segment.samples),
       ...feature.temporalProperties.map((property) => property.samples),
     ]
 

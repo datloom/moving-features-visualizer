@@ -7,6 +7,7 @@ import {
   type MovingFeatureLoadError,
 } from '../../services/loadMovingFeatures'
 import { Icon } from '../ui/Icon'
+import { ServerDataSourcePanel } from './ServerDataSourcePanel'
 
 type UploadState =
   | { readonly status: 'idle' }
@@ -72,6 +73,7 @@ export function LocalFileLoader({
 }: LocalFileLoaderProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [source, setSource] = useState<'file' | 'server'>('file')
   const [state, setState] = useState<UploadState>({ status: 'idle' })
 
   if (!open) return null
@@ -114,7 +116,7 @@ export function LocalFileLoader({
         <header className="upload-dialog-header">
           <div>
             <span>Open Data</span>
-            <h2 id="local-file-title">Local MF-JSON file</h2>
+            <h2 id="local-file-title">Choose a data source</h2>
           </div>
           <button
             aria-label="Close local file dialog"
@@ -127,78 +129,107 @@ export function LocalFileLoader({
         </header>
 
         <div
-          className={`file-drop-zone ${dragOver ? 'is-drag-over' : ''}`}
-          onDragEnter={(event) => {
-            event.preventDefault()
-            setDragOver(true)
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={handleDrop}
+          aria-label="Data source"
+          className="data-source-tabs"
+          role="tablist"
         >
-          <Icon name="upload" size={24} />
-          <strong>
-            {dragOver ? 'Drop file to open' : 'Drop an MF-JSON file here'}
-          </strong>
-          <span>or choose a local file</span>
           <button
-            disabled={state.status === 'loading'}
-            onClick={() => inputRef.current?.click()}
+            aria-selected={source === 'file'}
+            onClick={() => setSource('file')}
+            role="tab"
             type="button"
           >
-            Browse files
+            Local File
           </button>
-          <input
-            accept=".json,.mfjson,application/json"
-            aria-label="Choose local MF-JSON file"
-            className="visually-hidden"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0]
-              if (file) void processFile(file)
-              event.currentTarget.value = ''
-            }}
-            ref={inputRef}
-            type="file"
-          />
-          <small>Accepted formats: .json, .mfjson</small>
+          <button
+            aria-selected={source === 'server'}
+            onClick={() => setSource('server')}
+            role="tab"
+            type="button"
+          >
+            Server
+          </button>
         </div>
 
-        <div aria-live="polite" className="upload-status">
-          {state.status === 'loading' ? (
-            <>
-              <span className="loading-spinner" />
-              <div>
-                <strong>Loading {state.filename}</strong>
-                <p>Reading, validating, and normalizing moving features…</p>
-              </div>
-            </>
-          ) : null}
-          {state.status === 'success' ? (
-            <>
-              <span className="upload-success">
-                <Icon name="activity" />
-              </span>
-              <div>
-                <strong>{state.filename} loaded</strong>
-                <p>
-                  {state.count} moving{' '}
-                  {state.count === 1 ? 'feature' : 'features'} replaced the
-                  current dataset.
-                </p>
-              </div>
-            </>
-          ) : null}
-          {state.status === 'error' ? (
-            <>
-              <Icon name="alert" />
-              <div>
-                <strong>Could not load {state.filename}</strong>
-                <p>{state.error.message}</p>
-              </div>
-            </>
-          ) : null}
-        </div>
-        {issues ? <ValidationIssueList issues={issues} /> : null}
+        {source === 'file' ? (
+          <>
+            <div
+              className={`file-drop-zone ${dragOver ? 'is-drag-over' : ''}`}
+              onDragEnter={(event) => {
+                event.preventDefault()
+                setDragOver(true)
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={handleDrop}
+            >
+              <Icon name="upload" size={24} />
+              <strong>
+                {dragOver ? 'Drop file to open' : 'Drop an MF-JSON file here'}
+              </strong>
+              <span>or choose a local file</span>
+              <button
+                disabled={state.status === 'loading'}
+                onClick={() => inputRef.current?.click()}
+                type="button"
+              >
+                Browse files
+              </button>
+              <input
+                accept=".json,.mfjson,application/json"
+                aria-label="Choose local MF-JSON file"
+                className="visually-hidden"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0]
+                  if (file) void processFile(file)
+                  event.currentTarget.value = ''
+                }}
+                ref={inputRef}
+                type="file"
+              />
+              <small>Accepted formats: .json, .mfjson</small>
+            </div>
+
+            <div aria-live="polite" className="upload-status">
+              {state.status === 'loading' ? (
+                <>
+                  <span className="loading-spinner" />
+                  <div>
+                    <strong>Loading {state.filename}</strong>
+                    <p>Reading, validating, and normalizing moving features…</p>
+                  </div>
+                </>
+              ) : null}
+              {state.status === 'success' ? (
+                <>
+                  <span className="upload-success">
+                    <Icon name="activity" />
+                  </span>
+                  <div>
+                    <strong>{state.filename} loaded</strong>
+                    <p>
+                      {state.count} moving{' '}
+                      {state.count === 1 ? 'feature' : 'features'} replaced the
+                      current dataset.
+                    </p>
+                  </div>
+                </>
+              ) : null}
+              {state.status === 'error' ? (
+                <>
+                  <Icon name="alert" />
+                  <div>
+                    <strong>Could not load {state.filename}</strong>
+                    <p>{state.error.message}</p>
+                  </div>
+                </>
+              ) : null}
+            </div>
+            {issues ? <ValidationIssueList issues={issues} /> : null}
+          </>
+        ) : (
+          <ServerDataSourcePanel onLoaded={onLoaded} />
+        )}
       </section>
     </div>
   )

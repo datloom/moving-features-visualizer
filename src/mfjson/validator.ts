@@ -153,7 +153,8 @@ const validateCoordinates = (
       addIssue(context, {
         path: itemPath,
         code: 'invalid_coordinate',
-        message: 'A position must contain longitude, latitude, and optional height.',
+        message:
+          'A position must contain longitude, latitude, and optional height.',
         expected: '[longitude, latitude] or [longitude, latitude, height]',
         actual: coordinate,
       })
@@ -197,12 +198,11 @@ const validateCoordinates = (
   return value as readonly (readonly number[])[]
 }
 
-const validateTemporalGeometry = (
+const validateTemporalGeometrySegment = (
   value: unknown,
+  path: string,
   context: ValidationContext,
 ) => {
-  const path = '$.temporalGeometry'
-
   if (!isRecord(value)) {
     addIssue(context, {
       path,
@@ -234,16 +234,8 @@ const validateTemporalGeometry = (
     })
   }
 
-  validateDatetimes(
-    value.datetimes,
-    `${path}.datetimes`,
-    context,
-  )
-  validateCoordinates(
-    value.coordinates,
-    `${path}.coordinates`,
-    context,
-  )
+  validateDatetimes(value.datetimes, `${path}.datetimes`, context)
+  validateCoordinates(value.coordinates, `${path}.coordinates`, context)
 
   if (
     isUnknownArray(value.datetimes) &&
@@ -258,6 +250,30 @@ const validateTemporalGeometry = (
       actual: value.coordinates.length,
     })
   }
+}
+
+const validateTemporalGeometry = (
+  value: unknown,
+  context: ValidationContext,
+) => {
+  const path = '$.temporalGeometry'
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      addIssue(context, {
+        path,
+        code: 'empty_array',
+        message: 'At least one temporal geometry segment is required.',
+        expected: 'non-empty array',
+        actual: value,
+      })
+      return
+    }
+    value.forEach((segment, index) =>
+      validateTemporalGeometrySegment(segment, `${path}[${index}]`, context),
+    )
+    return
+  }
+  validateTemporalGeometrySegment(value, path, context)
 }
 
 const validatePropertyDefinition = (
@@ -355,7 +371,10 @@ const validatePropertyDefinition = (
         Number.isFinite(propertyValue)) ||
       (propertyType === 'Text' && typeof propertyValue === 'string')
 
-    if (!hasValidType && (propertyType === 'Measure' || propertyType === 'Text')) {
+    if (
+      !hasValidType &&
+      (propertyType === 'Measure' || propertyType === 'Text')
+    ) {
       addIssue(context, {
         path: `${path}.values[${index}]`,
         code: 'invalid_value',
@@ -398,11 +417,7 @@ const validateTemporalProperties = (
       return
     }
 
-    validateDatetimes(
-      group.datetimes,
-      `${groupPath}.datetimes`,
-      context,
-    )
+    validateDatetimes(group.datetimes, `${groupPath}.datetimes`, context)
     const definitions = Object.entries(group).filter(
       ([name]) => name !== 'datetimes',
     )

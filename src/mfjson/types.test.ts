@@ -57,15 +57,15 @@ describe('Moving Feature domain model', () => {
       id: 'vehicle-1',
       type: 'MovingFeature',
       temporalGeometry: {
-        type: 'MovingPoint',
-        interpolation: 'Linear',
-        samples: [],
+        segments: [
+          { type: 'MovingPoint', interpolation: 'Linear', samples: [] },
+        ],
       },
       temporalProperties: [],
       properties: { label: 'Vehicle 1' },
     } satisfies MovingFeature
 
     expect(feature.id).toBe('vehicle-1')
-    expect(feature.temporalGeometry.type).toBe('MovingPoint')
+    expect(feature.temporalGeometry.segments[0]?.type).toBe('MovingPoint')
   })
 })

@@ -52,15 +52,19 @@ vi.mock('cesium', () => ({
 
 vi.mock('../../visualization/cesium/adapters', () => ({
   getFeatureTimeRange: (feature: {
-    temporalGeometry: { samples: unknown[] }
+    temporalGeometry: { segments: { samples: unknown[] }[] }
   }) => {
-    const samples = feature.temporalGeometry.samples as { time: number }[]
+    const samples = feature.temporalGeometry.segments[0]!.samples as {
+      time: number
+    }[]
     return {
       startTime: samples[0]!.time,
       endTime: samples.at(-1)!.time,
     }
   },
-  movingFeatureToEntity,
+  movingFeatureToEntities: (feature: { id: string }) => [
+    movingFeatureToEntity(feature),
+  ],
   timestampToJulianDate,
 }))
 
@@ -72,11 +76,15 @@ const feature: MovingFeature = {
   id: 'vehicle-1',
   type: 'MovingFeature',
   temporalGeometry: {
-    type: 'MovingPoint',
-    interpolation: 'Linear',
-    samples: [
-      { time: 100, longitude: 139.7, latitude: 35.6 },
-      { time: 200, longitude: 139.8, latitude: 35.7 },
+    segments: [
+      {
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: 100, longitude: 139.7, latitude: 35.6 },
+          { time: 200, longitude: 139.8, latitude: 35.7 },
+        ],
+      },
     ],
   },
   temporalProperties: [],

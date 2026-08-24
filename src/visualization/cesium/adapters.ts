@@ -66,9 +66,14 @@ export interface FeatureTimeRange {
 export const getFeatureTimeRange = (
   feature: MovingFeature,
 ): FeatureTimeRange => {
-  const samples = feature.temporalGeometry.samples
-  const firstSample = samples[0]
-  const lastSample = samples.at(-1)
+  let firstSample: PositionSample | undefined
+  let lastSample: PositionSample | undefined
+  for (const segment of feature.temporalGeometry.segments) {
+    for (const sample of segment.samples) {
+      if (!firstSample || sample.time < firstSample.time) firstSample = sample
+      if (!lastSample || sample.time > lastSample.time) lastSample = sample
+    }
+  }
 
   if (!firstSample || !lastSample) {
     throw new RangeError('MovingPoint geometry must contain position samples.')
@@ -78,32 +83,50 @@ export const getFeatureTimeRange = (
 }
 
 export const movingFeatureToEntity = (feature: MovingFeature): Entity => {
-  const samples = feature.temporalGeometry.samples
-  const { startTime, endTime } = getFeatureTimeRange(feature)
-  const durationSeconds = Math.max((endTime - startTime) / 1_000, 1)
-
-  return new Entity({
-    id: feature.id,
-    name: feature.id,
-    availability: new TimeIntervalCollection([
-      new TimeInterval({
-        start: timestampToJulianDate(startTime),
-        stop: timestampToJulianDate(endTime),
-      }),
-    ]),
-    position: samplesToPositionProperty(samples),
-    point: {
-      color: Color.fromCssColorString('#35d4c7'),
-      outlineColor: Color.fromCssColorString('#071b1c'),
-      outlineWidth: 3,
-      pixelSize: 12,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    },
-    path: {
-      leadTime: durationSeconds,
-      trailTime: durationSeconds,
-      material: Color.fromCssColorString('#35d4c7').withAlpha(0.75),
-      width: 3,
-    },
-  })
+  const entity = movingFeatureToEntities(feature)[0]
+  if (!entity)
+    throw new RangeError('MovingPoint geometry must contain position samples.')
+  return entity
 }
+
+export const movingFeatureToEntities = (
+  feature: MovingFeature,
+): readonly Entity[] =>
+  feature.temporalGeometry.segments.map((segment, index) => {
+    const samples = segment.samples
+    const first = samples[0]
+    const last = samples.at(-1)
+    if (!first || !last) {
+      throw new RangeError(
+        'MovingPoint geometry must contain position samples.',
+      )
+    }
+    const startTime = first.time
+    const endTime = last.time
+    const durationSeconds = Math.max((endTime - startTime) / 1_000, 1)
+
+    return new Entity({
+      id: index === 0 ? feature.id : `${feature.id}--segment-${index + 1}`,
+      name: feature.id,
+      availability: new TimeIntervalCollection([
+        new TimeInterval({
+          start: timestampToJulianDate(startTime),
+          stop: timestampToJulianDate(endTime),
+        }),
+      ]),
+      position: samplesToPositionProperty(samples),
+      point: {
+        color: Color.fromCssColorString('#35d4c7'),
+        outlineColor: Color.fromCssColorString('#071b1c'),
+        outlineWidth: 3,
+        pixelSize: 12,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      path: {
+        leadTime: durationSeconds,
+        trailTime: durationSeconds,
+        material: Color.fromCssColorString('#35d4c7').withAlpha(0.75),
+        width: 3,
+      },
+    })
+  })

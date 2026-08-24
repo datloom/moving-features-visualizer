@@ -8,7 +8,9 @@ export function SelectedFeatureInfo({
 }: {
   readonly feature: MovingFeature
 }) {
-  const samples = feature.temporalGeometry.samples
+  const samples = feature.temporalGeometry.segments.flatMap(
+    (segment) => segment.samples,
+  )
   const first = samples[0]
   const last = samples.at(-1)
   const label =

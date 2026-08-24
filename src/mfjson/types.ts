@@ -26,6 +26,10 @@ export interface MovingPoint {
  */
 export type TemporalGeometry = MovingPoint
 
+export interface TemporalGeometryTrack {
+  readonly segments: readonly TemporalGeometry[]
+}
+
 export interface TemporalPropertySample<Value extends number | string> {
   readonly time: Timestamp
   readonly value: Value
@@ -48,14 +52,12 @@ export interface TextTemporalProperty {
   readonly samples: readonly TemporalPropertySample<string>[]
 }
 
-export type TemporalProperty =
-  | MeasureTemporalProperty
-  | TextTemporalProperty
+export type TemporalProperty = MeasureTemporalProperty | TextTemporalProperty
 
 export interface MovingFeature {
   readonly id: string
   readonly type: 'MovingFeature'
-  readonly temporalGeometry: TemporalGeometry
+  readonly temporalGeometry: TemporalGeometryTrack
   readonly temporalProperties: readonly TemporalProperty[]
   readonly properties: Readonly<Record<string, unknown>>
 }

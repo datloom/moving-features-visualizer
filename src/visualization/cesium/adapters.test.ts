@@ -14,19 +14,23 @@ const movingFeature: MovingFeature = {
   id: 'vehicle-1',
   type: 'MovingFeature',
   temporalGeometry: {
-    type: 'MovingPoint',
-    interpolation: 'Linear',
-    samples: [
+    segments: [
       {
-        time: Date.parse('2026-08-24T12:00:00Z'),
-        longitude: 139.7,
-        latitude: 35.6,
-      },
-      {
-        time: Date.parse('2026-08-24T12:00:10Z'),
-        longitude: 139.8,
-        latitude: 35.7,
-        height: 120,
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          {
+            time: Date.parse('2026-08-24T12:00:00Z'),
+            longitude: 139.7,
+            latitude: 35.6,
+          },
+          {
+            time: Date.parse('2026-08-24T12:00:10Z'),
+            longitude: 139.8,
+            latitude: 35.7,
+            height: 120,
+          },
+        ],
       },
     ],
   },
@@ -101,8 +105,8 @@ describe('Cesium adapters', () => {
 
   it('derives entity availability from normalized sample timestamps', () => {
     expect(getFeatureTimeRange(movingFeature)).toEqual({
-      startTime: movingFeature.temporalGeometry.samples[0]!.time,
-      endTime: movingFeature.temporalGeometry.samples[1]!.time,
+      startTime: movingFeature.temporalGeometry.segments[0]!.samples[0]!.time,
+      endTime: movingFeature.temporalGeometry.segments[0]!.samples[1]!.time,
     })
 
     const entity = movingFeatureToEntity(movingFeature)
@@ -116,13 +120,17 @@ describe('Cesium adapters', () => {
     expect(
       JulianDate.equals(
         interval.start,
-        timestampToJulianDate(movingFeature.temporalGeometry.samples[0]!.time),
+        timestampToJulianDate(
+          movingFeature.temporalGeometry.segments[0]!.samples[0]!.time,
+        ),
       ),
     ).toBe(true)
     expect(
       JulianDate.equals(
         interval.stop,
-        timestampToJulianDate(movingFeature.temporalGeometry.samples[1]!.time),
+        timestampToJulianDate(
+          movingFeature.temporalGeometry.segments[0]!.samples[1]!.time,
+        ),
       ),
     ).toBe(true)
   })
@@ -130,7 +138,11 @@ describe('Cesium adapters', () => {
   it('rejects MovingPoint geometry without samples', () => {
     const emptyFeature: MovingFeature = {
       ...movingFeature,
-      temporalGeometry: { ...movingFeature.temporalGeometry, samples: [] },
+      temporalGeometry: {
+        segments: [
+          { ...movingFeature.temporalGeometry.segments[0]!, samples: [] },
+        ],
+      },
     }
 
     expect(() => movingFeatureToEntity(emptyFeature)).toThrow(RangeError)

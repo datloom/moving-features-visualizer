@@ -6,7 +6,7 @@ import type { MovingFeature } from '../../mfjson/types'
 import { useTimeStore } from '../../store/timeStore'
 import {
   getFeatureTimeRange,
-  movingFeatureToEntity,
+  movingFeatureToEntities,
   timestampToJulianDate,
 } from '../../visualization/cesium/adapters'
 
@@ -69,8 +69,10 @@ export function CesiumMap({
       viewer.entities.remove(entity)
     }
 
-    const entities = features.map((feature) =>
-      viewer.entities.add(movingFeatureToEntity(feature)),
+    const entities = features.flatMap((feature) =>
+      movingFeatureToEntities(feature).map((entity) =>
+        viewer.entities.add(entity),
+      ),
     )
     featureEntitiesRef.current = entities
 

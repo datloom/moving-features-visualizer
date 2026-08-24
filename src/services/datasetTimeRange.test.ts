@@ -7,11 +7,15 @@ const feature: MovingFeature = {
   id: 'range-test',
   type: 'MovingFeature',
   temporalGeometry: {
-    type: 'MovingPoint',
-    interpolation: 'Linear',
-    samples: [
-      { time: 200, longitude: 0, latitude: 0 },
-      { time: 300, longitude: 1, latitude: 1 },
+    segments: [
+      {
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: 200, longitude: 0, latitude: 0 },
+          { time: 300, longitude: 1, latitude: 1 },
+        ],
+      },
     ],
   },
   temporalProperties: [
@@ -34,8 +38,12 @@ describe('getDatasetTimeRange', () => {
       ...feature,
       id: 'later',
       temporalGeometry: {
-        ...feature.temporalGeometry,
-        samples: [{ time: 500, longitude: 2, latitude: 2 }],
+        segments: [
+          {
+            ...feature.temporalGeometry.segments[0]!,
+            samples: [{ time: 500, longitude: 2, latitude: 2 }],
+          },
+        ],
       },
       temporalProperties: [],
     }

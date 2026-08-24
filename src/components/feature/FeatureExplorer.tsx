@@ -80,7 +80,10 @@ export function FeatureExplorer({
                 <small>{feature.id}</small>
               </span>
               <span className="feature-samples">
-                {feature.temporalGeometry.samples.length}
+                {feature.temporalGeometry.segments.reduce(
+                  (count, segment) => count + segment.samples.length,
+                  0,
+                )}
                 <small>samples</small>
               </span>
             </button>
