@@ -82,31 +82,50 @@ describe('MovingFeaturesApiClient', () => {
     },
   )
 
-  it('serializes a child datetime interval once with quotes and no leading space', async () => {
+  it('serializes collection and child datetime intervals without quotes or whitespace', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(
+      .mockResolvedValueOnce(
+        response({ type: 'FeatureCollection', features: [] }),
+      )
+      .mockResolvedValueOnce(
         response({ type: 'TemporalGeometrySequence', geometrySequence: [] }),
       )
+      .mockResolvedValueOnce(response({ temporalProperties: [] }))
     const client = new MovingFeaturesApiClient(
       'http://localhost:5050',
       fetchMock,
     )
+    const datetime = {
+      start: ' 2011-07-14T22:01:01Z ',
+      end: '\t2011-07-15T01:11:22Z\n',
+    }
+    await client.getFeatures('routes', { limit: 100, datetime })
     await client.getTemporalGeometry('routes', 'mf/1', {
       limit: 1000,
-      datetime: { start: '2011-07-14T22:01:01Z', end: '2011-07-15T01:11:22Z' },
+      datetime,
     })
-    const url = fetchMock.mock.calls[0]![0] as URL
-    expect(url.searchParams.get('datetime')).toBe(
-      '"2011-07-14T22:01:01Z/2011-07-15T01:11:22Z"',
-    )
-    expect(url.pathname).toContain('mf%2F1/tgsequence')
+    await client.getTemporalProperties('routes', 'mf/1', { datetime })
+
+    const urls = fetchMock.mock.calls.map(([input]) => input as URL)
+    expect(urls.map(({ pathname }) => pathname)).toEqual([
+      '/collections/routes/items',
+      '/collections/routes/items/mf%2F1/tgsequence',
+      '/collections/routes/items/mf%2F1/tproperties',
+    ])
+    for (const url of urls) {
+      const value = url.searchParams.get('datetime')
+      expect(value).toBe('2011-07-14T22:01:01Z/2011-07-15T01:11:22Z')
+      expect(value).not.toContain('"')
+      expect(value).toBe(value?.trim())
+      expect(url.toString()).not.toContain('%22')
+    }
     expect(
       serializeDateTimeInterval({
-        start: '2011-07-14T22:01:01Z',
-        end: '2011-07-15T01:11:22Z',
+        start: ' 2011-07-14T22:01:01Z ',
+        end: '2011-07-15T01:11:22Z ',
       }),
-    ).toBe('"2011-07-14T22:01:01Z/2011-07-15T01:11:22Z"')
+    ).toBe('2011-07-14T22:01:01Z/2011-07-15T01:11:22Z')
   })
 
   it.each([

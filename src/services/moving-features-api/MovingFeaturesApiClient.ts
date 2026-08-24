@@ -30,18 +30,20 @@ export const serializeDateTimeInterval = ({
   start,
   end,
 }: DateTimeInterval): string => {
+  const normalizedStart = start.trim()
+  const normalizedEnd = end.trim()
   if (
-    !Number.isFinite(Date.parse(start)) ||
-    !Number.isFinite(Date.parse(end))
+    !Number.isFinite(Date.parse(normalizedStart)) ||
+    !Number.isFinite(Date.parse(normalizedEnd))
   ) {
     throw new RangeError(
       'Datetime interval values must be valid ISO 8601 dates.',
     )
   }
-  if (Date.parse(start) > Date.parse(end)) {
+  if (Date.parse(normalizedStart) > Date.parse(normalizedEnd)) {
     throw new RangeError('Datetime interval start must not be after its end.')
   }
-  return `"${start}/${end}"`
+  return `${normalizedStart}/${normalizedEnd}`
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
