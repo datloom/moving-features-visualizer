@@ -1,5 +1,5 @@
 export type MovingFeaturesApiErrorKind =
-  'network' | 'http' | 'invalid-json' | 'invalid-response'
+  'client' | 'network' | 'http' | 'invalid-json' | 'invalid-response'
 
 export class MovingFeaturesApiError extends Error {
   constructor(

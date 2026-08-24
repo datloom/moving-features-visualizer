@@ -12,6 +12,8 @@ import { MAX_FEATURE_LIMIT, MIN_FEATURE_LIMIT } from './types'
 
 type FetchImplementation = typeof fetch
 
+const browserFetch: FetchImplementation = (input, init) => fetch(input, init)
+
 export const validateLimit = (limit: number): void => {
   if (
     !Number.isInteger(limit) ||
@@ -50,7 +52,7 @@ export class MovingFeaturesApiClient {
 
   constructor(
     baseUrl: string,
-    private readonly fetchImplementation: FetchImplementation = fetch,
+    private readonly fetchImplementation: FetchImplementation = browserFetch,
   ) {
     const parsed = new URL(baseUrl)
     parsed.pathname = parsed.pathname.replace(/\/$/, '')
@@ -79,6 +81,12 @@ export class MovingFeaturesApiClient {
         headers: { Accept: 'application/json' },
       })
     } catch (error) {
+      if (error instanceof Error && /illegal invocation/i.test(error.message)) {
+        throw new MovingFeaturesApiError(
+          'client',
+          'Moving Features API request could not start because the fetch adapter lost its browser invocation context.',
+        )
+      }
       throw new MovingFeaturesApiError(
         'network',
         `Could not reach the Moving Features server. Check the server URL and CORS configuration. ${error instanceof Error ? error.message : ''}`.trim(),

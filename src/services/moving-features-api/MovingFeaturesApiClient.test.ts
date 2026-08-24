@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MovingFeaturesApiError } from './errors'
 import {
@@ -14,6 +14,25 @@ const response = (body: unknown, init: ResponseInit = {}) =>
   })
 
 describe('MovingFeaturesApiClient', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('uses the default browser fetch adapter without invoking fetch as a client method', async () => {
+    const nativeFetchLike = vi.fn(function (this: unknown) {
+      if (this instanceof MovingFeaturesApiClient) {
+        throw new TypeError('Illegal invocation')
+      }
+      return Promise.resolve(response({ collections: [] }))
+    })
+    vi.stubGlobal('fetch', nativeFetchLike)
+
+    const client = new MovingFeaturesApiClient('http://localhost:5050')
+    await expect(client.getCollections()).resolves.toEqual({
+      collections: [],
+      links: undefined,
+    })
+    expect(nativeFetchLike).toHaveBeenCalledOnce()
+  })
+
   it('retrieves only explicitly typed Moving Feature collections', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       response({
@@ -125,5 +144,22 @@ describe('MovingFeaturesApiClient', () => {
     await expect(
       itemsClient.getFeatures('routes', { limit: 10 }),
     ).rejects.toMatchObject({ kind: 'invalid-response' })
+  })
+
+  it('classifies a lost fetch invocation context as a client error', async () => {
+    const detachedFetch = vi
+      .fn()
+      .mockRejectedValue(new TypeError('Illegal invocation'))
+
+    await expect(
+      new MovingFeaturesApiClient(
+        'http://localhost:5050',
+        detachedFetch,
+      ).getCollections(),
+    ).rejects.toMatchObject({
+      kind: 'client',
+      message:
+        'Moving Features API request could not start because the fetch adapter lost its browser invocation context.',
+    })
   })
 })
