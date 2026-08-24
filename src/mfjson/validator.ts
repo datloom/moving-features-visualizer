@@ -294,12 +294,16 @@ const validatePropertyDefinition = (
   }
 
   const propertyType = value.type
-  if (propertyType !== 'Measure' && propertyType !== 'Text') {
+  if (
+    propertyType !== 'Measure' &&
+    propertyType !== 'Text' &&
+    propertyType !== 'IMAGE'
+  ) {
     addIssue(context, {
       path: `${path}.type`,
       code: propertyType === undefined ? 'required' : 'unsupported_value',
-      message: 'Temporal property type must be Measure or Text.',
-      expected: ['Measure', 'Text'],
+      message: 'Temporal property type must be Measure, Text, or IMAGE.',
+      expected: ['Measure', 'Text', 'IMAGE'],
       actual: propertyType,
     })
   }
@@ -369,11 +373,14 @@ const validatePropertyDefinition = (
       (propertyType === 'Measure' &&
         typeof propertyValue === 'number' &&
         Number.isFinite(propertyValue)) ||
-      (propertyType === 'Text' && typeof propertyValue === 'string')
+      ((propertyType === 'Text' || propertyType === 'IMAGE') &&
+        typeof propertyValue === 'string')
 
     if (
       !hasValidType &&
-      (propertyType === 'Measure' || propertyType === 'Text')
+      (propertyType === 'Measure' ||
+        propertyType === 'Text' ||
+        propertyType === 'IMAGE')
     ) {
       addIssue(context, {
         path: `${path}.values[${index}]`,

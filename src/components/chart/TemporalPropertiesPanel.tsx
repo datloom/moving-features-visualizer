@@ -1,4 +1,5 @@
-import type { MeasureTemporalProperty, MovingFeature } from '../../mfjson/types'
+import type { MovingFeature } from '../../mfjson/types'
+import { getPropertyRendererStrategy } from '../../visualization/chart/temporalPropertyRendererStrategy'
 import { MeasurePropertyChart } from './MeasurePropertyChart'
 
 export function TemporalPropertiesPanel({
@@ -6,10 +7,11 @@ export function TemporalPropertiesPanel({
 }: {
   readonly feature: MovingFeature
 }) {
-  const measures = feature.temporalProperties.filter(
-    (property): property is MeasureTemporalProperty =>
-      property.type === 'Measure',
+  const strategies = feature.temporalProperties.map(getPropertyRendererStrategy)
+  const renderable = strategies.find(
+    (strategy) => strategy.renderer === 'measure-chart',
   )
+  const unavailable = strategies[0]
 
   return (
     <section aria-label="Temporal Properties" className="temporal-panel">
@@ -20,10 +22,13 @@ export function TemporalPropertiesPanel({
         </div>
         <span>{feature.temporalProperties.length} properties</span>
       </header>
-      {measures[0] ? (
-        <MeasurePropertyChart property={measures[0]} />
+      {renderable?.renderer === 'measure-chart' ? (
+        <MeasurePropertyChart property={renderable.property} />
       ) : (
-        <p className="compact-empty">No Measure properties are available.</p>
+        <p className="compact-empty">
+          {unavailable?.unavailableReason ??
+            'No temporal properties are available.'}
+        </p>
       )}
     </section>
   )

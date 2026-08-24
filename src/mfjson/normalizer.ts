@@ -23,9 +23,17 @@ const textPropertySchema = z.object({
   form: z.string().optional(),
 })
 
+const imagePropertySchema = z.object({
+  type: z.literal('IMAGE'),
+  values: z.array(z.string()),
+  interpolation: z.enum(['Discrete', 'Step', 'Linear']),
+  form: z.string().optional(),
+})
+
 const propertyDefinitionSchema = z.discriminatedUnion('type', [
   measurePropertySchema,
   textPropertySchema,
+  imagePropertySchema,
 ])
 
 const temporalPropertyGroupSchema = z
@@ -110,6 +118,14 @@ export const normalizeTemporalProperties = (
           name,
           interpolation: definition.interpolation,
           unit: definition.unit,
+          form: definition.form,
+          samples: createSamples(group.datetimes, definition.values),
+        })
+      } else if (definition.type === 'Text') {
+        properties.push({
+          type: definition.type,
+          name,
+          interpolation: definition.interpolation,
           form: definition.form,
           samples: createSamples(group.datetimes, definition.values),
         })

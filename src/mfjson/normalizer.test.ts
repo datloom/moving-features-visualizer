@@ -86,6 +86,39 @@ describe('normalizeTemporalProperties', () => {
     })
   })
 
+  it.each(['Discrete', 'Step', 'Linear'] as const)(
+    'normalizes opaque IMAGE values with %s interpolation',
+    (interpolation) => {
+      const value = 'data:image/png;base64,untrusted-payload'
+      const result = normalizeTemporalProperties(
+        featureWith([
+          {
+            datetimes: ['2026-08-21T10:00:01Z'],
+            camera: {
+              type: 'IMAGE',
+              values: [value],
+              interpolation,
+              form: 'https://example.test/camera',
+            },
+          },
+        ]),
+      )
+
+      expect(result).toEqual({
+        success: true,
+        data: [
+          {
+            name: 'camera',
+            type: 'IMAGE',
+            interpolation,
+            form: 'https://example.test/camera',
+            samples: [{ time: Date.parse('2026-08-21T10:00:01Z'), value }],
+          },
+        ],
+      })
+    },
+  )
+
   it('normalizes multiple properties from one group', () => {
     const result = normalizeTemporalProperties(
       featureWith([

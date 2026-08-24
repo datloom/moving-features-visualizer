@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import type {
   MeasureTemporalProperty,
+  ImageTemporalProperty,
   MovingFeature,
   PositionSample,
   TemporalGeometry,
@@ -48,6 +49,21 @@ describe('Moving Feature domain model', () => {
       TemporalPropertySample<number>
     >()
     expectTypeOf(status.samples[0]!).toMatchTypeOf<
+      TemporalPropertySample<string>
+    >()
+  })
+
+  it('represents IMAGE values as opaque timestamped strings', () => {
+    const image = {
+      type: 'IMAGE',
+      name: 'camera',
+      interpolation: 'Linear',
+      samples: [
+        { time: 1_700_000_000_000, value: 'data:image/png;base64,opaque' },
+      ],
+    } satisfies ImageTemporalProperty
+
+    expectTypeOf(image.samples[0]!).toMatchTypeOf<
       TemporalPropertySample<string>
     >()
   })

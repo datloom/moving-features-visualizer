@@ -217,6 +217,56 @@ describe('validateMfJson', () => {
     )
   })
 
+  it.each([
+    ['Measure', 'Discrete', [1]],
+    ['Measure', 'Linear', [1.5]],
+    ['Measure', 'Step', [2]],
+    ['Text', 'Discrete', ['idle']],
+    ['Text', 'Step', ['moving']],
+    ['IMAGE', 'Discrete', ['https://example.test/frame.png']],
+    ['IMAGE', 'Step', ['data:image/png;base64,opaque']],
+    ['IMAGE', 'Linear', ['https://example.test/frame-2.png']],
+  ])('accepts %s + %s', (type, interpolation, values) => {
+    expect(
+      validateMfJson({
+        ...validFeature,
+        temporalProperties: [
+          {
+            datetimes: ['2024-01-01T00:00:00Z'],
+            observed: { type, interpolation, values },
+          },
+        ],
+      }),
+    ).toEqual({ valid: true, issues: [] })
+  })
+
+  it.each([
+    ['Measure', ['fast'], 'finite number'],
+    ['Text', [42], 'string'],
+    ['IMAGE', [42], 'string'],
+  ])('rejects invalid %s values', (type, values, expected) => {
+    const result = validateMfJson({
+      ...validFeature,
+      temporalProperties: [
+        {
+          datetimes: ['2024-01-01T00:00:00Z'],
+          observed: { type, interpolation: 'Discrete', values },
+        },
+      ],
+    })
+
+    expect(result).toMatchObject({
+      valid: false,
+      issues: [
+        expect.objectContaining({
+          path: '$.temporalProperties[0].observed.values[0]',
+          code: 'invalid_value',
+          expected,
+        }),
+      ],
+    })
+  })
+
   it('rejects unordered temporal-property datetimes independently of geometry', () => {
     const result = validateMfJson({
       ...validFeature,

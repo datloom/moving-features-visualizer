@@ -5,7 +5,7 @@ export type GeometryInterpolation = 'Linear'
 
 export type PropertyInterpolation = 'Discrete' | 'Step' | 'Linear'
 
-export type TemporalPropertyType = 'Measure' | 'Text'
+export type TemporalPropertyType = 'Measure' | 'Text' | 'IMAGE'
 
 export interface PositionSample {
   readonly time: Timestamp
@@ -52,7 +52,16 @@ export interface TextTemporalProperty {
   readonly samples: readonly TemporalPropertySample<string>[]
 }
 
-export type TemporalProperty = MeasureTemporalProperty | TextTemporalProperty
+export interface ImageTemporalProperty {
+  readonly type: 'IMAGE'
+  readonly name: string
+  readonly interpolation: PropertyInterpolation
+  readonly form?: string
+  readonly samples: readonly TemporalPropertySample<string>[]
+}
+
+export type TemporalProperty =
+  MeasureTemporalProperty | TextTemporalProperty | ImageTemporalProperty
 
 export interface MovingFeature {
   readonly id: string
