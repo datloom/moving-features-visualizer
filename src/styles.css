@@ -386,13 +386,15 @@ select {
   color: var(--primary);
   border-color: #35635f;
 }
-.map-mode-control {
+.map-mode-control,
+.visualization-mode-control {
   display: grid;
   grid-template-columns: repeat(2, 32px);
   border: 1px solid var(--border);
   background: rgb(9 14 17 / 88%);
 }
-.map-mode-control button {
+.map-mode-control button,
+.visualization-mode-control button {
   height: 30px;
   padding: 0;
   border: 0;
@@ -402,12 +404,41 @@ select {
   font-weight: 700;
   cursor: pointer;
 }
-.map-mode-control button + button {
+.map-mode-control button + button,
+.visualization-mode-control button + button {
   border-left: 1px solid var(--border);
 }
-.map-mode-control button.is-active {
+.map-mode-control button.is-active,
+.visualization-mode-control button.is-active {
   color: var(--primary);
   background: var(--selected);
+}
+.visualization-mode-control {
+  grid-template-columns: 42px 76px;
+}
+.space-time-legend {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid rgb(126 151 158 / 35%);
+  color: var(--muted);
+  background: rgb(9 14 17 / 88%);
+  font-size: 0.62rem;
+}
+.space-time-legend strong {
+  color: var(--foreground);
+  font-size: 0.68rem;
+}
+.space-time-empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--muted);
+  background: #0c1114;
+  font-size: 0.72rem;
 }
 .map-attribution {
   position: absolute;
@@ -884,6 +915,7 @@ select {
 .icon-button:focus-visible,
 .map-tool-button:focus-visible,
 .map-mode-control button:focus-visible,
+.visualization-mode-control button:focus-visible,
 .feature-row:focus-visible,
 .dataset-control select:focus-visible,
 .feature-search input:focus-visible,

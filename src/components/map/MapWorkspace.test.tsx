@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { MovingFeature } from '../../mfjson/types'
@@ -7,6 +7,10 @@ vi.mock('./CesiumMap', () => ({
   CesiumMap: ({ mapMode }: { readonly mapMode: string }) => (
     <div data-testid="cesium-map-mode">{mapMode}</div>
   ),
+}))
+
+vi.mock('./SpaceTimeMap', () => ({
+  SpaceTimeMap: () => <div data-testid="space-time-map" />,
 }))
 
 vi.mock('../feature/SelectedFeatureInfo', () => ({
@@ -32,7 +36,10 @@ const feature: MovingFeature = {
 }
 
 describe('MapWorkspace map mode control', () => {
-  afterEach(() => vi.clearAllMocks())
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
 
   it('defaults to 3D and switches between 2D and 3D', () => {
     render(<MapWorkspace feature={feature} />)
@@ -49,5 +56,18 @@ describe('MapWorkspace map mode control', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '3D' }))
     expect(screen.getByTestId('cesium-map-mode')).toHaveTextContent('3d')
+  })
+
+  it('mounts only the selected Cesium visualization', () => {
+    render(<MapWorkspace feature={feature} />)
+    expect(screen.getByTestId('cesium-map-mode')).toBeInTheDocument()
+    expect(screen.queryByTestId('space-time-map')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Space-Time' }))
+    expect(screen.queryByTestId('cesium-map-mode')).not.toBeInTheDocument()
+    expect(screen.getByTestId('space-time-map')).toBeInTheDocument()
+    expect(
+      screen.getByText('Columbus View · time-height axis'),
+    ).toBeInTheDocument()
   })
 })
