@@ -293,10 +293,17 @@ const validatePropertyDefinition = (
       ? ['Discrete', 'Step']
       : ['Discrete', 'Step', 'Linear']
   const interpolation = value.interpolation
-  if (
-    interpolation !== undefined &&
-    (typeof interpolation !== 'string' ||
-      !allowedInterpolations.includes(interpolation))
+  if (interpolation === undefined) {
+    addIssue(context, {
+      path: `${path}.interpolation`,
+      code: 'required',
+      message: 'Temporal property interpolation is required.',
+      expected: allowedInterpolations,
+      actual: interpolation,
+    })
+  } else if (
+    typeof interpolation !== 'string' ||
+    !allowedInterpolations.includes(interpolation)
   ) {
     addIssue(context, {
       path: `${path}.interpolation`,
@@ -305,6 +312,19 @@ const validatePropertyDefinition = (
       expected: allowedInterpolations,
       actual: interpolation,
     })
+  }
+
+  for (const metadataName of ['unit', 'form'] as const) {
+    const metadata = value[metadataName]
+    if (metadata !== undefined && typeof metadata !== 'string') {
+      addIssue(context, {
+        path: `${path}.${metadataName}`,
+        code: 'invalid_type',
+        message: `Temporal property ${metadataName} must be a string when provided.`,
+        expected: 'string',
+        actual: metadata,
+      })
+    }
   }
 
   if (!isUnknownArray(value.values)) {

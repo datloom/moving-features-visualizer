@@ -36,6 +36,7 @@ export interface MeasureTemporalProperty {
   readonly name: string
   readonly interpolation: PropertyInterpolation
   readonly unit?: string
+  readonly form?: string
   readonly samples: readonly TemporalPropertySample<number>[]
 }
 
@@ -43,6 +44,7 @@ export interface TextTemporalProperty {
   readonly type: 'Text'
   readonly name: string
   readonly interpolation: Exclude<PropertyInterpolation, 'Linear'>
+  readonly form?: string
   readonly samples: readonly TemporalPropertySample<string>[]
 }
 
