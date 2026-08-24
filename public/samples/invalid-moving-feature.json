@@ -1,0 +1,29 @@
+{
+  "type": "Feature",
+  "id": "invalid-demonstration",
+  "temporalGeometry": {
+    "type": "MovingPoint",
+    "interpolation": "Spline",
+    "datetimes": [
+      "2026-08-24T09:01:00Z",
+      "not-a-datetime",
+      "2026-08-24T09:00:30Z"
+    ],
+    "coordinates": [[181, 95], [139.77], [139.78, 35.68], [139.79, 35.69]]
+  },
+  "temporalProperties": [
+    {
+      "datetimes": ["2026-08-24T09:00:00Z", "2026-08-24T09:01:00Z"],
+      "speed": {
+        "type": "Measure",
+        "values": ["fast"],
+        "unit": 42
+      },
+      "status": {
+        "type": "Text",
+        "values": ["idle", "moving"],
+        "interpolation": "Linear"
+      }
+    }
+  ]
+}
