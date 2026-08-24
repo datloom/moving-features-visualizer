@@ -30,7 +30,12 @@ export const initialFeatureState: FeatureState = {
 }
 
 const geometryFingerprint = (segment: TemporalGeometry): string =>
-  JSON.stringify([segment.type, segment.interpolation, segment.samples])
+  JSON.stringify([
+    segment.id,
+    segment.type,
+    segment.interpolation,
+    segment.samples,
+  ])
 
 const propertyFingerprint = (property: TemporalProperty): string =>
   JSON.stringify([

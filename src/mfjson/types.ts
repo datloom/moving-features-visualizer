@@ -15,6 +15,7 @@ export interface PositionSample {
 }
 
 export interface MovingPoint {
+  readonly id?: string
   readonly type: 'MovingPoint'
   readonly interpolation: GeometryInterpolation
   readonly samples: readonly PositionSample[]

@@ -13,6 +13,7 @@ const positionSchema = z.union([
 ])
 
 const movingPointSchema = z.object({
+  id: z.string().optional(),
   type: z.literal('MovingPoint'),
   datetimes: z.array(z.string()),
   coordinates: z.array(positionSchema),
@@ -82,6 +83,7 @@ export const parseTemporalGeometryTrack = (
     )
 
     return {
+      id: geometry.id,
       type: 'MovingPoint',
       interpolation: geometry.interpolation ?? 'Linear',
       samples,

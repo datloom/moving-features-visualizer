@@ -114,7 +114,7 @@ describe('Cesium adapters', () => {
     const interval = entity.availability!.get(0)
     if (!interval) throw new Error('Expected entity availability interval')
 
-    expect(entity.id).toBe('vehicle-1')
+    expect(entity.id).toBe('vehicle-1--geometry--1')
     expect(entity.position).toBeDefined()
     expect(entity.point).toBeDefined()
     expect(entity.path).toBeDefined()
@@ -134,6 +134,48 @@ describe('Cesium adapters', () => {
         ),
       ),
     ).toBe(true)
+  })
+
+  it('maps every temporal geometry segment to a separate stable entity', () => {
+    const multiSegmentFeature: MovingFeature = {
+      ...movingFeature,
+      temporalGeometry: {
+        segments: Array.from({ length: 5 }, (_, index) => ({
+          ...movingFeature.temporalGeometry.segments[0]!,
+          id: `tg-${index + 1}`,
+          samples: [
+            {
+              time: index * 20 * 60_000,
+              longitude: index,
+              latitude: index,
+            },
+            {
+              time: (index * 20 + 5) * 60_000,
+              longitude: index + 1,
+              latitude: index + 1,
+            },
+          ],
+        })),
+      },
+    }
+
+    const entities = movingFeatureToEntities(multiSegmentFeature, {
+      selected: true,
+    })
+
+    expect(entities.map(({ id }) => id)).toEqual([
+      'vehicle-1--geometry--tg-1',
+      'vehicle-1--geometry--tg-2',
+      'vehicle-1--geometry--tg-3',
+      'vehicle-1--geometry--tg-4',
+      'vehicle-1--geometry--tg-5',
+    ])
+    expect(entities.map((entity) => entity.availability?.length)).toEqual([
+      1, 1, 1, 1, 1,
+    ])
+    expect(entities[0]?.availability?.get(0)?.stop).not.toEqual(
+      entities[1]?.availability?.get(0)?.start,
+    )
   })
 
   it('gives the selected Feature a stronger style without changing its identity', () => {

@@ -12,6 +12,7 @@ import {
 import type {
   MovingFeature,
   PositionSample,
+  TemporalGeometry,
   Timestamp,
 } from '../../mfjson/types'
 
@@ -89,6 +90,13 @@ export const movingFeatureToEntity = (feature: MovingFeature): Entity => {
   return entity
 }
 
+export const geometrySegmentEntityId = (
+  featureId: string,
+  segment: TemporalGeometry,
+  segmentIndex: number,
+): string =>
+  `${featureId}--geometry--${segment.id ? encodeURIComponent(segment.id) : segmentIndex + 1}`
+
 export const movingFeatureToEntities = (
   feature: MovingFeature,
   options: { readonly selected?: boolean } = {},
@@ -107,7 +115,7 @@ export const movingFeatureToEntities = (
     const durationSeconds = Math.max((endTime - startTime) / 1_000, 1)
 
     return new Entity({
-      id: index === 0 ? feature.id : `${feature.id}--segment-${index + 1}`,
+      id: geometrySegmentEntityId(feature.id, segment, index),
       name: feature.id,
       availability: new TimeIntervalCollection([
         new TimeInterval({

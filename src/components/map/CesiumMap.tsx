@@ -12,6 +12,7 @@ import type { MovingFeature } from '../../mfjson/types'
 import { useTimeStore } from '../../store/timeStore'
 import {
   getFeatureTimeRange,
+  geometrySegmentEntityId,
   movingFeatureToEntities,
   timestampToJulianDate,
 } from '../../visualization/cesium/adapters'
@@ -38,7 +39,8 @@ export function CesiumMap({
 }: CesiumMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
-  const featureEntitiesRef = useRef<Entity[]>([])
+  const featureEntitiesRef = useRef<Map<string, Entity>>(new Map())
+  const renderedSelectionRef = useRef<Map<string, boolean>>(new Map())
   const renderedFeatureIdsRef = useRef('')
   const previousMapModeRef = useRef(mapMode)
   const [imageryFailed, setImageryFailed] = useState(false)
@@ -46,6 +48,8 @@ export function CesiumMap({
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
+    const featureEntities = featureEntitiesRef.current
+    const renderedSelection = renderedSelectionRef.current
 
     const imageryProvider = new OpenStreetMapImageryProvider({
       url: OPEN_STREET_MAP_URL,
@@ -80,6 +84,8 @@ export function CesiumMap({
       removeImageryErrorListener()
       unsubscribe()
       viewerRef.current = null
+      featureEntities.clear()
+      renderedSelection.clear()
       if (!viewer.isDestroyed()) viewer.destroy()
     }
   }, [])
@@ -88,22 +94,47 @@ export function CesiumMap({
     const viewer = viewerRef.current
     if (!viewer) return
 
-    for (const entity of featureEntitiesRef.current) {
-      viewer.entities.remove(entity)
-    }
-
     const seenFeatureIds = new Set<string>()
     const uniqueFeatures = features.filter((feature) => {
       if (seenFeatureIds.has(feature.id)) return false
       seenFeatureIds.add(feature.id)
       return true
     })
-    const entities = uniqueFeatures.flatMap((feature) =>
-      movingFeatureToEntities(feature, {
-        selected: feature.id === selectedFeatureId,
-      }).map((entity) => viewer.entities.add(entity)),
-    )
-    featureEntitiesRef.current = entities
+    const desiredEntityIds = new Set<string>()
+    const nextSelection = new Map<string, boolean>()
+    for (const feature of uniqueFeatures) {
+      const selected = feature.id === selectedFeatureId
+      const selectionChanged =
+        renderedSelectionRef.current.get(feature.id) !== selected
+      const segmentIds = feature.temporalGeometry.segments.map(
+        (segment, index) => geometrySegmentEntityId(feature.id, segment, index),
+      )
+      segmentIds.forEach((id) => desiredEntityIds.add(id))
+      if (selectionChanged) {
+        for (const id of segmentIds) {
+          const existing = featureEntitiesRef.current.get(id)
+          if (existing) {
+            viewer.entities.remove(existing)
+            featureEntitiesRef.current.delete(id)
+          }
+        }
+      }
+      for (const entity of movingFeatureToEntities(feature, { selected })) {
+        const id = String(entity.id)
+        if (!featureEntitiesRef.current.has(id)) {
+          featureEntitiesRef.current.set(id, viewer.entities.add(entity))
+        }
+      }
+      nextSelection.set(feature.id, selected)
+    }
+    for (const [id, entity] of featureEntitiesRef.current) {
+      if (!desiredEntityIds.has(id)) {
+        viewer.entities.remove(entity)
+        featureEntitiesRef.current.delete(id)
+      }
+    }
+    renderedSelectionRef.current = nextSelection
+    const entities = [...featureEntitiesRef.current.values()]
     const featureIds = uniqueFeatures.map(({ id }) => id).join('\u0000')
     const featureSetChanged = renderedFeatureIdsRef.current !== featureIds
     renderedFeatureIdsRef.current = featureIds
@@ -114,13 +145,6 @@ export function CesiumMap({
       const endTime = Math.max(...ranges.map((range) => range.endTime))
       useTimeStore.getState().setRange(startTime, endTime)
       if (featureSetChanged) void viewer.zoomTo(entities)
-    }
-
-    return () => {
-      if (!viewer.isDestroyed()) {
-        for (const entity of entities) viewer.entities.remove(entity)
-      }
-      featureEntitiesRef.current = []
     }
   }, [features, selectedFeatureId])
 
@@ -138,16 +162,14 @@ export function CesiumMap({
   }, [mapMode])
 
   useEffect(() => {
-    if (focusRevision === 0 || featureEntitiesRef.current.length === 0) return
+    if (focusRevision === 0 || featureEntitiesRef.current.size === 0) return
+    const renderedEntities = [...featureEntitiesRef.current.values()]
     const selectedEntities = selectedFeatureId
-      ? featureEntitiesRef.current.filter((entity) => {
+      ? renderedEntities.filter((entity) => {
           const entityId = String(entity.id)
-          return (
-            entityId === selectedFeatureId ||
-            entityId.startsWith(`${selectedFeatureId}--segment-`)
-          )
+          return entityId.startsWith(`${selectedFeatureId}--geometry--`)
         })
-      : featureEntitiesRef.current
+      : renderedEntities
     void viewerRef.current?.zoomTo(selectedEntities)
   }, [focusRevision, selectedFeatureId])
 

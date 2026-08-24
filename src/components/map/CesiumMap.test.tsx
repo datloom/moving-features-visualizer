@@ -89,6 +89,12 @@ vi.mock('cesium', () => ({
 }))
 
 vi.mock('../../visualization/cesium/adapters', () => ({
+  geometrySegmentEntityId: (
+    featureId: string,
+    segment: { id?: string },
+    index: number,
+  ) =>
+    `${featureId}--geometry--${segment.id ? encodeURIComponent(segment.id) : index + 1}`,
   getFeatureTimeRange: (feature: {
     temporalGeometry: { segments: { samples: unknown[] }[] }
   }) => {
@@ -101,9 +107,17 @@ vi.mock('../../visualization/cesium/adapters', () => ({
     }
   },
   movingFeatureToEntities: (
-    feature: { id: string },
+    feature: {
+      id: string
+      temporalGeometry: { segments: { id?: string }[] }
+    },
     options: { selected?: boolean },
-  ) => [movingFeatureToEntity(feature, options)],
+  ) => {
+    movingFeatureToEntity(feature, options)
+    return feature.temporalGeometry.segments.map((segment, index) => ({
+      id: `${feature.id}--geometry--${segment.id ? encodeURIComponent(segment.id) : index + 1}`,
+    }))
+  },
   timestampToJulianDate,
 }))
 
@@ -211,8 +225,8 @@ describe('CesiumMap', () => {
     expect(movingFeatureToEntity).toHaveBeenCalledWith(feature, {
       selected: false,
     })
-    expect(add).toHaveBeenCalledWith({ id: 'vehicle-1' })
-    expect(zoomTo).toHaveBeenCalledWith([{ id: 'vehicle-1' }])
+    expect(add).toHaveBeenCalledWith({ id: 'vehicle-1--geometry--1' })
+    expect(zoomTo).toHaveBeenCalledWith([{ id: 'vehicle-1--geometry--1' }])
     expect(useTimeStore.getState()).toMatchObject({
       startTime: 100,
       endTime: 200,
@@ -225,7 +239,9 @@ describe('CesiumMap', () => {
     rerender(<CesiumMap features={[]} />)
 
     expect(Viewer).toHaveBeenCalledTimes(1)
-    expect(remove).toHaveBeenCalledWith({ id: 'vehicle-1' })
+    expect(remove).toHaveBeenCalledWith({
+      id: 'vehicle-1--geometry--1',
+    })
   })
 
   it('renders every loaded Feature while styling selection independently', () => {
@@ -253,9 +269,11 @@ describe('CesiumMap', () => {
         selectedFeatureId="vehicle-2"
       />,
     )
-    expect(add).toHaveBeenCalledTimes(11)
-    expect(add).toHaveBeenCalledWith({ id: 'vehicle-1' })
-    expect(add).toHaveBeenCalledWith({ id: 'vehicle-11' })
+    // Only the two Features whose selection emphasis changed and the new
+    // Feature are replaced/added; the other eight entities remain stable.
+    expect(add).toHaveBeenCalledTimes(3)
+    expect(add).toHaveBeenCalledWith({ id: 'vehicle-1--geometry--1' })
+    expect(add).toHaveBeenCalledWith({ id: 'vehicle-11--geometry--1' })
     expect(zoomTo).toHaveBeenCalledOnce()
 
     zoomTo.mockClear()
@@ -296,8 +314,61 @@ describe('CesiumMap', () => {
 
     rerender(<CesiumMap features={features} focusRevision={1} />)
 
-    expect(zoomTo).toHaveBeenCalledWith([{ id: 'vehicle-1' }])
+    expect(zoomTo).toHaveBeenCalledWith([{ id: 'vehicle-1--geometry--1' }])
     expect(Viewer).toHaveBeenCalledTimes(viewerCalls)
     expect(movingFeatureToEntity).toHaveBeenCalledTimes(adapterCalls)
+  })
+
+  it('appends independent paths without recreating existing entities or moving the camera', () => {
+    const fiveSegments = Array.from({ length: 5 }, (_, index) => ({
+      ...feature.temporalGeometry.segments[0]!,
+      id: `tg-${index + 1}`,
+      samples: [
+        { time: 100 + index * 20, longitude: index, latitude: index },
+        { time: 105 + index * 20, longitude: index + 1, latitude: index + 1 },
+      ],
+    }))
+    const initial = {
+      ...feature,
+      temporalGeometry: { segments: fiveSegments },
+    }
+    const { rerender } = render(
+      <CesiumMap features={[initial]} selectedFeatureId="vehicle-1" />,
+    )
+    expect(add).toHaveBeenCalledTimes(5)
+
+    add.mockClear()
+    remove.mockClear()
+    zoomTo.mockClear()
+    useTimeStore.setState({
+      currentTime: 103,
+      playing: true,
+      playbackRate: 2,
+    })
+    const appended = {
+      ...initial,
+      temporalGeometry: {
+        segments: [
+          ...fiveSegments,
+          ...Array.from({ length: 5 }, (_, index) => ({
+            ...fiveSegments[0]!,
+            id: `tg-${index + 6}`,
+          })),
+        ],
+      },
+    }
+    rerender(<CesiumMap features={[appended]} selectedFeatureId="vehicle-1" />)
+
+    expect(add).toHaveBeenCalledTimes(5)
+    expect(add).toHaveBeenCalledWith({
+      id: 'vehicle-1--geometry--tg-10',
+    })
+    expect(remove).not.toHaveBeenCalled()
+    expect(zoomTo).not.toHaveBeenCalled()
+    expect(useTimeStore.getState()).toMatchObject({
+      currentTime: 103,
+      playing: true,
+      playbackRate: 2,
+    })
   })
 })
