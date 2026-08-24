@@ -514,6 +514,128 @@ select {
   width: 100%;
   min-height: 0;
 }
+.comparison-workspace {
+  display: grid;
+  grid-template-columns: minmax(180px, 230px) minmax(0, 1fr);
+  min-height: 0;
+}
+.comparison-controls {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-right: 1px solid var(--border);
+  overflow: auto;
+}
+.comparison-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.comparison-mode button {
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--surface-elevated);
+  font-size: 0.62rem;
+}
+.comparison-mode button + button {
+  border-left: 0;
+}
+.comparison-mode button[aria-pressed='true'] {
+  color: var(--foreground);
+  border-color: var(--primary);
+  background: rgb(53 212 199 / 10%);
+}
+.comparison-field,
+.comparison-feature {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+.comparison-field select {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: var(--surface-elevated);
+}
+.comparison-feature {
+  color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comparison-feature span {
+  color: var(--muted);
+}
+.comparison-checklist {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  max-height: 104px;
+  margin: 0;
+  padding: 4px 0 0;
+  border: 0;
+  overflow-y: auto;
+}
+.comparison-checklist legend {
+  padding: 0 0 3px;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+.comparison-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.66rem;
+}
+.comparison-checklist span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comparison-warning {
+  margin: 0;
+  color: var(--warning);
+  font-size: 0.6rem;
+}
+.comparison-charts {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.comparison-charts-multiple {
+  grid-auto-rows: minmax(170px, 1fr);
+}
+.comparison-chart {
+  min-width: 0;
+  min-height: 170px;
+}
+.comparison-chart-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 170px;
+}
+@media (max-width: 760px) {
+  .comparison-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .comparison-controls {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .comparison-checklist {
+    max-height: 76px;
+  }
+}
 .timeline-panel {
   z-index: 12;
   display: grid;

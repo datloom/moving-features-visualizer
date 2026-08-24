@@ -1,64 +1,80 @@
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MovingFeature, TemporalProperty } from '../../mfjson/types'
+import { initialFeatureState, useFeatureStore } from '../../store/featureStore'
 
-vi.mock('./MeasurePropertyChart', () => ({
-  MeasurePropertyChart: ({ property }: { property: { name: string } }) => (
-    <div data-testid="measure-chart">{property.name}</div>
+vi.mock('./MeasureComparisonChart', () => ({
+  MeasureComparisonChart: ({
+    group,
+  }: {
+    group: { series: { label: string }[] }
+  }) => (
+    <div data-testid="comparison-chart">
+      {group.series.map(({ label }) => label).join(',')}
+    </div>
   ),
 }))
 
 import { TemporalPropertiesPanel } from './TemporalPropertiesPanel'
 
 const featureWith = (
+  id: string,
   temporalProperties: readonly TemporalProperty[],
 ): MovingFeature => ({
-  id: 'feature',
+  id,
   type: 'MovingFeature',
   temporalGeometry: { segments: [] },
   temporalProperties,
   properties: {},
 })
 
+const speed = (name = 'speed'): TemporalProperty => ({
+  type: 'Measure',
+  name,
+  interpolation: 'Linear',
+  unit: 'KMH',
+  samples: [{ time: 1_000, value: 10 }],
+})
+
 describe('TemporalPropertiesPanel', () => {
+  beforeEach(() => useFeatureStore.setState(initialFeatureState))
   afterEach(cleanup)
 
-  it('keeps Measure properties routed to the existing chart', () => {
-    render(
-      <TemporalPropertiesPanel
-        feature={featureWith([
-          {
-            type: 'Measure',
-            name: 'speed',
-            interpolation: 'Linear',
-            samples: [],
-          },
-        ])}
-      />,
-    )
+  it('defaults to selected-feature Property Comparison and updates with Feature Store selection', () => {
+    const one = featureWith('one', [speed('speed')])
+    const two = featureWith('two', [speed('velocity')])
+    useFeatureStore.getState().replaceFeatures([one, two])
+    const view = render(<TemporalPropertiesPanel feature={one} />)
+    expect(screen.getByText('one')).toBeInTheDocument()
+    expect(screen.getByTestId('comparison-chart')).toHaveTextContent('speed')
 
-    expect(screen.getByTestId('measure-chart')).toHaveTextContent('speed')
+    useFeatureStore.getState().selectFeature('two')
+    view.rerender(<TemporalPropertiesPanel feature={two} />)
+    expect(screen.getByText('two')).toBeInTheDocument()
+    expect(screen.getByTestId('comparison-chart')).toHaveTextContent('velocity')
   })
 
-  it('shows the future renderer state without interpreting IMAGE content', () => {
-    const payload = 'data:image/png;base64,untrusted-payload'
-    render(
-      <TemporalPropertiesPanel
-        feature={featureWith([
-          {
-            type: 'IMAGE',
-            name: 'camera',
-            interpolation: 'Step',
-            samples: [{ time: 1_000, value: payload }],
-          },
-        ])}
-      />,
-    )
+  it('compares an explicitly selected property across checked Features', () => {
+    const one = featureWith('one', [speed()])
+    const two = featureWith('two', [speed()])
+    useFeatureStore.getState().replaceFeatures([one, two])
+    render(<TemporalPropertiesPanel feature={one} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Feature Comparison' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'two' }))
+    expect(screen.getByTestId('comparison-chart')).toHaveTextContent('one,two')
+  })
 
+  it('does not offer Text or IMAGE properties as Measure chart series', () => {
+    const imageOnly = featureWith('camera-feature', [
+      { type: 'IMAGE', name: 'camera', interpolation: 'Step', samples: [] },
+      { type: 'Text', name: 'state', interpolation: 'Step', samples: [] },
+    ])
+    useFeatureStore.getState().replaceFeatures([imageOnly])
+    render(<TemporalPropertiesPanel feature={imageOnly} />)
     expect(
-      screen.getByText('IMAGE rendering is not implemented yet.'),
+      screen.getByText('No Measure properties are available for this Feature.'),
     ).toBeInTheDocument()
-    expect(screen.queryByText(payload)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('comparison-chart')).not.toBeInTheDocument()
   })
 })
