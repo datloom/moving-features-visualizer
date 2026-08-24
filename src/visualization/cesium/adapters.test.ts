@@ -163,34 +163,69 @@ describe('Cesium adapters', () => {
       selected: true,
     })
 
-    expect(entities.map(({ id }) => id)).toEqual([
-      'vehicle-1--geometry--tg-1',
-      'vehicle-1--geometry--tg-2',
-      'vehicle-1--geometry--tg-3',
-      'vehicle-1--geometry--tg-4',
-      'vehicle-1--geometry--tg-5',
-    ])
-    expect(entities.map((entity) => entity.availability?.length)).toEqual([
-      1, 1, 1, 1, 1,
-    ])
-    expect(entities[0]?.availability?.get(0)?.stop).not.toEqual(
-      entities[1]?.availability?.get(0)?.start,
+    const trajectories = entities.filter((entity) =>
+      String(entity.id).endsWith('--trajectory'),
     )
+    const positions = entities.filter((entity) =>
+      String(entity.id).endsWith('--position'),
+    )
+
+    expect(trajectories.map(({ id }) => id)).toEqual([
+      'vehicle-1--geometry--tg-1--trajectory',
+      'vehicle-1--geometry--tg-2--trajectory',
+      'vehicle-1--geometry--tg-3--trajectory',
+      'vehicle-1--geometry--tg-4--trajectory',
+      'vehicle-1--geometry--tg-5--trajectory',
+    ])
+    expect(trajectories).toHaveLength(5)
+    expect(
+      trajectories.every((entity) => entity.availability === undefined),
+    ).toBe(true)
+    expect(trajectories.every((entity) => entity.polyline !== undefined)).toBe(
+      true,
+    )
+    expect(positions).toHaveLength(5)
+    expect(positions.every((entity) => entity.availability !== undefined)).toBe(
+      true,
+    )
+    expect(positions.every((entity) => entity.polyline === undefined)).toBe(
+      true,
+    )
+    expect(positions[0]?.availability?.get(0)?.stop).not.toEqual(
+      positions[1]?.availability?.get(0)?.start,
+    )
+
+    const withinSecondSegment = timestampToJulianDate(22 * 60_000)
+    expect(
+      positions.map((entity) => entity.position?.getValue(withinSecondSegment)),
+    ).toEqual([
+      undefined,
+      expect.any(Cartesian3),
+      undefined,
+      undefined,
+      undefined,
+    ])
   })
 
   it('gives the selected Feature a stronger style without changing its identity', () => {
     const normal = movingFeatureToEntities(movingFeature)[0]!
     const selected = movingFeatureToEntities(movingFeature, {
       selected: true,
-    })[0]!
+    })
+    const selectedTrajectory = selected.find((entity) =>
+      String(entity.id).endsWith('--trajectory'),
+    )!
+    const selectedPosition = selected.find((entity) =>
+      String(entity.id).endsWith('--position'),
+    )!
 
-    expect(selected.id).toBe(normal.id)
-    expect(Number(selected.point?.pixelSize?.getValue())).toBeGreaterThan(
-      Number(normal.point?.pixelSize?.getValue() ?? 0),
-    )
-    expect(Number(selected.path?.width?.getValue())).toBeGreaterThan(
-      Number(normal.path?.width?.getValue() ?? 0),
-    )
+    expect(String(selectedTrajectory.id)).toBe(`${normal.id}--trajectory`)
+    expect(
+      Number(selectedPosition.point?.pixelSize?.getValue()),
+    ).toBeGreaterThan(Number(normal.point?.pixelSize?.getValue() ?? 0))
+    expect(
+      Number(selectedTrajectory.polyline?.width?.getValue()),
+    ).toBeGreaterThan(Number(normal.path?.width?.getValue() ?? 0))
   })
 
   it('rejects MovingPoint geometry without samples', () => {

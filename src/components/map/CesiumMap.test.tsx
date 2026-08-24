@@ -106,6 +106,17 @@ vi.mock('../../visualization/cesium/adapters', () => ({
       endTime: samples.at(-1)!.time,
     }
   },
+  movingFeatureEntityIds: (
+    feature: {
+      id: string
+      temporalGeometry: { segments: { id?: string }[] }
+    },
+    options: { selected?: boolean },
+  ) =>
+    feature.temporalGeometry.segments.flatMap((segment, index) => {
+      const id = `${feature.id}--geometry--${segment.id ? encodeURIComponent(segment.id) : index + 1}`
+      return options.selected ? [`${id}--trajectory`, `${id}--position`] : [id]
+    }),
   movingFeatureToEntities: (
     feature: {
       id: string
@@ -114,9 +125,12 @@ vi.mock('../../visualization/cesium/adapters', () => ({
     options: { selected?: boolean },
   ) => {
     movingFeatureToEntity(feature, options)
-    return feature.temporalGeometry.segments.map((segment, index) => ({
-      id: `${feature.id}--geometry--${segment.id ? encodeURIComponent(segment.id) : index + 1}`,
-    }))
+    return feature.temporalGeometry.segments.flatMap((segment, index) => {
+      const id = `${feature.id}--geometry--${segment.id ? encodeURIComponent(segment.id) : index + 1}`
+      return options.selected
+        ? [{ id: `${id}--trajectory` }, { id: `${id}--position` }]
+        : [{ id }]
+    })
   },
   timestampToJulianDate,
 }))
@@ -253,7 +267,7 @@ describe('CesiumMap', () => {
       <CesiumMap features={loadedFeatures} selectedFeatureId="vehicle-1" />,
     )
 
-    expect(add).toHaveBeenCalledTimes(10)
+    expect(add).toHaveBeenCalledTimes(11)
     expect(movingFeatureToEntity).toHaveBeenCalledWith(loadedFeatures[0], {
       selected: true,
     })
@@ -271,7 +285,7 @@ describe('CesiumMap', () => {
     )
     // Only the two Features whose selection emphasis changed and the new
     // Feature are replaced/added; the other eight entities remain stable.
-    expect(add).toHaveBeenCalledTimes(3)
+    expect(add).toHaveBeenCalledTimes(4)
     expect(add).toHaveBeenCalledWith({ id: 'vehicle-1--geometry--1' })
     expect(add).toHaveBeenCalledWith({ id: 'vehicle-11--geometry--1' })
     expect(zoomTo).toHaveBeenCalledOnce()
@@ -335,7 +349,7 @@ describe('CesiumMap', () => {
     const { rerender } = render(
       <CesiumMap features={[initial]} selectedFeatureId="vehicle-1" />,
     )
-    expect(add).toHaveBeenCalledTimes(5)
+    expect(add).toHaveBeenCalledTimes(10)
 
     add.mockClear()
     remove.mockClear()
@@ -359,9 +373,9 @@ describe('CesiumMap', () => {
     }
     rerender(<CesiumMap features={[appended]} selectedFeatureId="vehicle-1" />)
 
-    expect(add).toHaveBeenCalledTimes(5)
+    expect(add).toHaveBeenCalledTimes(10)
     expect(add).toHaveBeenCalledWith({
-      id: 'vehicle-1--geometry--tg-10',
+      id: 'vehicle-1--geometry--tg-10--trajectory',
     })
     expect(remove).not.toHaveBeenCalled()
     expect(zoomTo).not.toHaveBeenCalled()

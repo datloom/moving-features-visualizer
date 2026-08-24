@@ -12,7 +12,7 @@ import type { MovingFeature } from '../../mfjson/types'
 import { useTimeStore } from '../../store/timeStore'
 import {
   getFeatureTimeRange,
-  geometrySegmentEntityId,
+  movingFeatureEntityIds,
   movingFeatureToEntities,
   timestampToJulianDate,
 } from '../../visualization/cesium/adapters'
@@ -106,17 +106,13 @@ export function CesiumMap({
       const selected = feature.id === selectedFeatureId
       const selectionChanged =
         renderedSelectionRef.current.get(feature.id) !== selected
-      const segmentIds = feature.temporalGeometry.segments.map(
-        (segment, index) => geometrySegmentEntityId(feature.id, segment, index),
-      )
-      segmentIds.forEach((id) => desiredEntityIds.add(id))
+      const entityIds = movingFeatureEntityIds(feature, { selected })
+      entityIds.forEach((id) => desiredEntityIds.add(id))
       if (selectionChanged) {
-        for (const id of segmentIds) {
-          const existing = featureEntitiesRef.current.get(id)
-          if (existing) {
-            viewer.entities.remove(existing)
-            featureEntitiesRef.current.delete(id)
-          }
+        for (const [id, existing] of featureEntitiesRef.current) {
+          if (!id.startsWith(`${feature.id}--geometry--`)) continue
+          viewer.entities.remove(existing)
+          featureEntitiesRef.current.delete(id)
         }
       }
       for (const entity of movingFeatureToEntities(feature, { selected })) {

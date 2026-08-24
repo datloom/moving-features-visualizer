@@ -97,49 +97,108 @@ export const geometrySegmentEntityId = (
 ): string =>
   `${featureId}--geometry--${segment.id ? encodeURIComponent(segment.id) : segmentIndex + 1}`
 
+export const geometrySegmentTrajectoryEntityId = (
+  featureId: string,
+  segment: TemporalGeometry,
+  segmentIndex: number,
+): string =>
+  `${geometrySegmentEntityId(featureId, segment, segmentIndex)}--trajectory`
+
+export const geometrySegmentPositionEntityId = (
+  featureId: string,
+  segment: TemporalGeometry,
+  segmentIndex: number,
+): string =>
+  `${geometrySegmentEntityId(featureId, segment, segmentIndex)}--position`
+
+export const movingFeatureEntityIds = (
+  feature: MovingFeature,
+  options: { readonly selected?: boolean } = {},
+): readonly string[] =>
+  feature.temporalGeometry.segments.flatMap((segment, index) =>
+    options.selected
+      ? [
+          geometrySegmentTrajectoryEntityId(feature.id, segment, index),
+          geometrySegmentPositionEntityId(feature.id, segment, index),
+        ]
+      : [geometrySegmentEntityId(feature.id, segment, index)],
+  )
+
 export const movingFeatureToEntities = (
   feature: MovingFeature,
   options: { readonly selected?: boolean } = {},
 ): readonly Entity[] =>
-  feature.temporalGeometry.segments.map((segment, index) => {
-    const samples = segment.samples
-    const first = samples[0]
-    const last = samples.at(-1)
-    if (!first || !last) {
-      throw new RangeError(
-        'MovingPoint geometry must contain position samples.',
+  feature.temporalGeometry.segments
+    .map((segment, index) => {
+      const samples = segment.samples
+      const first = samples[0]
+      const last = samples.at(-1)
+      if (!first || !last) {
+        throw new RangeError(
+          'MovingPoint geometry must contain position samples.',
+        )
+      }
+      const startTime = first.time
+      const endTime = last.time
+      const color = Color.fromCssColorString(
+        options.selected ? '#f3b85b' : '#35d4c7',
       )
-    }
-    const startTime = first.time
-    const endTime = last.time
-    const durationSeconds = Math.max((endTime - startTime) / 1_000, 1)
-
-    return new Entity({
-      id: geometrySegmentEntityId(feature.id, segment, index),
-      name: feature.id,
-      availability: new TimeIntervalCollection([
+      const availability = new TimeIntervalCollection([
         new TimeInterval({
           start: timestampToJulianDate(startTime),
           stop: timestampToJulianDate(endTime),
         }),
-      ]),
-      position: samplesToPositionProperty(samples),
-      point: {
-        color: Color.fromCssColorString(
-          options.selected ? '#f3b85b' : '#35d4c7',
-        ),
-        outlineColor: Color.fromCssColorString('#071b1c'),
-        outlineWidth: options.selected ? 4 : 3,
-        pixelSize: options.selected ? 15 : 11,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-      path: {
-        leadTime: durationSeconds,
-        trailTime: durationSeconds,
-        material: Color.fromCssColorString(
-          options.selected ? '#f3b85b' : '#35d4c7',
-        ).withAlpha(0.75),
-        width: options.selected ? 4 : 2,
-      },
+      ])
+
+      if (options.selected) {
+        return [
+          new Entity({
+            id: geometrySegmentTrajectoryEntityId(feature.id, segment, index),
+            name: feature.id,
+            polyline: {
+              positions: samples.map(coordinateToCartesian3),
+              material: color.withAlpha(0.75),
+              width: 4,
+            },
+          }),
+          new Entity({
+            id: geometrySegmentPositionEntityId(feature.id, segment, index),
+            name: feature.id,
+            availability,
+            position: samplesToPositionProperty(samples),
+            point: {
+              color,
+              outlineColor: Color.fromCssColorString('#071b1c'),
+              outlineWidth: 4,
+              pixelSize: 15,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+          }),
+        ]
+      }
+
+      const durationSeconds = Math.max((endTime - startTime) / 1_000, 1)
+
+      return [
+        new Entity({
+          id: geometrySegmentEntityId(feature.id, segment, index),
+          name: feature.id,
+          availability,
+          position: samplesToPositionProperty(samples),
+          point: {
+            color,
+            outlineColor: Color.fromCssColorString('#071b1c'),
+            outlineWidth: 3,
+            pixelSize: 11,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+          path: {
+            leadTime: durationSeconds,
+            trailTime: durationSeconds,
+            material: color.withAlpha(0.75),
+            width: 2,
+          },
+        }),
+      ]
     })
-  })
+    .flat()
