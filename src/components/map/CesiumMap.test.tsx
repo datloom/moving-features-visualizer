@@ -1,16 +1,48 @@
 import { render } from '@testing-library/react'
 import { StrictMode } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { destroy, setView, Viewer } = vi.hoisted(() => {
+const {
+  add,
+  destroy,
+  movingFeatureToEntity,
+  remove,
+  setView,
+  timestampToJulianDate,
+  Viewer,
+  zoomTo,
+} = vi.hoisted(() => {
+  const add = vi.fn((entity: unknown) => entity)
   const destroy = vi.fn()
   const isDestroyed = vi.fn(() => false)
+  const movingFeatureToEntity = vi.fn((feature: { id: string }) => ({
+    id: feature.id,
+  }))
+  const remove = vi.fn()
   const setView = vi.fn()
+  const timestampToJulianDate = vi.fn((timestamp: number) => timestamp)
+  const zoomTo = vi.fn(() => Promise.resolve(true))
   const Viewer = vi.fn(function () {
-    return { camera: { setView }, destroy, isDestroyed }
+    return {
+      camera: { setView },
+      clock: { currentTime: 0 },
+      destroy,
+      entities: { add, remove },
+      isDestroyed,
+      zoomTo,
+    }
   })
 
-  return { destroy, setView, Viewer }
+  return {
+    add,
+    destroy,
+    movingFeatureToEntity,
+    remove,
+    setView,
+    timestampToJulianDate,
+    Viewer,
+    zoomTo,
+  }
 })
 
 vi.mock('cesium', () => ({
@@ -18,9 +50,44 @@ vi.mock('cesium', () => ({
   Viewer,
 }))
 
+vi.mock('../../visualization/cesium/adapters', () => ({
+  getFeatureTimeRange: (feature: {
+    temporalGeometry: { samples: unknown[] }
+  }) => {
+    const samples = feature.temporalGeometry.samples as { time: number }[]
+    return {
+      startTime: samples[0]!.time,
+      endTime: samples.at(-1)!.time,
+    }
+  },
+  movingFeatureToEntity,
+  timestampToJulianDate,
+}))
+
 import { CesiumMap } from './CesiumMap'
+import type { MovingFeature } from '../../mfjson/types'
+import { initialTimeState, useTimeStore } from '../../store/timeStore'
+
+const feature: MovingFeature = {
+  id: 'vehicle-1',
+  type: 'MovingFeature',
+  temporalGeometry: {
+    type: 'MovingPoint',
+    interpolation: 'Linear',
+    samples: [
+      { time: 100, longitude: 139.7, latitude: 35.6 },
+      { time: 200, longitude: 139.8, latitude: 35.7 },
+    ],
+  },
+  temporalProperties: [],
+  properties: {},
+}
 
 describe('CesiumMap', () => {
+  beforeEach(() => {
+    useTimeStore.setState(initialTimeState)
+  })
+
   afterEach(() => {
     vi.clearAllMocks()
   })
@@ -54,5 +121,23 @@ describe('CesiumMap', () => {
 
     unmount()
     expect(destroy).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders normalized features without recreating the Viewer', () => {
+    const { rerender } = render(<CesiumMap features={[feature]} />)
+
+    expect(movingFeatureToEntity).toHaveBeenCalledWith(feature)
+    expect(add).toHaveBeenCalledWith({ id: 'vehicle-1' })
+    expect(zoomTo).toHaveBeenCalledWith([{ id: 'vehicle-1' }])
+    expect(useTimeStore.getState()).toMatchObject({
+      startTime: 100,
+      endTime: 200,
+      currentTime: 100,
+    })
+
+    rerender(<CesiumMap features={[]} />)
+
+    expect(Viewer).toHaveBeenCalledTimes(1)
+    expect(remove).toHaveBeenCalledWith({ id: 'vehicle-1' })
   })
 })

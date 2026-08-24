@@ -1,6 +1,19 @@
-import { Cartesian3, JulianDate, SampledPositionProperty } from 'cesium'
+import {
+  Cartesian3,
+  Color,
+  Entity,
+  JulianDate,
+  LinearApproximation,
+  SampledPositionProperty,
+  TimeInterval,
+  TimeIntervalCollection,
+} from 'cesium'
 
-import type { PositionSample, Timestamp } from '../../mfjson/types'
+import type {
+  MovingFeature,
+  PositionSample,
+  Timestamp,
+} from '../../mfjson/types'
 
 export const timestampToJulianDate = (timestamp: Timestamp): JulianDate => {
   if (!Number.isFinite(timestamp)) {
@@ -30,6 +43,10 @@ export const samplesToPositionProperty = (
   samples: readonly PositionSample[],
 ): SampledPositionProperty => {
   const property = new SampledPositionProperty()
+  property.setInterpolationOptions({
+    interpolationAlgorithm: LinearApproximation,
+    interpolationDegree: 1,
+  })
 
   for (const sample of samples) {
     property.addSample(
@@ -39,4 +56,54 @@ export const samplesToPositionProperty = (
   }
 
   return property
+}
+
+export interface FeatureTimeRange {
+  readonly startTime: Timestamp
+  readonly endTime: Timestamp
+}
+
+export const getFeatureTimeRange = (
+  feature: MovingFeature,
+): FeatureTimeRange => {
+  const samples = feature.temporalGeometry.samples
+  const firstSample = samples[0]
+  const lastSample = samples.at(-1)
+
+  if (!firstSample || !lastSample) {
+    throw new RangeError('MovingPoint geometry must contain position samples.')
+  }
+
+  return { startTime: firstSample.time, endTime: lastSample.time }
+}
+
+export const movingFeatureToEntity = (feature: MovingFeature): Entity => {
+  const samples = feature.temporalGeometry.samples
+  const { startTime, endTime } = getFeatureTimeRange(feature)
+  const durationSeconds = Math.max((endTime - startTime) / 1_000, 1)
+
+  return new Entity({
+    id: feature.id,
+    name: feature.id,
+    availability: new TimeIntervalCollection([
+      new TimeInterval({
+        start: timestampToJulianDate(startTime),
+        stop: timestampToJulianDate(endTime),
+      }),
+    ]),
+    position: samplesToPositionProperty(samples),
+    point: {
+      color: Color.fromCssColorString('#35d4c7'),
+      outlineColor: Color.fromCssColorString('#071b1c'),
+      outlineWidth: 3,
+      pixelSize: 12,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+    path: {
+      leadTime: durationSeconds,
+      trailTime: durationSeconds,
+      material: Color.fromCssColorString('#35d4c7').withAlpha(0.75),
+      width: 3,
+    },
+  })
 }
