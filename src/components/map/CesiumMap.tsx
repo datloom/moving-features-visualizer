@@ -115,7 +115,10 @@ export function CesiumMap({
           featureEntitiesRef.current.delete(id)
         }
       }
-      for (const entity of movingFeatureToEntities(feature, { selected })) {
+      for (const entity of movingFeatureToEntities(feature, {
+        selected,
+        getCurrentTime: () => useTimeStore.getState().currentTime,
+      })) {
         const id = String(entity.id)
         if (!featureEntitiesRef.current.has(id)) {
           featureEntitiesRef.current.set(id, viewer.entities.add(entity))

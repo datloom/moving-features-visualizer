@@ -33,8 +33,20 @@ export type MovingFeatureLoadResult =
     }
   | { readonly success: false; readonly error: MovingFeatureLoadError }
 
-const asFeatureInputs = (input: unknown): readonly unknown[] =>
-  Array.isArray(input) ? input : [input]
+const asFeatureInputs = (input: unknown): readonly unknown[] => {
+  if (Array.isArray(input)) return input
+  if (
+    typeof input === 'object' &&
+    input !== null &&
+    'type' in input &&
+    input.type === 'FeatureCollection' &&
+    'features' in input &&
+    Array.isArray(input.features)
+  ) {
+    return input.features
+  }
+  return [input]
+}
 
 export const loadMovingFeatures = async (
   dataSource: MovingFeatureDataSource,
@@ -106,6 +118,30 @@ export const loadMovingFeatures = async (
           type: 'normalization',
           message: 'MF-JSON normalization failed.',
           issues: result.issues,
+        },
+      }
+    }
+    if (
+      dataSource.origin?.type !== 'file' &&
+      result.data.temporalGeometry.segments.some(
+        (segment) => segment.type === 'MovingLineString',
+      )
+    ) {
+      return {
+        success: false,
+        error: {
+          type: 'validation',
+          message: 'MF-JSON validation failed.',
+          issues: [
+            {
+              path: '$.temporalGeometry.type',
+              code: 'unsupported_value',
+              message:
+                'MovingLineString ingestion is currently supported only for local files.',
+              expected: 'MovingPoint',
+              actual: 'MovingLineString',
+            },
+          ],
         },
       }
     }

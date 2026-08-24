@@ -1,5 +1,6 @@
 import {
   Cartesian3,
+  CallbackProperty,
   Color,
   Entity,
   JulianDate,
@@ -9,6 +10,7 @@ import {
   TimeIntervalCollection,
 } from 'cesium'
 
+import { geometryAtTime } from '../../mfjson/geometryAtTime'
 import type {
   MovingFeature,
   PositionSample,
@@ -67,26 +69,27 @@ export interface FeatureTimeRange {
 export const getFeatureTimeRange = (
   feature: MovingFeature,
 ): FeatureTimeRange => {
-  let firstSample: PositionSample | undefined
-  let lastSample: PositionSample | undefined
+  let firstTime: Timestamp | undefined
+  let lastTime: Timestamp | undefined
   for (const segment of feature.temporalGeometry.segments) {
     for (const sample of segment.samples) {
-      if (!firstSample || sample.time < firstSample.time) firstSample = sample
-      if (!lastSample || sample.time > lastSample.time) lastSample = sample
+      if (firstTime === undefined || sample.time < firstTime)
+        firstTime = sample.time
+      if (lastTime === undefined || sample.time > lastTime)
+        lastTime = sample.time
     }
   }
 
-  if (!firstSample || !lastSample) {
-    throw new RangeError('MovingPoint geometry must contain position samples.')
+  if (firstTime === undefined || lastTime === undefined) {
+    throw new RangeError('Temporal geometry must contain samples.')
   }
 
-  return { startTime: firstSample.time, endTime: lastSample.time }
+  return { startTime: firstTime, endTime: lastTime }
 }
 
 export const movingFeatureToEntity = (feature: MovingFeature): Entity => {
   const entity = movingFeatureToEntities(feature)[0]
-  if (!entity)
-    throw new RangeError('MovingPoint geometry must contain position samples.')
+  if (!entity) throw new RangeError('Temporal geometry must contain samples.')
   return entity
 }
 
@@ -116,7 +119,7 @@ export const movingFeatureEntityIds = (
   options: { readonly selected?: boolean } = {},
 ): readonly string[] =>
   feature.temporalGeometry.segments.flatMap((segment, index) =>
-    options.selected
+    segment.type === 'MovingPoint' && options.selected
       ? [
           geometrySegmentTrajectoryEntityId(feature.id, segment, index),
           geometrySegmentPositionEntityId(feature.id, segment, index),
@@ -126,7 +129,10 @@ export const movingFeatureEntityIds = (
 
 export const movingFeatureToEntities = (
   feature: MovingFeature,
-  options: { readonly selected?: boolean } = {},
+  options: {
+    readonly selected?: boolean
+    readonly getCurrentTime?: () => Timestamp
+  } = {},
 ): readonly Entity[] =>
   feature.temporalGeometry.segments
     .map((segment, index) => {
@@ -134,9 +140,7 @@ export const movingFeatureToEntities = (
       const first = samples[0]
       const last = samples.at(-1)
       if (!first || !last) {
-        throw new RangeError(
-          'MovingPoint geometry must contain position samples.',
-        )
+        throw new RangeError('Temporal geometry must contain samples.')
       }
       const startTime = first.time
       const endTime = last.time
@@ -150,13 +154,36 @@ export const movingFeatureToEntities = (
         }),
       ])
 
+      if (segment.type === 'MovingLineString') {
+        const getCurrentTime = options.getCurrentTime ?? (() => startTime)
+        return [
+          new Entity({
+            id: geometrySegmentEntityId(feature.id, segment, index),
+            name: feature.id,
+            availability,
+            polyline: {
+              positions: new CallbackProperty(() => {
+                const evaluated = geometryAtTime(segment, getCurrentTime())
+                return evaluated?.type === 'MovingLineString'
+                  ? evaluated.positions.map(coordinateToCartesian3)
+                  : undefined
+              }, false),
+              material: color.withAlpha(options.selected ? 0.95 : 0.75),
+              width: options.selected ? 5 : 3,
+            },
+          }),
+        ]
+      }
+
+      const pointSamples = segment.samples
+
       if (options.selected) {
         return [
           new Entity({
             id: geometrySegmentTrajectoryEntityId(feature.id, segment, index),
             name: feature.id,
             polyline: {
-              positions: samples.map(coordinateToCartesian3),
+              positions: pointSamples.map(coordinateToCartesian3),
               material: color.withAlpha(0.75),
               width: 4,
             },
@@ -165,7 +192,7 @@ export const movingFeatureToEntities = (
             id: geometrySegmentPositionEntityId(feature.id, segment, index),
             name: feature.id,
             availability,
-            position: samplesToPositionProperty(samples),
+            position: samplesToPositionProperty(pointSamples),
             point: {
               color,
               outlineColor: Color.fromCssColorString('#071b1c'),
@@ -184,7 +211,7 @@ export const movingFeatureToEntities = (
           id: geometrySegmentEntityId(feature.id, segment, index),
           name: feature.id,
           availability,
-          position: samplesToPositionProperty(samples),
+          position: samplesToPositionProperty(pointSamples),
           point: {
             color,
             outlineColor: Color.fromCssColorString('#071b1c'),

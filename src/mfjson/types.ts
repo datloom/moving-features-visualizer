@@ -21,11 +21,23 @@ export interface MovingPoint {
   readonly samples: readonly PositionSample[]
 }
 
+export interface LineStringSample {
+  readonly time: Timestamp
+  readonly positions: readonly Omit<PositionSample, 'time'>[]
+}
+
+export interface MovingLineString {
+  readonly id?: string
+  readonly type: 'MovingLineString'
+  readonly interpolation: GeometryInterpolation
+  readonly samples: readonly LineStringSample[]
+}
+
 /**
  * Union of normalized temporal geometries. Add future geometry variants here
  * while keeping consumers exhaustive through the `type` discriminator.
  */
-export type TemporalGeometry = MovingPoint
+export type TemporalGeometry = MovingPoint | MovingLineString
 
 export interface TemporalGeometryTrack {
   readonly segments: readonly TemporalGeometry[]

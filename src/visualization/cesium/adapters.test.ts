@@ -142,6 +142,7 @@ describe('Cesium adapters', () => {
       temporalGeometry: {
         segments: Array.from({ length: 5 }, (_, index) => ({
           ...movingFeature.temporalGeometry.segments[0]!,
+          type: 'MovingPoint' as const,
           id: `tg-${index + 1}`,
           samples: [
             {
@@ -226,6 +227,60 @@ describe('Cesium adapters', () => {
     expect(
       Number(selectedTrajectory.polyline?.width?.getValue()),
     ).toBeGreaterThan(Number(normal.path?.width?.getValue() ?? 0))
+  })
+
+  it('renders the current MovingLineString as one stable dynamic polyline', () => {
+    let currentTime = 5
+    const lineFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'line-1',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingLineString',
+            interpolation: 'Linear',
+            samples: [
+              {
+                time: 0,
+                positions: [
+                  { longitude: 0, latitude: 0 },
+                  { longitude: 10, latitude: 10, height: 10 },
+                ],
+              },
+              {
+                time: 10,
+                positions: [
+                  { longitude: 10, latitude: 10 },
+                  { longitude: 20, latitude: 20, height: 20 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const entity = movingFeatureToEntities(lineFeature, {
+      getCurrentTime: () => currentTime,
+    })[0]!
+    const positions: unknown = entity.polyline?.positions?.getValue(
+      timestampToJulianDate(currentTime),
+    )
+    expect(Array.isArray(positions)).toBe(true)
+    if (!Array.isArray(positions)) return
+    expect(positions).toHaveLength(2)
+    expect(
+      Cartesian3.equals(
+        positions[0] as Cartesian3,
+        Cartesian3.fromDegrees(5, 5, 0),
+      ),
+    ).toBe(true)
+
+    currentTime = 20
+    expect(
+      entity.polyline?.positions?.getValue(timestampToJulianDate(currentTime)),
+    ).toBeUndefined()
+    expect(movingFeatureToEntities(lineFeature)).toHaveLength(1)
   })
 
   it('rejects MovingPoint geometry without samples', () => {

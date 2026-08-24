@@ -94,6 +94,7 @@ export const getSpatialExtent = (
   let maxLatitude = Number.NEGATIVE_INFINITY
   for (const feature of features) {
     for (const segment of feature.temporalGeometry.segments) {
+      if (segment.type !== 'MovingPoint') continue
       for (const sample of segment.samples) {
         if (
           !Number.isFinite(sample.longitude) ||
@@ -185,19 +186,21 @@ export const transformSpaceTimeFeatures = (
 ): readonly SpaceTimeFeature[] =>
   features.map((feature) => ({
     id: feature.id,
-    segments: feature.temporalGeometry.segments.map((segment) => ({
-      interpolation: segment.interpolation,
-      samples: segment.samples.map((sample) => ({
-        time: sample.time,
-        longitude: sample.longitude,
-        latitude: sample.latitude,
-        visualHeight: timestampToVisualHeight(
-          sample.time,
-          extent,
-          timeAxisHeight,
-        ),
+    segments: feature.temporalGeometry.segments
+      .filter((segment) => segment.type === 'MovingPoint')
+      .map((segment) => ({
+        interpolation: segment.interpolation,
+        samples: segment.samples.map((sample) => ({
+          time: sample.time,
+          longitude: sample.longitude,
+          latitude: sample.latitude,
+          visualHeight: timestampToVisualHeight(
+            sample.time,
+            extent,
+            timeAxisHeight,
+          ),
+        })),
       })),
-    })),
   }))
 
 const interpolate = (
@@ -221,6 +224,7 @@ export const getSpaceTimePositionAtTime = (
 ): SpaceTimeSample | undefined => {
   requireFinite(time, 'timestamp')
   for (const segment of feature.temporalGeometry.segments) {
+    if (segment.type !== 'MovingPoint') continue
     const samples = segment.samples
     for (let index = 0; index < samples.length; index += 1) {
       const sample = samples[index]!

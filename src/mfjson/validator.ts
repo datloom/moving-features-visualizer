@@ -214,12 +214,12 @@ const validateTemporalGeometrySegment = (
     return
   }
 
-  if (value.type !== 'MovingPoint') {
+  if (value.type !== 'MovingPoint' && value.type !== 'MovingLineString') {
     addIssue(context, {
       path: `${path}.type`,
       code: value.type === undefined ? 'required' : 'unsupported_value',
-      message: 'Only MovingPoint temporal geometry is currently supported.',
-      expected: 'MovingPoint',
+      message: 'Temporal geometry type is not currently supported.',
+      expected: ['MovingPoint', 'MovingLineString'],
       actual: value.type,
     })
   }
@@ -235,7 +235,62 @@ const validateTemporalGeometrySegment = (
   }
 
   validateDatetimes(value.datetimes, `${path}.datetimes`, context)
-  validateCoordinates(value.coordinates, `${path}.coordinates`, context)
+  if (value.type === 'MovingLineString') {
+    if (!isUnknownArray(value.coordinates)) {
+      addIssue(context, {
+        path: `${path}.coordinates`,
+        code: 'invalid_type',
+        message:
+          'MovingLineString coordinates must be an array of LineStrings.',
+        expected: 'number[][][]',
+        actual: value.coordinates,
+      })
+    } else {
+      let expectedVertexCount: number | undefined
+      let expectedDimension: number | undefined
+      value.coordinates.forEach((line, index) => {
+        const linePath = `${path}.coordinates[${index}]`
+        const positions = validateCoordinates(line, linePath, context)
+        if (positions && positions.length < 2) {
+          addIssue(context, {
+            path: linePath,
+            code: 'invalid_coordinate',
+            message: 'A LineString must contain at least two positions.',
+            expected: 'at least two positions',
+            actual: positions.length,
+          })
+        }
+        if (!positions?.[0]) return
+        const dimensions = new Set(positions.map((position) => position.length))
+        if (dimensions.size !== 1) {
+          addIssue(context, {
+            path: linePath,
+            code: 'count_mismatch',
+            message: 'LineString positions must use one coordinate dimension.',
+            expected: 'consistent 2D or 3D positions',
+            actual: [...dimensions],
+          })
+        }
+        expectedVertexCount ??= positions.length
+        expectedDimension ??= positions[0].length
+        if (
+          positions.length !== expectedVertexCount ||
+          positions[0].length !== expectedDimension
+        ) {
+          addIssue(context, {
+            path: linePath,
+            code: 'count_mismatch',
+            message:
+              'Linear MovingLineString samples require compatible vertices.',
+            expected: `${expectedVertexCount} vertices of dimension ${expectedDimension}`,
+            actual: `${positions.length} vertices of dimension ${positions[0].length}`,
+          })
+        }
+      })
+    }
+  } else {
+    validateCoordinates(value.coordinates, `${path}.coordinates`, context)
+  }
 
   if (
     isUnknownArray(value.datetimes) &&
@@ -245,7 +300,7 @@ const validateTemporalGeometrySegment = (
     addIssue(context, {
       path,
       code: 'count_mismatch',
-      message: 'Temporal geometry must have one coordinate per datetime.',
+      message: 'Temporal geometry must have one geometry per datetime.',
       expected: value.datetimes.length,
       actual: value.coordinates.length,
     })

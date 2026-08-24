@@ -1,0 +1,22 @@
+{
+  "type": "Feature",
+  "id": "mf-line-1",
+  "properties": { "label": "Moving LineString 3D" },
+  "temporalGeometry": {
+    "type": "MovingLineString",
+    "datetimes": ["2026-08-25T00:00:00Z", "2026-08-25T00:01:00Z"],
+    "coordinates": [
+      [
+        [139.7, 35.6, 10],
+        [139.71, 35.61, 12],
+        [139.72, 35.62, 15]
+      ],
+      [
+        [139.71, 35.6, 10],
+        [139.72, 35.61, 13],
+        [139.73, 35.62, 16]
+      ]
+    ],
+    "interpolation": "Linear"
+  }
+}

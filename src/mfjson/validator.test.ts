@@ -52,7 +52,7 @@ describe('validateMfJson', () => {
       ...validFeature,
       temporalGeometry: {
         ...validFeature.temporalGeometry,
-        type: 'MovingLineString',
+        type: 'MovingPolygon',
       },
     })
 
@@ -71,6 +71,61 @@ describe('validateMfJson', () => {
         path: '$.temporalGeometry.type',
         code: 'unsupported_value',
       }),
+    )
+  })
+
+  it('accepts compatible MovingLineString snapshots', () => {
+    expect(
+      validateMfJson({
+        ...validFeature,
+        temporalGeometry: {
+          type: 'MovingLineString',
+          interpolation: 'Linear',
+          datetimes: ['2026-08-25T00:00:00Z', '2026-08-25T00:01:00Z'],
+          coordinates: [
+            [
+              [139.7, 35.6, 10],
+              [139.71, 35.61, 12],
+            ],
+            [
+              [139.71, 35.6, 10],
+              [139.72, 35.61, 13],
+            ],
+          ],
+        },
+      }),
+    ).toEqual({ valid: true, issues: [] })
+  })
+
+  it('rejects MovingLineString count and topology mismatches', () => {
+    const result = validateMfJson({
+      ...validFeature,
+      temporalGeometry: {
+        type: 'MovingLineString',
+        interpolation: 'Linear',
+        datetimes: ['2026-08-25T00:00:00Z', '2026-08-25T00:01:00Z'],
+        coordinates: [
+          [
+            [0, 0],
+            [1, 1],
+          ],
+          [
+            [0, 0],
+            [1, 1],
+            [2, 2],
+          ],
+          [[0, 0]],
+        ],
+      },
+    })
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'count_mismatch' }),
+        expect.objectContaining({
+          path: '$.temporalGeometry.coordinates[2]',
+          code: 'invalid_coordinate',
+        }),
+      ]),
     )
   })
 

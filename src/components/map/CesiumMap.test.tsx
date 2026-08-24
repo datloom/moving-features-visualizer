@@ -236,9 +236,10 @@ describe('CesiumMap', () => {
   it('renders normalized features without recreating the Viewer', () => {
     const { rerender } = render(<CesiumMap features={[feature]} />)
 
-    expect(movingFeatureToEntity).toHaveBeenCalledWith(feature, {
-      selected: false,
-    })
+    expect(movingFeatureToEntity).toHaveBeenCalledWith(
+      feature,
+      expect.objectContaining({ selected: false }),
+    )
     expect(add).toHaveBeenCalledWith({ id: 'vehicle-1--geometry--1' })
     expect(zoomTo).toHaveBeenCalledWith([{ id: 'vehicle-1--geometry--1' }])
     expect(useTimeStore.getState()).toMatchObject({
@@ -268,12 +269,14 @@ describe('CesiumMap', () => {
     )
 
     expect(add).toHaveBeenCalledTimes(11)
-    expect(movingFeatureToEntity).toHaveBeenCalledWith(loadedFeatures[0], {
-      selected: true,
-    })
-    expect(movingFeatureToEntity).toHaveBeenCalledWith(loadedFeatures[1], {
-      selected: false,
-    })
+    expect(movingFeatureToEntity).toHaveBeenCalledWith(
+      loadedFeatures[0],
+      expect.objectContaining({ selected: true }),
+    )
+    expect(movingFeatureToEntity).toHaveBeenCalledWith(
+      loadedFeatures[1],
+      expect.objectContaining({ selected: false }),
+    )
 
     add.mockClear()
     zoomTo.mockClear()
@@ -336,6 +339,7 @@ describe('CesiumMap', () => {
   it('appends independent paths without recreating existing entities or moving the camera', () => {
     const fiveSegments = Array.from({ length: 5 }, (_, index) => ({
       ...feature.temporalGeometry.segments[0]!,
+      type: 'MovingPoint' as const,
       id: `tg-${index + 1}`,
       samples: [
         { time: 100 + index * 20, longitude: index, latitude: index },

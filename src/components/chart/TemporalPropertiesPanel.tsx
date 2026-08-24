@@ -331,7 +331,9 @@ export function TemporalPropertiesPanel({
                     />
                     <span>
                       {property.name}
-                      {property.detail ? ` (${property.detail})` : ''}
+                      {property.type === 'Measure' && property.detail
+                        ? ` (${property.detail})`
+                        : ''}
                       {` · ${property.type}`}
                     </span>
                   </label>

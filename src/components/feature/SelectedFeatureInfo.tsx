@@ -9,11 +9,16 @@ export function SelectedFeatureInfo({
 }: {
   readonly feature: MovingFeature
 }) {
-  const samples = feature.temporalGeometry.segments.flatMap(
-    (segment) => segment.samples,
+  const sampleTimes = feature.temporalGeometry.segments.flatMap((segment) =>
+    segment.samples.map((sample) => sample.time),
   )
-  const first = samples[0]
-  const last = samples.at(-1)
+  const first = sampleTimes.length > 0 ? Math.min(...sampleTimes) : undefined
+  const last = sampleTimes.length > 0 ? Math.max(...sampleTimes) : undefined
+  const geometryTypes = [
+    ...new Set(
+      feature.temporalGeometry.segments.map((segment) => segment.type),
+    ),
+  ].join(', ')
   const label =
     typeof feature.properties.label === 'string'
       ? feature.properties.label
@@ -33,17 +38,17 @@ export function SelectedFeatureInfo({
       <dl>
         <div>
           <dt>Geometry</dt>
-          <dd>MovingPoint</dd>
+          <dd>{geometryTypes || '—'}</dd>
         </div>
         <div>
           <dt>Samples</dt>
-          <dd>{samples.length}</dd>
+          <dd>{sampleTimes.length}</dd>
         </div>
         <div>
           <dt>Time range</dt>
           <dd>
-            {first && last
-              ? `${formatTime(first.time)}–${formatTime(last.time)}`
+            {first !== undefined && last !== undefined
+              ? `${formatTime(first)}–${formatTime(last)}`
               : '—'}
           </dd>
         </div>

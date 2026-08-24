@@ -41,6 +41,7 @@ describe('getDatasetTimeRange', () => {
         segments: [
           {
             ...feature.temporalGeometry.segments[0]!,
+            type: 'MovingPoint',
             samples: [{ time: 500, longitude: 2, latitude: 2 }],
           },
         ],

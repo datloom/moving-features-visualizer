@@ -40,6 +40,11 @@ const source = (value: unknown): MovingFeatureDataSource => ({
   load: vi.fn().mockResolvedValue(value),
 })
 
+const fileSource = (value: unknown): MovingFeatureDataSource => ({
+  origin: { type: 'file' },
+  load: vi.fn().mockResolvedValue(value),
+})
+
 describe('loadMovingFeatures', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -67,6 +72,46 @@ describe('loadMovingFeatures', () => {
       currentTime: startTime,
       playing: false,
     })
+  })
+
+  it('loads a mixed MovingPoint/MovingLineString FeatureCollection', async () => {
+    const line = {
+      type: 'Feature',
+      id: 'line-1',
+      temporalGeometry: {
+        type: 'MovingLineString',
+        datetimes: ['2026-01-01T10:00:00Z', '2026-01-01T10:05:00Z'],
+        coordinates: [
+          [
+            [139.7, 35.6],
+            [139.71, 35.61],
+          ],
+          [
+            [139.71, 35.6],
+            [139.72, 35.61],
+          ],
+        ],
+        interpolation: 'Linear',
+      },
+    }
+    const result = await loadMovingFeatures(
+      fileSource({
+        type: 'FeatureCollection',
+        features: [rawFeature('point-1'), line],
+      }),
+    )
+
+    expect(result.success).toBe(true)
+    expect(useFeatureStore.getState().features).toMatchObject([
+      {
+        id: 'point-1',
+        temporalGeometry: { segments: [{ type: 'MovingPoint' }] },
+      },
+      {
+        id: 'line-1',
+        temporalGeometry: { segments: [{ type: 'MovingLineString' }] },
+      },
+    ])
   })
 
   it('replaces the previous dataset and resets active playback', async () => {
