@@ -26,8 +26,7 @@ export interface MeasureRendererStrategy extends StrategyBase {
 export interface TextRendererStrategy extends StrategyBase {
   readonly renderer: 'text-timeline'
   readonly property: TextTemporalProperty
-  readonly renderable: false
-  readonly unavailableReason: 'Text timeline rendering is not implemented yet.'
+  readonly renderable: true
 }
 
 export interface ImageRendererStrategy extends StrategyBase {
@@ -77,8 +76,7 @@ export const getPropertyRendererStrategy = (
         renderer: 'text-timeline',
         property,
         interpolationBehavior: textBehavior(property),
-        renderable: false,
-        unavailableReason: 'Text timeline rendering is not implemented yet.',
+        renderable: true,
       }
     case 'IMAGE':
       return {

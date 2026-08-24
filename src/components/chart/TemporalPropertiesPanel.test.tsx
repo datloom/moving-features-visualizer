@@ -16,6 +16,20 @@ vi.mock('./MeasureComparisonChart', () => ({
   ),
 }))
 
+vi.mock('./TextPropertyChart', () => ({
+  TextPropertyChart: ({
+    propertyName,
+    properties,
+  }: {
+    propertyName: string
+    properties: { samples: unknown[] }[]
+  }) => (
+    <div data-testid="text-chart">
+      {propertyName}:{properties.length}
+    </div>
+  ),
+}))
+
 import { TemporalPropertiesPanel } from './TemporalPropertiesPanel'
 
 const featureWith = (
@@ -76,5 +90,29 @@ describe('TemporalPropertiesPanel', () => {
       screen.getByText('No Measure properties are available for this Feature.'),
     ).toBeInTheDocument()
     expect(screen.queryByTestId('comparison-chart')).not.toBeInTheDocument()
+  })
+
+  it('renders all logical Text property segments in one selected timeline', () => {
+    const textSegments: TemporalProperty[] = [
+      {
+        type: 'Text',
+        name: 'status',
+        interpolation: 'Step',
+        samples: [{ time: 1, value: 'moving' }],
+      },
+      {
+        type: 'Text',
+        name: 'status',
+        interpolation: 'Step',
+        samples: [{ time: 10, value: 'stopped' }],
+      },
+    ]
+    const localFeature = featureWith('local', textSegments)
+    useFeatureStore.getState().replaceFeatures([localFeature])
+    render(<TemporalPropertiesPanel feature={localFeature} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Text Timeline' }))
+
+    expect(screen.getByTestId('text-chart')).toHaveTextContent('status:2')
   })
 })

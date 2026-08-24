@@ -45,7 +45,7 @@ describe('temporal property renderer strategy', () => {
     ).toMatchObject({
       renderer: 'text-timeline',
       interpolationBehavior: behavior,
-      renderable: false,
+      renderable: true,
     })
   })
 
