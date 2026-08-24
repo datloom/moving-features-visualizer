@@ -19,19 +19,25 @@ import {
 const INITIAL_CAMERA = Cartesian3.fromDegrees(0, 20, 20_000_000)
 const OPEN_STREET_MAP_URL = 'https://tile.openstreetmap.org/'
 const EMPTY_FEATURES: readonly MovingFeature[] = []
+const SCENE_MORPH_DURATION_SECONDS = 0.5
+
+export type MapMode = '2d' | '3d'
 
 export interface CesiumMapProps {
   readonly features?: readonly MovingFeature[]
   readonly focusRevision?: number
+  readonly mapMode?: MapMode
 }
 
 export function CesiumMap({
   features = EMPTY_FEATURES,
   focusRevision = 0,
+  mapMode = '3d',
 }: CesiumMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const featureEntitiesRef = useRef<Entity[]>([])
+  const previousMapModeRef = useRef(mapMode)
   const [imageryFailed, setImageryFailed] = useState(false)
 
   useEffect(() => {
@@ -105,6 +111,19 @@ export function CesiumMap({
       featureEntitiesRef.current = []
     }
   }, [features])
+
+  useEffect(() => {
+    if (previousMapModeRef.current === mapMode) return
+    previousMapModeRef.current = mapMode
+
+    const scene = viewerRef.current?.scene
+    if (!scene) return
+    if (mapMode === '2d') {
+      scene.morphTo2D(SCENE_MORPH_DURATION_SECONDS)
+    } else {
+      scene.morphTo3D(SCENE_MORPH_DURATION_SECONDS)
+    }
+  }, [mapMode])
 
   useEffect(() => {
     if (focusRevision === 0 || featureEntitiesRef.current.length === 0) return

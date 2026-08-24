@@ -7,6 +7,8 @@ const {
   destroy,
   ImageryLayer,
   imageryErrorListeners,
+  morphTo2D,
+  morphTo3D,
   movingFeatureToEntity,
   osmImageryLayer,
   OpenStreetMapImageryProvider,
@@ -22,6 +24,8 @@ const {
   const isDestroyed = vi.fn(() => false)
   const imageryErrorListeners: (() => void)[] = []
   const removeImageryErrorListener = vi.fn()
+  const morphTo2D = vi.fn()
+  const morphTo3D = vi.fn()
   const OpenStreetMapImageryProvider = vi.fn(function () {
     return {
       errorEvent: {
@@ -50,6 +54,7 @@ const {
       destroy,
       entities: { add, remove },
       isDestroyed,
+      scene: { morphTo2D, morphTo3D },
       zoomTo,
     }
   })
@@ -59,6 +64,8 @@ const {
     destroy,
     ImageryLayer,
     imageryErrorListeners,
+    morphTo2D,
+    morphTo3D,
     movingFeatureToEntity,
     osmImageryLayer,
     OpenStreetMapImageryProvider,
@@ -163,6 +170,21 @@ describe('CesiumMap', () => {
     expect(container.querySelector('.map-imagery-error')).toHaveTextContent(
       'OpenStreetMap imagery is temporarily unavailable.',
     )
+  })
+
+  it('uses native scene morphs without recreating the Viewer', () => {
+    const { rerender } = render(<CesiumMap mapMode="3d" />)
+
+    expect(morphTo2D).not.toHaveBeenCalled()
+    expect(morphTo3D).not.toHaveBeenCalled()
+
+    rerender(<CesiumMap mapMode="2d" />)
+    expect(morphTo2D).toHaveBeenCalledWith(0.5)
+    expect(Viewer).toHaveBeenCalledTimes(1)
+
+    rerender(<CesiumMap mapMode="3d" />)
+    expect(morphTo3D).toHaveBeenCalledWith(0.5)
+    expect(Viewer).toHaveBeenCalledTimes(1)
   })
 
   it('cleans up each Viewer created during React Strict Mode checks', () => {

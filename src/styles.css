@@ -386,6 +386,29 @@ select {
   color: var(--primary);
   border-color: #35635f;
 }
+.map-mode-control {
+  display: grid;
+  grid-template-columns: repeat(2, 32px);
+  border: 1px solid var(--border);
+  background: rgb(9 14 17 / 88%);
+}
+.map-mode-control button {
+  height: 30px;
+  padding: 0;
+  border: 0;
+  color: var(--muted-strong);
+  background: transparent;
+  font-size: 0.62rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.map-mode-control button + button {
+  border-left: 1px solid var(--border);
+}
+.map-mode-control button.is-active {
+  color: var(--primary);
+  background: var(--selected);
+}
 .map-attribution {
   position: absolute;
   right: 9px;
@@ -860,6 +883,7 @@ select {
 }
 .icon-button:focus-visible,
 .map-tool-button:focus-visible,
+.map-mode-control button:focus-visible,
 .feature-row:focus-visible,
 .dataset-control select:focus-visible,
 .feature-search input:focus-visible,
