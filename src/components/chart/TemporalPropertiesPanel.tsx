@@ -349,6 +349,7 @@ export function TemporalPropertiesPanel({
             <>
               {chartEntries.map((entry) => (
                 <div
+                  className="comparison-chart-viewport"
                   key={entry.key}
                   ref={(element) => {
                     if (element)
