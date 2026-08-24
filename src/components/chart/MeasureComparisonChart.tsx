@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { LineChart, ScatterChart } from 'echarts/charts'
 import {
   DataZoomComponent,
@@ -16,6 +16,7 @@ import {
   buildComparisonCurrentTimeOption,
   buildMeasureComparisonChartOption,
 } from '../../visualization/chart/measureComparisonChartAdapter'
+import { resolveMeasureValue } from '../../visualization/chart/measureChartAdapter'
 import { PropertyChartHeader } from './PropertyChartHeader'
 
 registerEChartsModules([
@@ -37,6 +38,16 @@ export function MeasureComparisonChart({
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<ECharts | null>(null)
   const firstSeriesIdRef = useRef(group.series[0]?.id)
+  const currentTime = useTimeStore((state) => state.currentTime)
+  const currentValues = useMemo(() => {
+    const byName = new Map<string, number | undefined>()
+    for (const item of group.series) {
+      const value = resolveMeasureValue(item.property, currentTime)
+      if (value !== undefined || !byName.has(item.propertyName))
+        byName.set(item.propertyName, value)
+    }
+    return [...byName]
+  }, [currentTime, group.series])
 
   useEffect(() => {
     const container = containerRef.current
@@ -89,6 +100,19 @@ export function MeasureComparisonChart({
           type: 'Measure',
           interpolation: item.property.interpolation,
         }))}
+        trailing={
+          <div>
+            {currentValues.map(([name, value]) => (
+              <output
+                aria-label={`Current ${name}`}
+                className="measure-current-value"
+                key={name}
+              >
+                {value === undefined ? 'No data' : value.toLocaleString()}
+              </output>
+            ))}
+          </div>
+        }
       />
       <div className="comparison-chart-canvas" ref={containerRef} role="img" />
     </section>
