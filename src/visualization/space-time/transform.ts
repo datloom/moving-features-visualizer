@@ -187,20 +187,29 @@ export const transformSpaceTimeFeatures = (
   features.map((feature) => ({
     id: feature.id,
     segments: feature.temporalGeometry.segments
-      .filter((segment) => segment.type === 'MovingPoint')
-      .map((segment) => ({
-        interpolation: segment.interpolation,
-        samples: segment.samples.map((sample) => ({
-          time: sample.time,
-          longitude: sample.longitude,
-          latitude: sample.latitude,
-          visualHeight: timestampToVisualHeight(
-            sample.time,
-            extent,
-            timeAxisHeight,
-          ),
-        })),
-      })),
+      .flatMap((segment): readonly SpaceTimeSegment[] => {
+        if (
+          segment.type !== 'MovingPoint' ||
+          segment.interpolation !== 'Linear'
+        ) {
+          return []
+        }
+        return [
+          {
+            interpolation: 'Linear',
+            samples: segment.samples.map((sample) => ({
+              time: sample.time,
+              longitude: sample.longitude,
+              latitude: sample.latitude,
+              visualHeight: timestampToVisualHeight(
+                sample.time,
+                extent,
+                timeAxisHeight,
+              ),
+            })),
+          },
+        ]
+      }),
   }))
 
 const interpolate = (

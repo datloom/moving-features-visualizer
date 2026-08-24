@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { MovingLineString } from './types'
+import type { MovingLineString, MovingPoint } from './types'
 import { geometryAtTime } from './geometryAtTime'
 
 const line: MovingLineString = {
@@ -31,6 +31,47 @@ describe('geometryAtTime', () => {
       positions: [
         { longitude: 5, latitude: 5, height: 5 },
         { longitude: 15, latitude: 15, height: 15 },
+      ],
+    })
+  })
+
+  it('uses the shared nonlinear engine for MovingPoint', () => {
+    const point: MovingPoint = {
+      type: 'MovingPoint',
+      interpolation: 'Quadratic',
+      samples: [
+        { time: 0, longitude: 0, latitude: 0 },
+        { time: 10, longitude: 10, latitude: 10 },
+        { time: 20, longitude: 0, latitude: 0 },
+      ],
+    }
+    expect(geometryAtTime(point, 15)).toEqual({
+      type: 'MovingPoint',
+      position: { longitude: 10, latitude: 10 },
+    })
+  })
+
+  it('reconstructs a nonlinear MovingLineString from vertex trajectories', () => {
+    const quadratic: MovingLineString = {
+      ...line,
+      interpolation: 'Quadratic',
+      samples: [
+        line.samples[0]!,
+        line.samples[1]!,
+        {
+          time: 20,
+          positions: [
+            { longitude: 0, latitude: 0, height: 0 },
+            { longitude: 10, latitude: 10, height: 10 },
+          ],
+        },
+      ],
+    }
+    expect(geometryAtTime(quadratic, 15)).toEqual({
+      type: 'MovingLineString',
+      positions: [
+        { longitude: 10, latitude: 10, height: 10 },
+        { longitude: 20, latitude: 20, height: 20 },
       ],
     })
   })

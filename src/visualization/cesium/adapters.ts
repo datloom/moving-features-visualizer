@@ -1,5 +1,6 @@
 import {
   Cartesian3,
+  CallbackPositionProperty,
   CallbackProperty,
   Color,
   Entity,
@@ -176,6 +177,16 @@ export const movingFeatureToEntities = (
       }
 
       const pointSamples = segment.samples
+      const motionCurvePosition = new CallbackPositionProperty((time) => {
+        if (!time) return undefined
+        const evaluated = geometryAtTime(
+          segment,
+          JulianDate.toDate(time).getTime(),
+        )
+        return evaluated?.type === 'MovingPoint'
+          ? coordinateToCartesian3(evaluated.position)
+          : undefined
+      }, false)
 
       if (options.selected) {
         return [
@@ -192,7 +203,7 @@ export const movingFeatureToEntities = (
             id: geometrySegmentPositionEntityId(feature.id, segment, index),
             name: feature.id,
             availability,
-            position: samplesToPositionProperty(pointSamples),
+            position: motionCurvePosition,
             point: {
               color,
               outlineColor: Color.fromCssColorString('#071b1c'),
@@ -211,7 +222,7 @@ export const movingFeatureToEntities = (
           id: geometrySegmentEntityId(feature.id, segment, index),
           name: feature.id,
           availability,
-          position: samplesToPositionProperty(pointSamples),
+          position: motionCurvePosition,
           point: {
             color,
             outlineColor: Color.fromCssColorString('#071b1c'),

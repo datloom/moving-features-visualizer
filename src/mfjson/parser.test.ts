@@ -62,6 +62,7 @@ describe('parseTemporalGeometryTrack MovingLineString', () => {
             [139.71, 35.61],
           ],
         ],
+        interpolation: 'Discrete',
       }),
     )
     expect(result.success).toBe(true)
@@ -116,6 +117,7 @@ describe('parseMovingPoint', () => {
         type: 'MovingPoint',
         datetimes: ['2026-08-21T10:00:00Z'],
         coordinates: [[139.7, 35.68, 10]],
+        interpolation: 'Discrete',
       }),
     )
 
@@ -133,6 +135,7 @@ describe('parseMovingPoint', () => {
         type: 'MovingPoint',
         datetimes: ['2026-08-21T10:00:00Z'],
         coordinates: [[139.7]],
+        interpolation: 'Discrete',
       }),
     )
 
@@ -153,6 +156,7 @@ describe('parseMovingPoint', () => {
         type: 'MovingPoint',
         datetimes: ['not-a-date'],
         coordinates: [[139.7, 35.68]],
+        interpolation: 'Discrete',
       }),
     )
 
@@ -216,7 +220,7 @@ describe('parseMovingPoint', () => {
         type: 'MovingPoint',
         datetimes: ['2026-08-21T10:00:00Z'],
         coordinates: [[139.7, 35.68]],
-        interpolation: 'Linear',
+        interpolation: 'Discrete',
       }),
     )
     const unsupported = parseMovingPoint(
@@ -230,7 +234,7 @@ describe('parseMovingPoint', () => {
 
     expect(explicit).toMatchObject({
       success: true,
-      data: { interpolation: 'Linear' },
+      data: { interpolation: 'Discrete' },
     })
     expect(unsupported).toMatchObject({
       success: false,
@@ -247,8 +251,11 @@ describe('parseMovingPoint', () => {
     const result = parseMovingPoint(
       featureWith({
         type: 'MovingPoint',
-        datetimes: ['2026-08-21T10:00:00Z'],
-        coordinates: [[139.7, 35.68]],
+        datetimes: ['2026-08-21T10:00:00Z', '2026-08-21T10:01:00Z'],
+        coordinates: [
+          [139.7, 35.68],
+          [139.71, 35.69],
+        ],
       }),
     )
 
@@ -262,6 +269,11 @@ describe('parseMovingPoint', () => {
             time: Date.parse('2026-08-21T10:00:00Z'),
             longitude: 139.7,
             latitude: 35.68,
+          },
+          {
+            time: Date.parse('2026-08-21T10:01:00Z'),
+            longitude: 139.71,
+            latitude: 35.69,
           },
         ],
       },

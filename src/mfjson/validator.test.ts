@@ -10,7 +10,7 @@ const validFeature = {
     datetimes: ['2024-01-01T00:00:00Z', '2024-01-01T00:01:00Z'],
     coordinates: [
       [139.7, 35.6],
-      [139.71, 35.61, 20],
+      [139.71, 35.61],
     ],
   },
   temporalProperties: [
@@ -96,6 +96,35 @@ describe('validateMfJson', () => {
       }),
     ).toEqual({ valid: true, issues: [] })
   })
+
+  it.each([
+    ['Discrete', 1, true],
+    ['Step', 1, false],
+    ['Step', 2, true],
+    ['Linear', 1, false],
+    ['Linear', 2, true],
+    ['Quadratic', 2, false],
+    ['Quadratic', 3, true],
+    ['Cubic', 3, false],
+    ['Cubic', 4, true],
+  ] as const)(
+    'validates %s minimum sample count (%i)',
+    (interpolation, count, valid) => {
+      const datetimes = Array.from({ length: count }, (_, index) =>
+        new Date(index * 1_000).toISOString(),
+      )
+      const result = validateMfJson({
+        ...validFeature,
+        temporalGeometry: {
+          type: 'MovingPoint',
+          interpolation,
+          datetimes,
+          coordinates: datetimes.map((_, index) => [index, index]),
+        },
+      })
+      expect(result.valid).toBe(valid)
+    },
+  )
 
   it('rejects MovingLineString count and topology mismatches', () => {
     const result = validateMfJson({

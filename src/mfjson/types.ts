@@ -1,7 +1,12 @@
 /** Unix epoch time in milliseconds. */
 export type Timestamp = number
 
-export type GeometryInterpolation = 'Linear'
+export type GeometryInterpolation =
+  | 'Discrete'
+  | 'Step'
+  | 'Linear'
+  | 'Quadratic'
+  | 'Cubic'
 
 export type PropertyInterpolation = 'Discrete' | 'Step' | 'Linear'
 

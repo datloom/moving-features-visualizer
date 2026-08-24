@@ -13,12 +13,20 @@ const positionSchema = z.union([
   z.tuple([z.number(), z.number(), z.number()]),
 ])
 
+const geometryInterpolationSchema = z.enum([
+  'Discrete',
+  'Step',
+  'Linear',
+  'Quadratic',
+  'Cubic',
+])
+
 const movingPointSchema = z.object({
   id: z.string().optional(),
   type: z.literal('MovingPoint'),
   datetimes: z.array(z.string()),
   coordinates: z.array(positionSchema),
-  interpolation: z.literal('Linear').optional(),
+  interpolation: geometryInterpolationSchema.optional(),
 })
 
 const movingLineStringSchema = z.object({
@@ -26,7 +34,7 @@ const movingLineStringSchema = z.object({
   type: z.literal('MovingLineString'),
   datetimes: z.array(z.string()),
   coordinates: z.array(z.array(positionSchema)),
-  interpolation: z.literal('Linear').optional(),
+  interpolation: geometryInterpolationSchema.optional(),
 })
 
 const temporalGeometrySchema = z.discriminatedUnion('type', [

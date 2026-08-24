@@ -41,6 +41,14 @@ const isUnknownArray = (value: unknown): value is unknown[] =>
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value)
 
+const geometrySampleMinimums = {
+  Discrete: 1,
+  Step: 2,
+  Linear: 2,
+  Quadratic: 3,
+  Cubic: 4,
+} as const
+
 const addIssue = (
   context: ValidationContext,
   issue: Omit<ValidationIssue, 'featureId'>,
@@ -224,17 +232,37 @@ const validateTemporalGeometrySegment = (
     })
   }
 
-  if (value.interpolation !== undefined && value.interpolation !== 'Linear') {
+  const interpolation =
+    typeof value.interpolation === 'string' &&
+    value.interpolation in geometrySampleMinimums
+      ? (value.interpolation as keyof typeof geometrySampleMinimums)
+      : value.interpolation === undefined
+        ? 'Linear'
+        : undefined
+  if (interpolation === undefined) {
     addIssue(context, {
       path: `${path}.interpolation`,
       code: 'unsupported_value',
-      message: 'Only Linear geometry interpolation is currently supported.',
-      expected: 'Linear',
+      message: 'Temporal geometry interpolation is not currently supported.',
+      expected: Object.keys(geometrySampleMinimums),
       actual: value.interpolation,
     })
   }
 
   validateDatetimes(value.datetimes, `${path}.datetimes`, context)
+  if (
+    interpolation !== undefined &&
+    isUnknownArray(value.datetimes) &&
+    value.datetimes.length < geometrySampleMinimums[interpolation]
+  ) {
+    addIssue(context, {
+      path: `${path}.datetimes`,
+      code: 'count_mismatch',
+      message: `${interpolation} interpolation requires at least ${geometrySampleMinimums[interpolation]} temporal samples.`,
+      expected: `at least ${geometrySampleMinimums[interpolation]} samples`,
+      actual: value.datetimes.length,
+    })
+  }
   if (value.type === 'MovingLineString') {
     if (!isUnknownArray(value.coordinates)) {
       addIssue(context, {
@@ -281,7 +309,7 @@ const validateTemporalGeometrySegment = (
             path: linePath,
             code: 'count_mismatch',
             message:
-              'Linear MovingLineString samples require compatible vertices.',
+              'MovingLineString samples require compatible vertices.',
             expected: `${expectedVertexCount} vertices of dimension ${expectedDimension}`,
             actual: `${positions.length} vertices of dimension ${positions[0].length}`,
           })
@@ -289,7 +317,23 @@ const validateTemporalGeometrySegment = (
       })
     }
   } else {
-    validateCoordinates(value.coordinates, `${path}.coordinates`, context)
+    const positions = validateCoordinates(
+      value.coordinates,
+      `${path}.coordinates`,
+      context,
+    )
+    if (positions?.[0]) {
+      const dimensions = new Set(positions.map((position) => position.length))
+      if (dimensions.size !== 1) {
+        addIssue(context, {
+          path: `${path}.coordinates`,
+          code: 'count_mismatch',
+          message: 'MovingPoint samples must use one coordinate dimension.',
+          expected: 'consistent 2D or 3D positions',
+          actual: [...dimensions],
+        })
+      }
+    }
   }
 
   if (
