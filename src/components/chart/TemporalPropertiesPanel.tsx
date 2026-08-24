@@ -27,7 +27,6 @@ export function TemporalPropertiesPanel({
   const selectedFeature =
     features.find((item) => item.id === selectedFeatureId) ?? feature
   const [mode, setMode] = useState<MeasureComparisonMode>('properties')
-  const [chartKind, setChartKind] = useState<'Measure' | 'Text'>('Measure')
   const availablePropertyNames = useMemo(
     () => getAvailableMeasurePropertyNames(features),
     [features],
@@ -50,24 +49,6 @@ export function TemporalPropertiesPanel({
       ),
     [selectedFeature],
   )
-  const textPropertyNames = useMemo(
-    () => [...new Set(textProperties.map((property) => property.name))],
-    [textProperties],
-  )
-  const [selectedTextProperty, setSelectedTextProperty] = useState(
-    textPropertyNames[0] ?? '',
-  )
-  useEffect(() => {
-    if (!textPropertyNames.includes(selectedTextProperty))
-      setSelectedTextProperty(textPropertyNames[0] ?? '')
-  }, [selectedTextProperty, textPropertyNames])
-  const selectedTextSegments = useMemo(
-    () =>
-      textProperties.filter(
-        (property) => property.name === selectedTextProperty,
-      ),
-    [selectedTextProperty, textProperties],
-  )
   const logicalMeasureProperties = useMemo(
     () =>
       measureProperties.filter(
@@ -78,9 +59,12 @@ export function TemporalPropertiesPanel({
       ),
     [measureProperties],
   )
-  const [selectedPropertyNames, setSelectedPropertyNames] = useState<
-    Set<string>
-  >(() => new Set(measureProperties[0] ? [measureProperties[0].name] : []))
+  const [selectedPropertyKeys, setSelectedPropertyKeys] = useState<Set<string>>(
+    () =>
+      new Set(
+        measureProperties[0] ? [`Measure:${measureProperties[0].name}`] : [],
+      ),
+  )
 
   useEffect(() => {
     if (!availablePropertyNames.includes(featureProperty))
@@ -104,19 +88,47 @@ export function TemporalPropertiesPanel({
     )
   }, [eligibleFeatureIds, selectedFeatureId])
 
-  const measurePropertyNames = useMemo(
-    () => logicalMeasureProperties.map((property) => property.name),
-    [logicalMeasureProperties],
+  const logicalProperties = useMemo(
+    () => [
+      ...logicalMeasureProperties.map((property) => ({
+        key: `Measure:${property.name}`,
+        name: property.name,
+        type: 'Measure' as const,
+        detail: property.unit ?? property.form,
+      })),
+      ...[...new Set(textProperties.map((property) => property.name))].map(
+        (name) => ({ key: `Text:${name}`, name, type: 'Text' as const }),
+      ),
+    ],
+    [logicalMeasureProperties, textProperties],
   )
   useEffect(() => {
-    setSelectedPropertyNames((current) =>
+    setSelectedPropertyKeys((current) =>
       reconcileSelection(
         current,
-        measurePropertyNames,
-        measurePropertyNames[0],
+        logicalProperties.map((property) => property.key),
+        logicalProperties[0]?.key,
       ),
     )
-  }, [measurePropertyNames])
+  }, [logicalProperties])
+  const selectedMeasureNames = useMemo(
+    () =>
+      new Set(
+        [...selectedPropertyKeys]
+          .filter((key) => key.startsWith('Measure:'))
+          .map((key) => key.slice('Measure:'.length)),
+      ),
+    [selectedPropertyKeys],
+  )
+  const selectedTextNames = useMemo(
+    () =>
+      new Set(
+        [...selectedPropertyKeys]
+          .filter((key) => key.startsWith('Text:'))
+          .map((key) => key.slice('Text:'.length)),
+      ),
+    [selectedPropertyKeys],
+  )
 
   const featureSeries = useMemo(
     () =>
@@ -131,9 +143,17 @@ export function TemporalPropertiesPanel({
   const propertyGroups = useMemo(
     () =>
       groupPropertyComparisonSeries(
-        createPropertyComparisonSeries(selectedFeature, selectedPropertyNames),
+        createPropertyComparisonSeries(selectedFeature, selectedMeasureNames),
       ),
-    [selectedFeature, selectedPropertyNames],
+    [selectedFeature, selectedMeasureNames],
+  )
+  const selectedTextProperties = useMemo(
+    () =>
+      [...selectedTextNames].map((name) => ({
+        name,
+        segments: textProperties.filter((property) => property.name === name),
+      })),
+    [selectedTextNames, textProperties],
   )
   const groups =
     mode === 'features'
@@ -155,25 +175,19 @@ export function TemporalPropertiesPanel({
     return next
   }
   const emptyMessage =
-    chartKind === 'Text'
-      ? textProperties.length === 0
-        ? 'No Text properties are available for this Feature.'
-        : selectedTextSegments.length === 0
-          ? 'Select a Text property.'
-          : undefined
-      : mode === 'features'
-        ? availablePropertyNames.length === 0
-          ? 'No Measure properties are available in the loaded dataset.'
-          : selectedFeatureIds.size === 0
-            ? 'Select at least one Feature to compare.'
-            : featureSeries.length === 0
-              ? 'No loaded Features contain the selected property.'
-              : undefined
-        : measureProperties.length === 0
-          ? 'No Measure properties are available for this Feature.'
-          : selectedPropertyNames.size === 0
-            ? 'Select at least one Measure property.'
+    mode === 'features'
+      ? availablePropertyNames.length === 0
+        ? 'No Measure properties are available in the loaded dataset.'
+        : selectedFeatureIds.size === 0
+          ? 'Select at least one Feature to compare.'
+          : featureSeries.length === 0
+            ? 'No loaded Features contain the selected property.'
             : undefined
+      : logicalProperties.length === 0
+        ? 'No supported temporal properties are available for this Feature.'
+        : selectedPropertyKeys.size === 0
+          ? 'Select at least one temporal property.'
+          : undefined
 
   return (
     <section
@@ -183,9 +197,7 @@ export function TemporalPropertiesPanel({
       <header className="temporal-panel-heading">
         <div>
           <h2>Temporal Properties</h2>
-          <span>
-            {chartKind === 'Text' ? 'Text timeline' : 'Measure comparison'}
-          </span>
+          <span>Measure and Text comparison</span>
         </div>
         <span>{features.length} features</span>
       </header>
@@ -199,19 +211,9 @@ export function TemporalPropertiesPanel({
             role="group"
             aria-label="Comparison mode"
           >
-            {textProperties.length > 0 ? (
-              <button
-                aria-pressed={chartKind === 'Text'}
-                onClick={() => setChartKind('Text')}
-                type="button"
-              >
-                Text Timeline
-              </button>
-            ) : null}
             <button
-              aria-pressed={chartKind === 'Measure' && mode === 'features'}
+              aria-pressed={mode === 'features'}
               onClick={() => {
-                setChartKind('Measure')
                 setMode('features')
               }}
               type="button"
@@ -219,9 +221,8 @@ export function TemporalPropertiesPanel({
               Feature Comparison
             </button>
             <button
-              aria-pressed={chartKind === 'Measure' && mode === 'properties'}
+              aria-pressed={mode === 'properties'}
               onClick={() => {
-                setChartKind('Measure')
                 setMode('properties')
               }}
               type="button"
@@ -229,27 +230,7 @@ export function TemporalPropertiesPanel({
               Property Comparison
             </button>
           </div>
-          {chartKind === 'Text' ? (
-            <>
-              <p className="comparison-feature" title={selectedFeature.id}>
-                <span>Feature</span>
-                {selectedFeature.id}
-              </p>
-              <label className="comparison-field">
-                Text property
-                <select
-                  value={selectedTextProperty}
-                  onChange={(event) =>
-                    setSelectedTextProperty(event.target.value)
-                  }
-                >
-                  {textPropertyNames.map((name) => (
-                    <option key={name}>{name}</option>
-                  ))}
-                </select>
-              </label>
-            </>
-          ) : mode === 'features' ? (
+          {mode === 'features' ? (
             <>
               <label className="comparison-field">
                 Property
@@ -300,24 +281,21 @@ export function TemporalPropertiesPanel({
               </p>
               <fieldset className="comparison-checklist">
                 <legend>Properties</legend>
-                {logicalMeasureProperties.map((property) => (
-                  <label key={property.name} title={property.name}>
+                {logicalProperties.map((property) => (
+                  <label key={property.key} title={property.name}>
                     <input
-                      checked={selectedPropertyNames.has(property.name)}
+                      checked={selectedPropertyKeys.has(property.key)}
                       onChange={(event) =>
-                        setSelectedPropertyNames((current) =>
-                          toggle(current, property.name, event.target.checked),
+                        setSelectedPropertyKeys((current) =>
+                          toggle(current, property.key, event.target.checked),
                         )
                       }
                       type="checkbox"
                     />
                     <span>
                       {property.name}
-                      {property.unit
-                        ? ` (${property.unit})`
-                        : property.form
-                          ? ` (${property.form})`
-                          : ''}
+                      {property.detail ? ` (${property.detail})` : ''}
+                      {` · ${property.type}`}
                     </span>
                   </label>
                 ))}
@@ -330,16 +308,20 @@ export function TemporalPropertiesPanel({
         >
           {emptyMessage ? (
             <p className="compact-empty">{emptyMessage}</p>
-          ) : chartKind === 'Text' ? (
-            <TextPropertyChart
-              featureId={selectedFeature.id}
-              propertyName={selectedTextProperty}
-              properties={selectedTextSegments}
-            />
           ) : (
-            groups.map((group) => (
-              <MeasureComparisonChart group={group} key={group.key} />
-            ))
+            <>
+              {groups.map((group) => (
+                <MeasureComparisonChart group={group} key={group.key} />
+              ))}
+              {selectedTextProperties.map(({ name, segments }) => (
+                <TextPropertyChart
+                  featureId={selectedFeature.id}
+                  key={`text:${name}`}
+                  propertyName={name}
+                  properties={segments}
+                />
+              ))}
+            </>
           )}
         </div>
       </div>

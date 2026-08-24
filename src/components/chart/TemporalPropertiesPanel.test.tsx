@@ -79,20 +79,19 @@ describe('TemporalPropertiesPanel', () => {
     expect(screen.getByTestId('comparison-chart')).toHaveTextContent('one,two')
   })
 
-  it('does not offer Text or IMAGE properties as Measure chart series', () => {
+  it('supports a Text-only Feature in Property Comparison', () => {
     const imageOnly = featureWith('camera-feature', [
       { type: 'IMAGE', name: 'camera', interpolation: 'Step', samples: [] },
       { type: 'Text', name: 'state', interpolation: 'Step', samples: [] },
     ])
     useFeatureStore.getState().replaceFeatures([imageOnly])
     render(<TemporalPropertiesPanel feature={imageOnly} />)
-    expect(
-      screen.getByText('No Measure properties are available for this Feature.'),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'state · Text' })).toBeChecked()
+    expect(screen.getByTestId('text-chart')).toHaveTextContent('state:1')
     expect(screen.queryByTestId('comparison-chart')).not.toBeInTheDocument()
   })
 
-  it('renders all logical Text property segments in one selected timeline', () => {
+  it('renders all logical Text property segments in Property Comparison', () => {
     const textSegments: TemporalProperty[] = [
       {
         type: 'Text',
@@ -111,8 +110,21 @@ describe('TemporalPropertiesPanel', () => {
     useFeatureStore.getState().replaceFeatures([localFeature])
     render(<TemporalPropertiesPanel feature={localFeature} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Text Timeline' }))
-
     expect(screen.getByTestId('text-chart')).toHaveTextContent('status:2')
+  })
+
+  it('renders selected Measure and Text properties together', () => {
+    const mixed = featureWith('mixed', [
+      speed(),
+      { type: 'Text', name: 'status', interpolation: 'Step', samples: [] },
+    ])
+    useFeatureStore.getState().replaceFeatures([mixed])
+    render(<TemporalPropertiesPanel feature={mixed} />)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'status · Text' }))
+
+    expect(screen.getByTestId('comparison-chart')).toHaveTextContent('speed')
+    expect(screen.getByTestId('text-chart')).toHaveTextContent('status:1')
+    expect(screen.queryByRole('button', { name: 'Text Timeline' })).toBeNull()
   })
 })
