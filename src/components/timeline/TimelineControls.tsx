@@ -1,4 +1,5 @@
 import { useTimeStore } from '../../store/timeStore'
+import { Icon } from '../ui/Icon'
 
 const PLAYBACK_RATES = [0.5, 1, 2, 4, 10] as const
 
@@ -27,7 +28,7 @@ export function TimelineControls() {
             onClick={() => useTimeStore.getState().setCurrentTime(startTime)}
             type="button"
           >
-            Start
+            <Icon name="chevronLeft" size={15} /> Start
           </button>
           <button
             aria-label={playing ? 'Pause playback' : 'Play timeline'}
@@ -40,6 +41,7 @@ export function TimelineControls() {
             }}
             type="button"
           >
+            <Icon name={playing ? 'pause' : 'play'} size={15} />
             {playing ? 'Pause' : 'Play'}
           </button>
           <button
@@ -49,7 +51,7 @@ export function TimelineControls() {
             onClick={() => useTimeStore.getState().setCurrentTime(endTime)}
             type="button"
           >
-            End
+            End <Icon name="chevronRight" size={15} />
           </button>
         </div>
 

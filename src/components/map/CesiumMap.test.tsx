@@ -143,4 +143,20 @@ describe('CesiumMap', () => {
     expect(Viewer).toHaveBeenCalledTimes(1)
     expect(remove).toHaveBeenCalledWith({ id: 'vehicle-1' })
   })
+
+  it('refocuses existing entities without recreating the Viewer', () => {
+    const features = [feature]
+    const { rerender } = render(
+      <CesiumMap features={features} focusRevision={0} />,
+    )
+    const viewerCalls = Viewer.mock.calls.length
+    const adapterCalls = movingFeatureToEntity.mock.calls.length
+    zoomTo.mockClear()
+
+    rerender(<CesiumMap features={features} focusRevision={1} />)
+
+    expect(zoomTo).toHaveBeenCalledWith([{ id: 'vehicle-1' }])
+    expect(Viewer).toHaveBeenCalledTimes(viewerCalls)
+    expect(movingFeatureToEntity).toHaveBeenCalledTimes(adapterCalls)
+  })
 })

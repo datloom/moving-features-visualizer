@@ -15,9 +15,13 @@ const EMPTY_FEATURES: readonly MovingFeature[] = []
 
 export interface CesiumMapProps {
   readonly features?: readonly MovingFeature[]
+  readonly focusRevision?: number
 }
 
-export function CesiumMap({ features = EMPTY_FEATURES }: CesiumMapProps) {
+export function CesiumMap({
+  features = EMPTY_FEATURES,
+  focusRevision = 0,
+}: CesiumMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const featureEntitiesRef = useRef<Entity[]>([])
@@ -85,6 +89,11 @@ export function CesiumMap({ features = EMPTY_FEATURES }: CesiumMapProps) {
       featureEntitiesRef.current = []
     }
   }, [features])
+
+  useEffect(() => {
+    if (focusRevision === 0 || featureEntitiesRef.current.length === 0) return
+    void viewerRef.current?.zoomTo(featureEntitiesRef.current)
+  }, [focusRevision])
 
   return (
     <div

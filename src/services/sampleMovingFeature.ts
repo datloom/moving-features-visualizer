@@ -1,4 +1,8 @@
-import type { MeasureTemporalProperty, MovingFeature } from '../mfjson/types'
+import type {
+  MeasureTemporalProperty,
+  MovingFeature,
+  TextTemporalProperty,
+} from '../mfjson/types'
 
 export const sampleSpeedProperty: MeasureTemporalProperty = {
   type: 'Measure',
@@ -48,4 +52,66 @@ export const sampleMovingFeature: MovingFeature = {
   },
   temporalProperties: [sampleSpeedProperty],
   properties: { label: 'Tokyo survey route' },
+}
+
+const harborSpeedProperty: MeasureTemporalProperty = {
+  type: 'Measure',
+  name: 'Speed',
+  unit: 'km/h',
+  interpolation: 'Step',
+  samples: [
+    { time: Date.parse('2026-08-24T09:00:00Z'), value: 0 },
+    { time: Date.parse('2026-08-24T09:02:00Z'), value: 14 },
+    { time: Date.parse('2026-08-24T09:04:00Z'), value: 8 },
+    { time: Date.parse('2026-08-24T09:06:00Z'), value: 0 },
+  ],
+}
+
+const harborStatusProperty: TextTemporalProperty = {
+  type: 'Text',
+  name: 'Status',
+  interpolation: 'Step',
+  samples: [
+    { time: Date.parse('2026-08-24T09:00:00Z'), value: 'stopped' },
+    { time: Date.parse('2026-08-24T09:02:00Z'), value: 'in-transit' },
+    { time: Date.parse('2026-08-24T09:04:00Z'), value: 'inspecting' },
+    { time: Date.parse('2026-08-24T09:06:00Z'), value: 'complete' },
+  ],
+}
+
+export const harborMovingFeature: MovingFeature = {
+  id: 'yokohama-inspection-02',
+  type: 'MovingFeature',
+  temporalGeometry: {
+    type: 'MovingPoint',
+    interpolation: 'Linear',
+    samples: [
+      {
+        time: Date.parse('2026-08-24T09:00:00Z'),
+        longitude: 139.638,
+        latitude: 35.452,
+        height: 12,
+      },
+      {
+        time: Date.parse('2026-08-24T09:02:00Z'),
+        longitude: 139.648,
+        latitude: 35.447,
+        height: 18,
+      },
+      {
+        time: Date.parse('2026-08-24T09:04:00Z'),
+        longitude: 139.659,
+        latitude: 35.455,
+        height: 15,
+      },
+      {
+        time: Date.parse('2026-08-24T09:06:00Z'),
+        longitude: 139.67,
+        latitude: 35.462,
+        height: 10,
+      },
+    ],
+  },
+  temporalProperties: [harborSpeedProperty, harborStatusProperty],
+  properties: { label: 'Yokohama inspection' },
 }
