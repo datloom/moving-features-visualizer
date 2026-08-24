@@ -36,18 +36,24 @@ describe('validateMfJson', () => {
     expect(validateMfJson(validFeature)).toEqual({ valid: true, issues: [] })
   })
 
-  it.each([null, [], 'invalid', 42])('rejects a non-object root: %j', (input) => {
-    expect(validateMfJson(input)).toMatchObject({
-      valid: false,
-      issues: [{ path: '$', code: 'invalid_type' }],
-    })
-  })
+  it.each([null, [], 'invalid', 42])(
+    'rejects a non-object root: %j',
+    (input) => {
+      expect(validateMfJson(input)).toMatchObject({
+        valid: false,
+        issues: [{ path: '$', code: 'invalid_type' }],
+      })
+    },
+  )
 
   it('requires a supported temporal geometry', () => {
     const missing = validateMfJson({ type: 'Feature', id: 'missing' })
     const unsupported = validateMfJson({
       ...validFeature,
-      temporalGeometry: { ...validFeature.temporalGeometry, type: 'MovingLineString' },
+      temporalGeometry: {
+        ...validFeature.temporalGeometry,
+        type: 'MovingLineString',
+      },
     })
 
     expect(missing).toMatchObject({
@@ -73,8 +79,16 @@ describe('validateMfJson', () => {
       ...validFeature,
       temporalGeometry: {
         ...validFeature.temporalGeometry,
-        datetimes: ['2024-01-01T00:01:00Z', 'not-a-date', '2023-12-31T23:00:00Z'],
-        coordinates: [[0, 0], [1, 1], [2, 2]],
+        datetimes: [
+          '2024-01-01T00:01:00Z',
+          'not-a-date',
+          '2023-12-31T23:00:00Z',
+        ],
+        coordinates: [
+          [0, 0],
+          [1, 1],
+          [2, 2],
+        ],
       },
     })
 
@@ -120,7 +134,10 @@ describe('validateMfJson', () => {
       ...validFeature,
       temporalGeometry: {
         ...validFeature.temporalGeometry,
-        coordinates: [[181, -91], [0, 0]],
+        coordinates: [
+          [181, -91],
+          [0, 0],
+        ],
       },
     })
 
@@ -145,7 +162,11 @@ describe('validateMfJson', () => {
         {
           datetimes: ['2024-01-01T00:00:00Z', '2024-01-01T00:01:00Z'],
           speed: { type: 'Measure', values: ['fast'], interpolation: 'Linear' },
-          status: { type: 'Text', values: ['idle', 'moving'], interpolation: 'Linear' },
+          status: {
+            type: 'Text',
+            values: ['idle', 'moving'],
+            interpolation: 'Linear',
+          },
         },
       ],
     })
@@ -165,6 +186,57 @@ describe('validateMfJson', () => {
           code: 'unsupported_value',
         }),
       ]),
+    )
+  })
+
+  it('requires interpolation metadata for every temporal property', () => {
+    const result = validateMfJson({
+      ...validFeature,
+      temporalProperties: [
+        {
+          datetimes: ['2024-01-01T00:00:00Z'],
+          speed: { type: 'Measure', values: [10] },
+          status: { type: 'Text', values: ['idle'] },
+        },
+      ],
+    })
+
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: '$.temporalProperties[0].speed.interpolation',
+          code: 'required',
+          expected: ['Discrete', 'Step', 'Linear'],
+        }),
+        expect.objectContaining({
+          path: '$.temporalProperties[0].status.interpolation',
+          code: 'required',
+          expected: ['Discrete', 'Step'],
+        }),
+      ]),
+    )
+  })
+
+  it('rejects unordered temporal-property datetimes independently of geometry', () => {
+    const result = validateMfJson({
+      ...validFeature,
+      temporalProperties: [
+        {
+          datetimes: ['2024-01-01T00:00:30Z', '2024-01-01T00:00:10Z'],
+          speed: {
+            type: 'Measure',
+            values: [10, 12],
+            interpolation: 'Linear',
+          },
+        },
+      ],
+    })
+
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        path: '$.temporalProperties[0].datetimes[1]',
+        code: 'not_ordered',
+      }),
     )
   })
 })

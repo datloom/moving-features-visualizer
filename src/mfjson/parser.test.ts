@@ -99,6 +99,29 @@ describe('parseMovingPoint', () => {
     })
   })
 
+  it('rejects unordered geometry datetimes without constructing samples', () => {
+    const result = parseMovingPoint(
+      featureWith({
+        type: 'MovingPoint',
+        datetimes: ['2026-08-21T10:01:00Z', '2026-08-21T10:00:00Z'],
+        coordinates: [
+          [139.7, 35.68],
+          [139.71, 35.69],
+        ],
+      }),
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      issues: [
+        {
+          path: '$.temporalGeometry.datetimes[1]',
+          code: 'not_ordered',
+        },
+      ],
+    })
+  })
+
   it('rejects coordinate and datetime count mismatches', () => {
     const result = parseMovingPoint(
       featureWith({
@@ -149,6 +172,31 @@ describe('parseMovingPoint', () => {
           code: 'unsupported_value',
         },
       ],
+    })
+  })
+
+  it('defaults omitted geometry interpolation to Linear', () => {
+    const result = parseMovingPoint(
+      featureWith({
+        type: 'MovingPoint',
+        datetimes: ['2026-08-21T10:00:00Z'],
+        coordinates: [[139.7, 35.68]],
+      }),
+    )
+
+    expect(result).toEqual({
+      success: true,
+      data: {
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          {
+            time: Date.parse('2026-08-21T10:00:00Z'),
+            longitude: 139.7,
+            latitude: 35.68,
+          },
+        ],
+      },
     })
   })
 })

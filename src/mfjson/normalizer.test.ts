@@ -97,9 +97,27 @@ describe('normalizeTemporalProperties', () => {
       ]),
     )
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       success: true,
-      data: [{ name: 'speed' }, { name: 'status' }],
+      data: [
+        {
+          type: 'Measure',
+          name: 'speed',
+          interpolation: 'Discrete',
+          unit: undefined,
+          form: undefined,
+          samples: [{ time: Date.parse('2026-08-21T10:00:03Z'), value: 10 }],
+        },
+        {
+          type: 'Text',
+          name: 'status',
+          interpolation: 'Discrete',
+          form: undefined,
+          samples: [
+            { time: Date.parse('2026-08-21T10:00:03Z'), value: 'idle' },
+          ],
+        },
+      ],
     })
   })
 
@@ -117,16 +135,25 @@ describe('normalizeTemporalProperties', () => {
       ]),
     )
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       success: true,
       data: [
         {
+          type: 'Measure',
           name: 'speed',
-          samples: [{ time: Date.parse('2026-08-21T10:00:03Z') }],
+          interpolation: 'Linear',
+          unit: undefined,
+          form: undefined,
+          samples: [{ time: Date.parse('2026-08-21T10:00:03Z'), value: 10 }],
         },
         {
+          type: 'Text',
           name: 'status',
-          samples: [{ time: Date.parse('2026-08-21T10:00:17Z') }],
+          interpolation: 'Step',
+          form: undefined,
+          samples: [
+            { time: Date.parse('2026-08-21T10:00:17Z'), value: 'moving' },
+          ],
         },
       ],
     })
@@ -142,7 +169,11 @@ describe('normalizeTemporalProperties', () => {
       featureWith([
         {
           datetimes: propertyDatetimes,
-          speed: { type: 'Measure', values: [10, 12, 14], interpolation: 'Linear' },
+          speed: {
+            type: 'Measure',
+            values: [10, 12, 14],
+            interpolation: 'Linear',
+          },
         },
       ]),
     )
@@ -173,6 +204,27 @@ describe('normalizeTemporalProperties', () => {
         {
           path: '$.temporalProperties[0].speed',
           code: 'count_mismatch',
+        },
+      ],
+    })
+  })
+
+  it('rejects a temporal property with missing interpolation metadata', () => {
+    const result = normalizeTemporalProperties(
+      featureWith([
+        {
+          datetimes: ['2026-08-21T10:00:03Z'],
+          speed: { type: 'Measure', values: [10] },
+        },
+      ]),
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      issues: [
+        {
+          path: '$.temporalProperties[0].speed.interpolation',
+          code: 'required',
         },
       ],
     })
