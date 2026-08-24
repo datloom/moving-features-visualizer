@@ -7,6 +7,10 @@ vi.mock('./components/map/CesiumMap', () => ({
   CesiumMap: () => <div aria-label="Moving features map" role="application" />,
 }))
 
+vi.mock('./components/chart/MeasurePropertyChart', () => ({
+  MeasurePropertyChart: () => <div aria-label="Measure property chart" />,
+}))
+
 describe('App', () => {
   it('identifies the application', () => {
     render(<App />)

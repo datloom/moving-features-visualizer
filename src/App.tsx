@@ -1,7 +1,11 @@
 import { CesiumMap } from './components/map/CesiumMap'
+import { MeasurePropertyChart } from './components/chart/MeasurePropertyChart'
 import { PlaybackController } from './components/timeline/PlaybackController'
 import { TimelineControls } from './components/timeline/TimelineControls'
-import { sampleMovingFeature } from './services/sampleMovingFeature'
+import {
+  sampleMovingFeature,
+  sampleSpeedProperty,
+} from './services/sampleMovingFeature'
 
 const FEATURES = [sampleMovingFeature]
 
@@ -12,6 +16,7 @@ export function App() {
       <div className="map-workspace">
         <CesiumMap features={FEATURES} />
       </div>
+      <MeasurePropertyChart property={sampleSpeedProperty} />
       <TimelineControls />
       <PlaybackController />
     </main>

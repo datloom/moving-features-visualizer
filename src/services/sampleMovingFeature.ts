@@ -1,4 +1,17 @@
-import type { MovingFeature } from '../mfjson/types'
+import type { MeasureTemporalProperty, MovingFeature } from '../mfjson/types'
+
+export const sampleSpeedProperty: MeasureTemporalProperty = {
+  type: 'Measure',
+  name: 'Speed',
+  unit: 'km/h',
+  interpolation: 'Linear',
+  samples: [
+    { time: Date.parse('2026-08-24T09:00:00Z'), value: 18 },
+    { time: Date.parse('2026-08-24T09:02:00Z'), value: 31 },
+    { time: Date.parse('2026-08-24T09:04:00Z'), value: 24 },
+    { time: Date.parse('2026-08-24T09:06:00Z'), value: 42 },
+  ],
+}
 
 export const sampleMovingFeature: MovingFeature = {
   id: 'tokyo-survey-01',
@@ -33,6 +46,6 @@ export const sampleMovingFeature: MovingFeature = {
       },
     ],
   },
-  temporalProperties: [],
+  temporalProperties: [sampleSpeedProperty],
   properties: { label: 'Tokyo survey route' },
 }

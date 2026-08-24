@@ -39,10 +39,60 @@ body {
 
 .app-shell {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) 210px auto;
   height: 100%;
   min-height: 24rem;
   background: var(--background);
+}
+
+.measure-chart-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  padding: 10px 16px 4px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.measure-chart-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.measure-chart-header h2,
+.measure-chart-header p {
+  margin: 0;
+}
+
+.measure-chart-header h2 {
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.measure-chart-header p {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.measure-current-value {
+  color: var(--primary);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.measure-current-value span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.measure-chart-canvas {
+  width: 100%;
+  min-height: 0;
 }
 
 .map-workspace {
@@ -162,6 +212,12 @@ body {
 }
 
 @media (max-width: 640px) {
+  .app-shell {
+    grid-template-rows: minmax(16rem, 1fr) 180px auto;
+    height: auto;
+    min-height: 100%;
+  }
+
   .timeline-panel {
     padding: 10px 12px;
   }
