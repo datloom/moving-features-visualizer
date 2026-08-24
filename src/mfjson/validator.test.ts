@@ -52,7 +52,7 @@ describe('validateMfJson', () => {
       ...validFeature,
       temporalGeometry: {
         ...validFeature.temporalGeometry,
-        type: 'MovingPolygon',
+        type: 'MovingMultiPolygon',
       },
     })
 
@@ -155,6 +155,42 @@ describe('validateMfJson', () => {
           code: 'invalid_coordinate',
         }),
       ]),
+    )
+  })
+
+  it('rejects incompatible MovingPolygon ring structure', () => {
+    const result = validateMfJson({
+      ...validFeature,
+      temporalGeometry: {
+        type: 'MovingPolygon',
+        interpolation: 'Linear',
+        datetimes: ['2026-08-25T00:00:00Z', '2026-08-25T00:01:00Z'],
+        coordinates: [
+          [
+            [
+              [0, 0],
+              [2, 0],
+              [2, 2],
+              [0, 0],
+            ],
+          ],
+          [
+            [
+              [1, 0],
+              [3, 0],
+              [3, 2],
+              [1, 2],
+              [1, 0],
+            ],
+          ],
+        ],
+      },
+    })
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        path: '$.temporalGeometry.coordinates[1]',
+        code: 'count_mismatch',
+      }),
     )
   })
 

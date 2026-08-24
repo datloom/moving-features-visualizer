@@ -1,4 +1,4 @@
-import { Cartesian3, JulianDate } from 'cesium'
+import { Cartesian3, JulianDate, PolygonHierarchy } from 'cesium'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -281,6 +281,57 @@ describe('Cesium adapters', () => {
       entity.polyline?.positions?.getValue(timestampToJulianDate(currentTime)),
     ).toBeUndefined()
     expect(movingFeatureToEntities(lineFeature)).toHaveLength(1)
+  })
+
+  it('renders a current MovingPolygon with holes and Polygon trail snapshots', () => {
+    let currentTime = 5
+    const polygonFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'polygon-1',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingPolygon',
+            interpolation: 'Linear',
+            samples: [0, 10].map((time) => ({
+              time,
+              rings: [
+                [
+                  { longitude: time, latitude: 0, height: time },
+                  { longitude: time + 4, latitude: 0, height: time },
+                  { longitude: time + 4, latitude: 4, height: time },
+                  { longitude: time, latitude: 0, height: time },
+                ],
+                [
+                  { longitude: time + 1, latitude: 1, height: time },
+                  { longitude: time + 2, latitude: 1, height: time },
+                  { longitude: time + 2, latitude: 2, height: time },
+                  { longitude: time + 1, latitude: 1, height: time },
+                ],
+              ],
+            })),
+          },
+        ],
+      },
+    }
+    const entities = movingFeatureToEntities(polygonFeature, {
+      getCurrentTime: () => currentTime,
+    })
+    const current = entities.find(
+      ({ id }) => String(id) === 'polygon-1--geometry--1',
+    )!
+    const hierarchy: unknown = current.polygon?.hierarchy?.getValue()
+    expect(hierarchy).toBeInstanceOf(PolygonHierarchy)
+    if (!(hierarchy instanceof PolygonHierarchy)) return
+    expect(hierarchy.holes).toHaveLength(1)
+    expect(hierarchy.positions).toHaveLength(4)
+
+    const future = entities.find(({ id }) =>
+      String(id).endsWith('--trail--10'),
+    )!
+    expect(future.polygon?.show?.getValue()).toBe(false)
+    currentTime = 10
+    expect(future.polygon?.show?.getValue()).toBe(true)
   })
 
   it('rejects MovingPoint geometry without samples', () => {

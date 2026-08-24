@@ -77,6 +77,59 @@ describe('parseTemporalGeometryTrack MovingLineString', () => {
   })
 })
 
+describe('parseTemporalGeometryTrack MovingPolygon', () => {
+  it('keeps each Polygon and its rings intact', () => {
+    const result = parseTemporalGeometryTrack(
+      featureWith({
+        type: 'MovingPolygon',
+        interpolation: 'Discrete',
+        datetimes: ['2026-08-25T00:00:00Z'],
+        coordinates: [
+          [
+            [
+              [0, 0, 10],
+              [2, 0, 10],
+              [2, 2, 10],
+              [0, 0, 10],
+            ],
+            [
+              [0.5, 0.5, 10],
+              [1, 0.5, 10],
+              [1, 1, 10],
+              [0.5, 0.5, 10],
+            ],
+          ],
+        ],
+      }),
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        segments: [
+          {
+            type: 'MovingPolygon',
+            samples: [
+              {
+                time: Date.parse('2026-08-25T00:00:00Z'),
+                rings: [
+                  [
+                    { longitude: 0, latitude: 0, height: 10 },
+                    { longitude: 2, latitude: 0, height: 10 },
+                    { longitude: 2, latitude: 2, height: 10 },
+                    { longitude: 0, latitude: 0, height: 10 },
+                  ],
+                  expect.any(Array),
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    })
+  })
+})
+
 describe('parseMovingPoint', () => {
   it('normalizes a valid 2D MovingPoint', () => {
     const result = parseMovingPoint(

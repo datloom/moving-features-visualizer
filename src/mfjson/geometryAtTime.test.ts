@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { MovingLineString, MovingPoint } from './types'
+import type { MovingLineString, MovingPoint, MovingPolygon } from './types'
 import { geometryAtTime } from './geometryAtTime'
 
 const line: MovingLineString = {
@@ -76,6 +76,45 @@ describe('geometryAtTime', () => {
     })
   })
 
+  it('interpolates corresponding MovingPolygon vertices and preserves closure', () => {
+    const polygon: MovingPolygon = {
+      type: 'MovingPolygon',
+      interpolation: 'Linear',
+      samples: [
+        {
+          time: 0,
+          rings: [
+            [
+              { longitude: 0, latitude: 0, height: 0 },
+              { longitude: 2, latitude: 0, height: 0 },
+              { longitude: 2, latitude: 2, height: 0 },
+              { longitude: 0, latitude: 0, height: 0 },
+            ],
+          ],
+        },
+        {
+          time: 10,
+          rings: [
+            [
+              { longitude: 10, latitude: 10, height: 10 },
+              { longitude: 12, latitude: 10, height: 10 },
+              { longitude: 12, latitude: 12, height: 10 },
+              { longitude: 10, latitude: 10, height: 10 },
+            ],
+          ],
+        },
+      ],
+    }
+    const evaluated = geometryAtTime(polygon, 5)
+    expect(evaluated?.type).toBe('MovingPolygon')
+    if (evaluated?.type !== 'MovingPolygon') return
+    expect(evaluated.rings[0]?.slice(0, 2)).toEqual([
+      { longitude: 5, latitude: 5, height: 5 },
+      { longitude: 7, latitude: 5, height: 5 },
+    ])
+    expect(evaluated.rings[0]?.at(-1)).toBe(evaluated.rings[0]?.[0])
+  })
+
   it('returns no geometry outside a segment and therefore does not bridge gaps', () => {
     expect(geometryAtTime(line, 20)).toBeUndefined()
     expect(
@@ -104,6 +143,6 @@ describe('geometryAtTime', () => {
         },
         5,
       ),
-    ).toThrow(/matching vertex counts/)
+    ).toThrow(/matching structure/)
   })
 })

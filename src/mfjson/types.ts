@@ -38,11 +38,23 @@ export interface MovingLineString {
   readonly samples: readonly LineStringSample[]
 }
 
+export interface PolygonSample {
+  readonly time: Timestamp
+  readonly rings: readonly (readonly Omit<PositionSample, 'time'>[])[]
+}
+
+export interface MovingPolygon {
+  readonly id?: string
+  readonly type: 'MovingPolygon'
+  readonly interpolation: GeometryInterpolation
+  readonly samples: readonly PolygonSample[]
+}
+
 /**
  * Union of normalized temporal geometries. Add future geometry variants here
  * while keeping consumers exhaustive through the `type` discriminator.
  */
-export type TemporalGeometry = MovingPoint | MovingLineString
+export type TemporalGeometry = MovingPoint | MovingLineString | MovingPolygon
 
 export interface TemporalGeometryTrack {
   readonly segments: readonly TemporalGeometry[]

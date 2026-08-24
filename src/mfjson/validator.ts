@@ -222,12 +222,16 @@ const validateTemporalGeometrySegment = (
     return
   }
 
-  if (value.type !== 'MovingPoint' && value.type !== 'MovingLineString') {
+  if (
+    value.type !== 'MovingPoint' &&
+    value.type !== 'MovingLineString' &&
+    value.type !== 'MovingPolygon'
+  ) {
     addIssue(context, {
       path: `${path}.type`,
       code: value.type === undefined ? 'required' : 'unsupported_value',
       message: 'Temporal geometry type is not currently supported.',
-      expected: ['MovingPoint', 'MovingLineString'],
+      expected: ['MovingPoint', 'MovingLineString', 'MovingPolygon'],
       actual: value.type,
     })
   }
@@ -263,7 +267,100 @@ const validateTemporalGeometrySegment = (
       actual: value.datetimes.length,
     })
   }
-  if (value.type === 'MovingLineString') {
+  if (value.type === 'MovingPolygon') {
+    if (!isUnknownArray(value.coordinates)) {
+      addIssue(context, {
+        path: `${path}.coordinates`,
+        code: 'invalid_type',
+        message: 'MovingPolygon coordinates must be an array of Polygons.',
+        expected: 'number[][][][]',
+        actual: value.coordinates,
+      })
+    } else {
+      let expectedRingCounts: readonly number[] | undefined
+      let expectedDimension: number | undefined
+      value.coordinates.forEach((polygon, polygonIndex) => {
+        const polygonPath = `${path}.coordinates[${polygonIndex}]`
+        if (!isUnknownArray(polygon) || polygon.length === 0) {
+          addIssue(context, {
+            path: polygonPath,
+            code: isUnknownArray(polygon) ? 'empty_array' : 'invalid_type',
+            message: 'A Polygon must contain at least one ring.',
+            expected: 'non-empty array of rings',
+            actual: polygon,
+          })
+          return
+        }
+        const ringCounts: number[] = []
+        polygon.forEach((ring, ringIndex) => {
+          const ringPath = `${polygonPath}[${ringIndex}]`
+          const positions = validateCoordinates(ring, ringPath, context)
+          if (!positions) return
+          ringCounts.push(positions.length)
+          if (positions.length < 4) {
+            addIssue(context, {
+              path: ringPath,
+              code: 'invalid_coordinate',
+              message: 'A Polygon ring must contain at least four positions.',
+              expected: 'at least four positions',
+              actual: positions.length,
+            })
+          }
+          const first = positions[0]
+          const last = positions.at(-1)
+          if (
+            first &&
+            last &&
+            (first.length !== last.length ||
+              first.some((component, index) => component !== last[index]))
+          ) {
+            addIssue(context, {
+              path: ringPath,
+              code: 'invalid_coordinate',
+              message: 'A Polygon ring must be closed.',
+              expected: 'first and last positions equal',
+              actual: [first, last],
+            })
+          }
+          const dimensions = new Set(
+            positions.map((position) => position.length),
+          )
+          if (dimensions.size !== 1) {
+            addIssue(context, {
+              path: ringPath,
+              code: 'count_mismatch',
+              message: 'Polygon positions must use one coordinate dimension.',
+              expected: 'consistent 2D or 3D positions',
+              actual: [...dimensions],
+            })
+          }
+          expectedDimension ??= first?.length
+          if (first && first.length !== expectedDimension) {
+            addIssue(context, {
+              path: ringPath,
+              code: 'count_mismatch',
+              message: 'MovingPolygon samples require compatible dimensions.',
+              expected: `${expectedDimension}D positions`,
+              actual: `${first.length}D positions`,
+            })
+          }
+        })
+        expectedRingCounts ??= ringCounts
+        if (
+          ringCounts.length !== expectedRingCounts.length ||
+          ringCounts.some((count, index) => count !== expectedRingCounts![index])
+        ) {
+          addIssue(context, {
+            path: polygonPath,
+            code: 'count_mismatch',
+            message: 'MovingPolygon samples require compatible ring structure.',
+            expected: expectedRingCounts,
+            actual: ringCounts,
+          })
+        }
+      })
+    }
+  } else if (value.type === 'MovingLineString') {
     if (!isUnknownArray(value.coordinates)) {
       addIssue(context, {
         path: `${path}.coordinates`,

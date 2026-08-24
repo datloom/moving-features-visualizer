@@ -6,14 +6,20 @@ import {
   Entity,
   JulianDate,
   LinearApproximation,
+  PolygonHierarchy,
   SampledPositionProperty,
   TimeInterval,
   TimeIntervalCollection,
 } from 'cesium'
 
 import { geometryAtTime } from '../../mfjson/geometryAtTime'
+import {
+  buildMovingPolygonTrail,
+  movingPolygonTrailSampleTimes,
+} from '../../mfjson/movingPolygonTrail'
 import type {
   MovingFeature,
+  MovingPolygon,
   PositionSample,
   TemporalGeometry,
   Timestamp,
@@ -115,18 +121,56 @@ export const geometrySegmentPositionEntityId = (
 ): string =>
   `${geometrySegmentEntityId(featureId, segment, segmentIndex)}--position`
 
+export const geometrySegmentTrailEntityId = (
+  featureId: string,
+  segment: MovingPolygon,
+  segmentIndex: number,
+  timestamp: Timestamp,
+): string =>
+  `${geometrySegmentEntityId(featureId, segment, segmentIndex)}--trail--${timestamp}`
+
+const ringsToPolygonHierarchy = (
+  rings: readonly (readonly Pick<
+    PositionSample,
+    'longitude' | 'latitude' | 'height'
+  >[])[],
+): PolygonHierarchy | undefined => {
+  const outer = rings[0]
+  if (!outer) return undefined
+  return new PolygonHierarchy(
+    outer.map(coordinateToCartesian3),
+    rings.slice(1).map(
+      (hole) => new PolygonHierarchy(hole.map(coordinateToCartesian3)),
+    ),
+  )
+}
+
 export const movingFeatureEntityIds = (
   feature: MovingFeature,
   options: { readonly selected?: boolean } = {},
 ): readonly string[] =>
-  feature.temporalGeometry.segments.flatMap((segment, index) =>
-    segment.type === 'MovingPoint' && options.selected
-      ? [
-          geometrySegmentTrajectoryEntityId(feature.id, segment, index),
-          geometrySegmentPositionEntityId(feature.id, segment, index),
-        ]
-      : [geometrySegmentEntityId(feature.id, segment, index)],
-  )
+  feature.temporalGeometry.segments.flatMap((segment, index) => {
+    if (segment.type === 'MovingPoint' && options.selected) {
+      return [
+        geometrySegmentTrajectoryEntityId(feature.id, segment, index),
+        geometrySegmentPositionEntityId(feature.id, segment, index),
+      ]
+    }
+    if (segment.type === 'MovingPolygon') {
+      return [
+        geometrySegmentEntityId(feature.id, segment, index),
+        ...movingPolygonTrailSampleTimes(segment).map((time) =>
+          geometrySegmentTrailEntityId(
+            feature.id,
+            segment,
+            index,
+            time,
+          ),
+        ),
+      ]
+    }
+    return [geometrySegmentEntityId(feature.id, segment, index)]
+  })
 
 export const movingFeatureToEntities = (
   feature: MovingFeature,
@@ -173,6 +217,55 @@ export const movingFeatureToEntities = (
               width: options.selected ? 5 : 3,
             },
           }),
+        ]
+      }
+
+      if (segment.type === 'MovingPolygon') {
+        const getCurrentTime = options.getCurrentTime ?? (() => startTime)
+        const trail = buildMovingPolygonTrail(segment)
+        return [
+          new Entity({
+            id: geometrySegmentEntityId(feature.id, segment, index),
+            name: feature.id,
+            availability,
+            polygon: {
+              hierarchy: new CallbackProperty(() => {
+                const evaluated = geometryAtTime(segment, getCurrentTime())
+                return evaluated?.type === 'MovingPolygon'
+                  ? ringsToPolygonHierarchy(evaluated.rings)
+                  : undefined
+              }, false),
+              material: color.withAlpha(options.selected ? 0.45 : 0.3),
+              outline: true,
+              outlineColor: color.withAlpha(0.95),
+              perPositionHeight: true,
+            },
+          }),
+          ...trail.map(
+            (snapshot) =>
+              new Entity({
+                id: geometrySegmentTrailEntityId(
+                  feature.id,
+                  segment,
+                  index,
+                  snapshot.time,
+                ),
+                name: feature.id,
+                polygon: {
+                  hierarchy: ringsToPolygonHierarchy(snapshot.rings),
+                  show: new CallbackProperty(
+                    () => snapshot.time <= getCurrentTime(),
+                    false,
+                  ),
+                  material: color.withAlpha(options.selected ? 0.08 : 0.045),
+                  outline: true,
+                  outlineColor: color.withAlpha(
+                    options.selected ? 0.28 : 0.16,
+                  ),
+                  perPositionHeight: true,
+                },
+              }),
+          ),
         ]
       }
 

@@ -11,6 +11,43 @@ export type EvaluatedTemporalGeometry =
       readonly type: 'MovingLineString'
       readonly positions: readonly Position[]
     }
+  | {
+      readonly type: 'MovingPolygon'
+      readonly rings: readonly (readonly Position[])[]
+    }
+
+const evaluatePositionLeaves = (
+  timestamps: readonly Timestamp[],
+  samples: readonly (readonly Position[])[],
+  interpolation: TemporalGeometry['interpolation'],
+  resolved: NonNullable<ReturnType<typeof resolveMotionCurveInterval>>,
+): readonly Position[] | undefined => {
+  const first = samples[0]
+  if (!first) return undefined
+  const positionCount = first.length
+  if (samples.some((sample) => sample.length !== positionCount)) {
+    throw new RangeError('Temporal geometry samples require matching structure.')
+  }
+  const evaluated: Position[] = []
+  const trajectory = Array.from(
+    { length: samples.length },
+    () => first[0]!,
+  )
+  for (let positionIndex = 0; positionIndex < positionCount; positionIndex += 1) {
+    for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex += 1) {
+      trajectory[sampleIndex] = samples[sampleIndex]![positionIndex]!
+    }
+    const position = evaluatePositionMotionCurve(
+      timestamps,
+      trajectory,
+      interpolation,
+      resolved,
+    )
+    if (!position) return undefined
+    evaluated.push(position)
+  }
+  return evaluated
+}
 
 /** Evaluates one temporal-geometry segment without bridging segment gaps. */
 export const geometryAtTime = (
@@ -29,32 +66,45 @@ export const geometryAtTime = (
     )
     return position ? { type: 'MovingPoint', position } : undefined
   }
-  const first = segment.samples[0]
-  if (!first) return undefined
-  const vertexCount = first.positions.length
-  if (segment.samples.some((sample) => sample.positions.length !== vertexCount)) {
-    throw new RangeError(
-      'MovingLineString samples require matching vertex counts.',
-    )
-  }
-  const positions: Position[] = []
-  const vertexTrajectory = Array.from(
-    { length: segment.samples.length },
-    () => first.positions[0]!,
-  )
-  for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex += 1) {
-    for (let sampleIndex = 0; sampleIndex < segment.samples.length; sampleIndex += 1) {
-      vertexTrajectory[sampleIndex] =
-        segment.samples[sampleIndex]!.positions[vertexIndex]!
-    }
-    const position = evaluatePositionMotionCurve(
+  if (segment.type === 'MovingLineString') {
+    const positions = evaluatePositionLeaves(
       timestamps,
-      vertexTrajectory,
+      segment.samples.map((sample) => sample.positions),
       segment.interpolation,
       resolved,
     )
-    if (!position) return undefined
-    positions.push(position)
+    return positions ? { type: 'MovingLineString', positions } : undefined
   }
-  return { type: 'MovingLineString', positions }
+  const first = segment.samples[0]
+  if (!first) return undefined
+  const ringCount = first.rings.length
+  if (segment.samples.some((sample) => sample.rings.length !== ringCount)) {
+    throw new RangeError('MovingPolygon samples require matching ring counts.')
+  }
+  const rings: Position[][] = []
+  for (let ringIndex = 0; ringIndex < ringCount; ringIndex += 1) {
+    const sourceRings = segment.samples.map((sample) => sample.rings[ringIndex]!)
+    const evaluatedRing = evaluatePositionLeaves(
+      timestamps,
+      sourceRings,
+      segment.interpolation,
+      resolved,
+    )
+    if (!evaluatedRing) return undefined
+    const ring = [...evaluatedRing]
+    const sourceFirst = sourceRings[0]?.[0]
+    const sourceLast = sourceRings[0]?.at(-1)
+    if (
+      sourceFirst &&
+      sourceLast &&
+      sourceFirst.longitude === sourceLast.longitude &&
+      sourceFirst.latitude === sourceLast.latitude &&
+      sourceFirst.height === sourceLast.height &&
+      ring.length > 1
+    ) {
+      ring[ring.length - 1] = ring[0]!
+    }
+    rings.push(ring)
+  }
+  return { type: 'MovingPolygon', rings }
 }

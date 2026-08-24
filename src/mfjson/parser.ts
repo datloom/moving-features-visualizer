@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type {
   MovingPoint,
   MovingLineString,
+  MovingPolygon,
   PositionSample,
   TemporalGeometryTrack,
 } from './types'
@@ -37,9 +38,18 @@ const movingLineStringSchema = z.object({
   interpolation: geometryInterpolationSchema.optional(),
 })
 
+const movingPolygonSchema = z.object({
+  id: z.string().optional(),
+  type: z.literal('MovingPolygon'),
+  datetimes: z.array(z.string()),
+  coordinates: z.array(z.array(z.array(positionSchema))),
+  interpolation: geometryInterpolationSchema.optional(),
+})
+
 const temporalGeometrySchema = z.discriminatedUnion('type', [
   movingPointSchema,
   movingLineStringSchema,
+  movingPolygonSchema,
 ])
 
 const movingPointFeatureSchema = z.object({
@@ -89,7 +99,24 @@ export const parseTemporalGeometryTrack = (
     ? parsedFeature.data.temporalGeometry
     : [parsedFeature.data.temporalGeometry]
   const segments = geometries.map(
-    (geometry): MovingPoint | MovingLineString => {
+    (geometry): MovingPoint | MovingLineString | MovingPolygon => {
+      if (geometry.type === 'MovingPolygon') {
+        return {
+          id: geometry.id,
+          type: geometry.type,
+          interpolation: geometry.interpolation ?? 'Linear',
+          samples: geometry.datetimes.map((datetime, index) => ({
+            time: Date.parse(datetime),
+            rings: geometry.coordinates[index]!.map((ring) =>
+              ring.map((coordinate) => ({
+                longitude: coordinate[0],
+                latitude: coordinate[1],
+                ...(coordinate.length === 3 ? { height: coordinate[2] } : {}),
+              })),
+            ),
+          })),
+        }
+      }
       if (geometry.type === 'MovingLineString') {
         return {
           id: geometry.id,

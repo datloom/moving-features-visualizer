@@ -124,7 +124,9 @@ export const loadMovingFeatures = async (
     if (
       dataSource.origin?.type !== 'file' &&
       result.data.temporalGeometry.segments.some(
-        (segment) => segment.type === 'MovingLineString',
+        (segment) =>
+          segment.type === 'MovingLineString' ||
+          segment.type === 'MovingPolygon',
       )
     ) {
       return {
@@ -137,9 +139,11 @@ export const loadMovingFeatures = async (
               path: '$.temporalGeometry.type',
               code: 'unsupported_value',
               message:
-                'MovingLineString ingestion is currently supported only for local files.',
+                'MovingLineString and MovingPolygon ingestion are currently supported only for local files.',
               expected: 'MovingPoint',
-              actual: 'MovingLineString',
+              actual: result.data.temporalGeometry.segments.find(
+                (segment) => segment.type !== 'MovingPoint',
+              )?.type,
             },
           ],
         },
