@@ -12,6 +12,9 @@ const COLORS = [
   '#ff8066',
 ]
 
+const displayAxisMetadata = (value: string | undefined): string | undefined =>
+  value && value.length > 24 ? `${value.slice(0, 23)}…` : value
+
 const markLine = (currentTime: number) => ({
   animation: false,
   symbol: ['none', 'none'],
@@ -88,7 +91,7 @@ export const buildMeasureComparisonChartOption = (
   },
   yAxis: {
     type: 'value',
-    name: unitLabel,
+    name: displayAxisMetadata(unitLabel),
     nameTextStyle: { color: '#91a0ab' },
     axisLabel: { color: '#91a0ab' },
     splitLine: { lineStyle: { color: '#263139' } },

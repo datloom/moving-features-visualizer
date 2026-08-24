@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { MovingFeature, TextTemporalProperty } from '../../mfjson/types'
 import { useFeatureStore } from '../../store/featureStore'
@@ -65,6 +65,8 @@ export function TemporalPropertiesPanel({
         measureProperties[0] ? [`Measure:${measureProperties[0].name}`] : [],
       ),
   )
+  const [pendingNavigationKey, setPendingNavigationKey] = useState<string>()
+  const chartElementsRef = useRef<Map<string, HTMLDivElement>>(new Map())
 
   useEffect(() => {
     if (!availablePropertyNames.includes(featureProperty))
@@ -155,18 +157,51 @@ export function TemporalPropertiesPanel({
       })),
     [selectedTextNames, textProperties],
   )
-  const groups =
-    mode === 'features'
-      ? [
-          {
-            key: `feature:${featureProperty}`,
-            unitLabel:
-              featureSeries[0]?.property.unit ??
-              featureSeries[0]?.property.form,
-            series: featureSeries,
-          },
-        ]
-      : propertyGroups
+  const groups = useMemo(
+    () =>
+      mode === 'features'
+        ? [
+            {
+              key: `feature:${featureProperty}`,
+              unitLabel:
+                featureSeries[0]?.property.unit ??
+                featureSeries[0]?.property.form,
+              series: featureSeries,
+            },
+          ]
+        : propertyGroups,
+    [featureProperty, featureSeries, mode, propertyGroups],
+  )
+
+  const chartEntries = useMemo(
+    () => [
+      ...groups.map((group) => ({
+        key: `measure:${group.key}`,
+        propertyKeys: group.series.map(
+          (series) => `Measure:${series.propertyName}`,
+        ),
+        group,
+      })),
+      ...selectedTextProperties.map(({ name, segments }) => ({
+        key: `text:${name}`,
+        propertyKeys: [`Text:${name}`],
+        name,
+        segments,
+      })),
+    ],
+    [groups, selectedTextProperties],
+  )
+
+  useEffect(() => {
+    if (!pendingNavigationKey) return
+    const entry = chartEntries.find((item) =>
+      item.propertyKeys.includes(pendingNavigationKey),
+    )
+    const element = entry ? chartElementsRef.current.get(entry.key) : undefined
+    if (element && typeof element.scrollIntoView === 'function')
+      element.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    setPendingNavigationKey(undefined)
+  }, [chartEntries, pendingNavigationKey])
 
   const toggle = (current: Set<string>, value: string, checked: boolean) => {
     const next = new Set(current)
@@ -285,11 +320,13 @@ export function TemporalPropertiesPanel({
                   <label key={property.key} title={property.name}>
                     <input
                       checked={selectedPropertyKeys.has(property.key)}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        if (event.target.checked)
+                          setPendingNavigationKey(property.key)
                         setSelectedPropertyKeys((current) =>
                           toggle(current, property.key, event.target.checked),
                         )
-                      }
+                      }}
                       type="checkbox"
                     />
                     <span>
@@ -304,22 +341,31 @@ export function TemporalPropertiesPanel({
           )}
         </aside>
         <div
-          className={`comparison-charts ${groups.length > 1 ? 'comparison-charts-multiple' : ''}`}
+          className={`comparison-charts ${chartEntries.length > 1 ? 'comparison-charts-multiple' : ''}`}
         >
           {emptyMessage ? (
             <p className="compact-empty">{emptyMessage}</p>
           ) : (
             <>
-              {groups.map((group) => (
-                <MeasureComparisonChart group={group} key={group.key} />
-              ))}
-              {selectedTextProperties.map(({ name, segments }) => (
-                <TextPropertyChart
-                  featureId={selectedFeature.id}
-                  key={`text:${name}`}
-                  propertyName={name}
-                  properties={segments}
-                />
+              {chartEntries.map((entry) => (
+                <div
+                  key={entry.key}
+                  ref={(element) => {
+                    if (element)
+                      chartElementsRef.current.set(entry.key, element)
+                    else chartElementsRef.current.delete(entry.key)
+                  }}
+                >
+                  {'group' in entry ? (
+                    <MeasureComparisonChart group={entry.group} />
+                  ) : (
+                    <TextPropertyChart
+                      featureId={selectedFeature.id}
+                      propertyName={entry.name}
+                      properties={entry.segments}
+                    />
+                  )}
+                </div>
               ))}
             </>
           )}
