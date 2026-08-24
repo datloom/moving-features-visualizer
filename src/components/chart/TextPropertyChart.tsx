@@ -15,6 +15,7 @@ import {
   buildTextCurrentTimeMarkerOption,
   resolveTextValue,
 } from '../../visualization/chart/textChartAdapter'
+import { PropertyChartHeader } from './PropertyChartHeader'
 
 registerEChartsModules([
   LineChart,
@@ -82,20 +83,23 @@ export function TextPropertyChart({
       aria-labelledby={`text-${propertyName}`}
       className="measure-chart-panel"
     >
-      <header className="measure-chart-header">
-        <div>
-          <h2 id={`text-${propertyName}`}>{propertyName}</h2>
-          <p>
-            Text · {properties[0]?.interpolation ?? 'Discrete'} interpolation
-          </p>
-        </div>
-        <output
-          aria-label={`Current ${propertyName}`}
-          className="measure-current-value"
-        >
-          {currentValue ?? 'No data'}
-        </output>
-      </header>
+      <PropertyChartHeader
+        properties={[
+          {
+            name: propertyName,
+            type: 'Text',
+            interpolation: properties[0]?.interpolation ?? 'Discrete',
+          },
+        ]}
+        trailing={
+          <output
+            aria-label={`Current ${propertyName}`}
+            className="measure-current-value"
+          >
+            {currentValue ?? 'No data'}
+          </output>
+        }
+      />
       <div
         aria-label={`${propertyName} categorical timeline`}
         className="measure-chart-canvas"

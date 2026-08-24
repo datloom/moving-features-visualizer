@@ -16,6 +16,7 @@ import {
   buildMeasureChartOption,
   resolveMeasureValue,
 } from '../../visualization/chart/measureChartAdapter'
+import { PropertyChartHeader } from './PropertyChartHeader'
 
 registerEChartsModules([
   LineChart,
@@ -73,21 +74,26 @@ export function MeasurePropertyChart({ property }: MeasurePropertyChartProps) {
       aria-labelledby={`measure-${property.name}`}
       className="measure-chart-panel"
     >
-      <header className="measure-chart-header">
-        <div>
-          <h2 id={`measure-${property.name}`}>{property.name}</h2>
-          <p>{property.interpolation} interpolation</p>
-        </div>
-        <output
-          aria-label={`Current ${property.name}`}
-          className="measure-current-value"
-        >
-          {currentValue === undefined ? '—' : currentValue.toLocaleString()}
-          {currentValue !== undefined && property.unit ? (
-            <span> {property.unit}</span>
-          ) : null}
-        </output>
-      </header>
+      <PropertyChartHeader
+        properties={[
+          {
+            name: property.name,
+            type: 'Measure',
+            interpolation: property.interpolation,
+          },
+        ]}
+        trailing={
+          <output
+            aria-label={`Current ${property.name}`}
+            className="measure-current-value"
+          >
+            {currentValue === undefined ? '—' : currentValue.toLocaleString()}
+            {currentValue !== undefined && property.unit ? (
+              <span> {property.unit}</span>
+            ) : null}
+          </output>
+        }
+      />
       <div
         aria-label={`${property.name} over time`}
         className="measure-chart-canvas"

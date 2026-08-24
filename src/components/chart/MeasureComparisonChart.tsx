@@ -16,6 +16,7 @@ import {
   buildComparisonCurrentTimeOption,
   buildMeasureComparisonChartOption,
 } from '../../visualization/chart/measureComparisonChartAdapter'
+import { PropertyChartHeader } from './PropertyChartHeader'
 
 registerEChartsModules([
   LineChart,
@@ -82,6 +83,13 @@ export function MeasureComparisonChart({
       className="comparison-chart"
       aria-label={`${group.series.map((item) => item.label).join(', ')} comparison`}
     >
+      <PropertyChartHeader
+        properties={group.series.map((item) => ({
+          name: item.propertyName,
+          type: 'Measure',
+          interpolation: item.property.interpolation,
+        }))}
+      />
       <div className="comparison-chart-canvas" ref={containerRef} role="img" />
     </section>
   )
