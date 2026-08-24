@@ -348,7 +348,9 @@ const validateTemporalGeometrySegment = (
         expectedRingCounts ??= ringCounts
         if (
           ringCounts.length !== expectedRingCounts.length ||
-          ringCounts.some((count, index) => count !== expectedRingCounts![index])
+          ringCounts.some(
+            (count, index) => count !== expectedRingCounts![index],
+          )
         ) {
           addIssue(context, {
             path: polygonPath,
@@ -405,8 +407,7 @@ const validateTemporalGeometrySegment = (
           addIssue(context, {
             path: linePath,
             code: 'count_mismatch',
-            message:
-              'MovingLineString samples require compatible vertices.',
+            message: 'MovingLineString samples require compatible vertices.',
             expected: `${expectedVertexCount} vertices of dimension ${expectedDimension}`,
             actual: `${positions.length} vertices of dimension ${positions[0].length}`,
           })
@@ -505,21 +506,14 @@ const validatePropertyDefinition = (
   }
 
   const allowedInterpolations =
-    propertyType === 'Text'
-      ? ['Discrete', 'Step']
-      : ['Discrete', 'Step', 'Linear']
+    propertyType === 'Measure'
+      ? ['Discrete', 'Step', 'Linear', 'Regression']
+      : ['Discrete', 'Step']
   const interpolation = value.interpolation
-  if (interpolation === undefined) {
-    addIssue(context, {
-      path: `${path}.interpolation`,
-      code: 'required',
-      message: 'Temporal property interpolation is required.',
-      expected: allowedInterpolations,
-      actual: interpolation,
-    })
-  } else if (
-    typeof interpolation !== 'string' ||
-    !allowedInterpolations.includes(interpolation)
+  if (
+    interpolation !== undefined &&
+    (typeof interpolation !== 'string' ||
+      !allowedInterpolations.includes(interpolation))
   ) {
     addIssue(context, {
       path: `${path}.interpolation`,
@@ -527,6 +521,21 @@ const validatePropertyDefinition = (
       message: 'Interpolation is not supported for this property type.',
       expected: allowedInterpolations,
       actual: interpolation,
+    })
+  }
+
+  if (
+    propertyType === 'Measure' &&
+    interpolation === 'Regression' &&
+    datetimeCount !== undefined &&
+    datetimeCount < 2
+  ) {
+    addIssue(context, {
+      path,
+      code: 'count_mismatch',
+      message: 'Regression Measure properties require at least two samples.',
+      expected: 'at least 2 samples',
+      actual: datetimeCount,
     })
   }
 

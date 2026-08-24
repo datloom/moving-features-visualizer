@@ -11,7 +11,9 @@ import { validateMfJson, type ValidationIssue } from './validator'
 const measurePropertySchema = z.object({
   type: z.literal('Measure'),
   values: z.array(z.number()),
-  interpolation: z.enum(['Discrete', 'Step', 'Linear']),
+  interpolation: z
+    .enum(['Discrete', 'Step', 'Linear', 'Regression'])
+    .default('Discrete'),
   unit: z.string().optional(),
   form: z.string().optional(),
 })
@@ -19,14 +21,14 @@ const measurePropertySchema = z.object({
 const textPropertySchema = z.object({
   type: z.literal('Text'),
   values: z.array(z.string()),
-  interpolation: z.enum(['Discrete', 'Step']),
+  interpolation: z.enum(['Discrete', 'Step']).default('Discrete'),
   form: z.string().optional(),
 })
 
 const imagePropertySchema = z.object({
   type: z.literal('IMAGE'),
   values: z.array(z.string()),
-  interpolation: z.enum(['Discrete', 'Step', 'Linear']),
+  interpolation: z.enum(['Discrete', 'Step']).default('Discrete'),
   form: z.string().optional(),
 })
 

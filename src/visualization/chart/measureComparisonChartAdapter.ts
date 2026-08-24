@@ -1,6 +1,10 @@
 import type { EChartsOption, SeriesOption } from 'echarts'
 
 import type { MeasureComparisonSeries } from './measureComparison'
+import {
+  evaluateMeasureRegression,
+  getMeasureRegressionModel,
+} from '../../mfjson/measureRegression'
 import { PROPERTY_COMPARISON_GRID } from './propertyComparisonLayout'
 
 const COLORS = [
@@ -27,7 +31,7 @@ const buildSeries = (
   item: MeasureComparisonSeries,
   index: number,
   currentTime: number,
-): SeriesOption => {
+): readonly SeriesOption[] => {
   const color = COLORS[index % COLORS.length]
   const shared = {
     id: item.id,
@@ -39,16 +43,43 @@ const buildSeries = (
     markLine: index === 0 ? markLine(currentTime) : undefined,
   }
   if (item.property.interpolation === 'Discrete') {
-    return { ...shared, type: 'scatter', symbolSize: item.focused ? 10 : 7 }
+    return [{ ...shared, type: 'scatter', symbolSize: item.focused ? 10 : 7 }]
   }
-  return {
-    ...shared,
-    type: 'line',
-    showSymbol: true,
-    symbolSize: item.focused ? 7 : 5,
-    lineStyle: { color, width: item.focused ? 3 : 2 },
-    step: item.property.interpolation === 'Step' ? 'end' : false,
+  if (item.property.interpolation === 'Regression') {
+    const model = getMeasureRegressionModel(item.property)
+    return [
+      {
+        ...shared,
+        name: `${item.label} observations`,
+        type: 'scatter',
+        symbolSize: item.focused ? 10 : 7,
+        z: 3,
+      },
+      {
+        id: `${item.id}:regression`,
+        name: item.label,
+        type: 'line',
+        data: [
+          [model.startTime, evaluateMeasureRegression(model, model.startTime)],
+          [model.endTime, evaluateMeasureRegression(model, model.endTime)],
+        ],
+        animation: false,
+        showSymbol: false,
+        lineStyle: { color, width: item.focused ? 3 : 2 },
+        emphasis: { focus: 'series' },
+      },
+    ]
   }
+  return [
+    {
+      ...shared,
+      type: 'line',
+      showSymbol: true,
+      symbolSize: item.focused ? 7 : 5,
+      lineStyle: { color, width: item.focused ? 3 : 2 },
+      step: item.property.interpolation === 'Step' ? 'end' : false,
+    },
+  ]
 }
 
 export const buildComparisonCurrentTimeOption = (
@@ -97,5 +128,7 @@ export const buildMeasureComparisonChartOption = (
     splitLine: { lineStyle: { color: '#263139' } },
   },
   dataZoom: [{ type: 'inside', filterMode: 'none' }],
-  series: series.map((item, index) => buildSeries(item, index, currentTime)),
+  series: series.flatMap((item, index) =>
+    buildSeries(item, index, currentTime),
+  ),
 })

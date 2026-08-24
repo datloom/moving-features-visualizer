@@ -8,7 +8,7 @@ import {
 
 const series = (
   id: string,
-  interpolation: 'Discrete' | 'Linear' | 'Step',
+  interpolation: 'Discrete' | 'Linear' | 'Step' | 'Regression',
 ): MeasureComparisonSeries => ({
   id,
   label: id,
@@ -58,5 +58,36 @@ describe('Measure comparison ECharts adapter', () => {
     expect(buildComparisonCurrentTimeOption('one', 1_500).series).toHaveLength(
       1,
     )
+  })
+
+  it('keeps Regression observations and fitted segment lines separate', () => {
+    const regression = series('trend', 'Regression')
+    const option = buildMeasureComparisonChartOption(
+      [
+        {
+          ...regression,
+          property: {
+            ...regression.property,
+            samples: [
+              { time: 1_000, value: 10 },
+              { time: 2_000, value: 20 },
+            ],
+          },
+        },
+      ],
+      1_500,
+      1_000,
+      2_000,
+    )
+    const output = option.series as Array<Record<string, unknown>>
+    expect(output).toHaveLength(2)
+    expect(output[0]?.type).toBe('scatter')
+    expect(output[1]).toMatchObject({
+      type: 'line',
+      data: [
+        [1_000, 10],
+        [2_000, 20],
+      ],
+    })
   })
 })

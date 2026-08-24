@@ -24,6 +24,29 @@ const featureWith = (temporalProperties: unknown) => ({
 })
 
 describe('normalizeTemporalProperties', () => {
+  it('defaults omitted interpolation to Discrete and preserves Regression', () => {
+    const result = normalizeTemporalProperties(
+      featureWith([
+        {
+          datetimes: ['2026-08-21T10:00:03Z', '2026-08-21T10:00:08Z'],
+          speed: { type: 'Measure', values: [10, 14] },
+          trend: {
+            type: 'Measure',
+            values: [10, 14],
+            interpolation: 'Regression',
+          },
+        },
+      ]),
+    )
+    expect(result).toMatchObject({
+      success: true,
+      data: [
+        { name: 'speed', interpolation: 'Discrete' },
+        { name: 'trend', interpolation: 'Regression' },
+      ],
+    })
+  })
+
   it('normalizes Measure samples and preserves unit, form, and interpolation', () => {
     const result = normalizeTemporalProperties(
       featureWith([
@@ -86,7 +109,7 @@ describe('normalizeTemporalProperties', () => {
     })
   })
 
-  it.each(['Discrete', 'Step', 'Linear'] as const)(
+  it.each(['Discrete', 'Step'] as const)(
     'normalizes opaque IMAGE values with %s interpolation',
     (interpolation) => {
       const value = 'data:image/png;base64,untrusted-payload'
@@ -237,27 +260,6 @@ describe('normalizeTemporalProperties', () => {
         {
           path: '$.temporalProperties[0].speed',
           code: 'count_mismatch',
-        },
-      ],
-    })
-  })
-
-  it('rejects a temporal property with missing interpolation metadata', () => {
-    const result = normalizeTemporalProperties(
-      featureWith([
-        {
-          datetimes: ['2026-08-21T10:00:03Z'],
-          speed: { type: 'Measure', values: [10] },
-        },
-      ]),
-    )
-
-    expect(result).toMatchObject({
-      success: false,
-      issues: [
-        {
-          path: '$.temporalProperties[0].speed.interpolation',
-          code: 'required',
         },
       ],
     })

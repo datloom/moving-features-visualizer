@@ -80,4 +80,38 @@ describe('Measure chart adapter', () => {
     expect(resolveMeasureValue(property('Discrete'), 1_500)).toBeUndefined()
     expect(resolveMeasureValue(property('Discrete'), 2_000)).toBe(20)
   })
+
+  it('renders Regression observations and fitted line from the current-value model', () => {
+    const regression: MeasureTemporalProperty = {
+      ...property('Regression'),
+      samples: [
+        { time: 0, value: 0 },
+        { time: 10, value: 0 },
+        { time: 20, value: 90 },
+      ],
+    }
+    const option = buildMeasureChartOption(regression, 15)
+    const series = Array.isArray(option.series)
+      ? option.series
+      : [option.series]
+    expect(series).toHaveLength(2)
+    expect(series[0]).toMatchObject({
+      type: 'scatter',
+      data: [
+        [0, 0],
+        [10, 0],
+        [20, 90],
+      ],
+    })
+    expect(series[1]).toMatchObject({
+      type: 'line',
+      showSymbol: false,
+      data: [
+        [0, -15],
+        [20, 75],
+      ],
+    })
+    expect(resolveMeasureValue(regression, 15)).toBeCloseTo(52.5)
+    expect(resolveMeasureValue(regression, 25)).toBeUndefined()
+  })
 })

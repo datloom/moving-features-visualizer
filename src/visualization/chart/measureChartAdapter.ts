@@ -1,8 +1,13 @@
 import type { EChartsOption, SeriesOption } from 'echarts'
 
 import type { MeasureTemporalProperty } from '../../mfjson/types'
+import {
+  evaluateMeasureRegression,
+  getMeasureRegressionModel,
+} from '../../mfjson/measureRegression'
 
 const SERIES_ID = 'measure-property-series'
+const REGRESSION_SERIES_ID = `${SERIES_ID}-regression`
 
 const buildMarkLine = (currentTime: number) => ({
   animation: false,
@@ -18,7 +23,7 @@ const formatAxisTime = (timestamp: number): string =>
 const formatTooltipTime = (timestamp: number): string =>
   `${new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ')} UTC`
 
-const buildSeries = (property: MeasureTemporalProperty): SeriesOption => {
+const buildSeries = (property: MeasureTemporalProperty): SeriesOption[] => {
   const shared = {
     id: SERIES_ID,
     name: property.name,
@@ -29,21 +34,51 @@ const buildSeries = (property: MeasureTemporalProperty): SeriesOption => {
   }
 
   if (property.interpolation === 'Discrete') {
-    return {
-      ...shared,
-      type: 'scatter',
-      symbolSize: 8,
-    }
+    return [
+      {
+        ...shared,
+        type: 'scatter',
+        symbolSize: 8,
+      },
+    ]
   }
 
-  return {
-    ...shared,
-    type: 'line',
-    showSymbol: true,
-    symbolSize: 6,
-    lineStyle: { color: '#35d4c7', width: 2 },
-    step: property.interpolation === 'Step' ? 'end' : false,
+  if (property.interpolation === 'Regression') {
+    const model = getMeasureRegressionModel(property)
+    return [
+      {
+        ...shared,
+        name: `${property.name} observations`,
+        type: 'scatter',
+        symbolSize: 8,
+        z: 3,
+      },
+      {
+        id: REGRESSION_SERIES_ID,
+        name: `${property.name} regression`,
+        type: 'line',
+        data: [
+          [model.startTime, evaluateMeasureRegression(model, model.startTime)],
+          [model.endTime, evaluateMeasureRegression(model, model.endTime)],
+        ],
+        animation: false,
+        showSymbol: false,
+        lineStyle: { color: '#35d4c7', width: 2.5 },
+        emphasis: { focus: 'series' },
+      },
+    ]
   }
+
+  return [
+    {
+      ...shared,
+      type: 'line',
+      showSymbol: true,
+      symbolSize: 6,
+      lineStyle: { color: '#35d4c7', width: 2 },
+      step: property.interpolation === 'Step' ? 'end' : false,
+    },
+  ]
 }
 
 export const buildCurrentTimeMarkerOption = (
@@ -102,7 +137,9 @@ export const buildMeasureChartOption = (
         textStyle: { color: '#91a0ab' },
       },
     ],
-    series: [{ ...series, markLine: buildMarkLine(currentTime) }],
+    series: series.map((item, index) =>
+      index === 0 ? { ...item, markLine: buildMarkLine(currentTime) } : item,
+    ),
   }
 }
 
@@ -111,6 +148,12 @@ export const resolveMeasureValue = (
   currentTime: number,
 ): number | undefined => {
   const samples = property.samples
+  if (property.interpolation === 'Regression') {
+    return evaluateMeasureRegression(
+      getMeasureRegressionModel(property),
+      currentTime,
+    )
+  }
   const exact = samples.find((sample) => sample.time === currentTime)
   if (exact) return exact.value
   if (property.interpolation === 'Discrete') return undefined

@@ -2,13 +2,11 @@
 export type Timestamp = number
 
 export type GeometryInterpolation =
-  | 'Discrete'
-  | 'Step'
-  | 'Linear'
-  | 'Quadratic'
-  | 'Cubic'
+  'Discrete' | 'Step' | 'Linear' | 'Quadratic' | 'Cubic'
 
-export type PropertyInterpolation = 'Discrete' | 'Step' | 'Linear'
+export type MeasureInterpolation = 'Discrete' | 'Step' | 'Linear' | 'Regression'
+export type TextInterpolation = 'Discrete' | 'Step'
+export type ImageInterpolation = 'Discrete' | 'Step'
 
 export type TemporalPropertyType = 'Measure' | 'Text' | 'IMAGE'
 
@@ -68,7 +66,7 @@ export interface TemporalPropertySample<Value extends number | string> {
 export interface MeasureTemporalProperty {
   readonly type: 'Measure'
   readonly name: string
-  readonly interpolation: PropertyInterpolation
+  readonly interpolation: MeasureInterpolation
   readonly unit?: string
   readonly form?: string
   readonly samples: readonly TemporalPropertySample<number>[]
@@ -77,7 +75,7 @@ export interface MeasureTemporalProperty {
 export interface TextTemporalProperty {
   readonly type: 'Text'
   readonly name: string
-  readonly interpolation: Exclude<PropertyInterpolation, 'Linear'>
+  readonly interpolation: TextInterpolation
   readonly form?: string
   readonly samples: readonly TemporalPropertySample<string>[]
 }
@@ -85,7 +83,7 @@ export interface TextTemporalProperty {
 export interface ImageTemporalProperty {
   readonly type: 'IMAGE'
   readonly name: string
-  readonly interpolation: PropertyInterpolation
+  readonly interpolation: ImageInterpolation
   readonly form?: string
   readonly samples: readonly TemporalPropertySample<string>[]
 }

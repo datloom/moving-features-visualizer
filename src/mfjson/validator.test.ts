@@ -309,7 +309,7 @@ describe('validateMfJson', () => {
     )
   })
 
-  it('requires interpolation metadata for every temporal property', () => {
+  it('accepts omitted temporal-property interpolation for Discrete defaults', () => {
     const result = validateMfJson({
       ...validFeature,
       temporalProperties: [
@@ -321,43 +321,65 @@ describe('validateMfJson', () => {
       ],
     })
 
-    expect(result.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          path: '$.temporalProperties[0].speed.interpolation',
-          code: 'required',
-          expected: ['Discrete', 'Step', 'Linear'],
-        }),
-        expect.objectContaining({
-          path: '$.temporalProperties[0].status.interpolation',
-          code: 'required',
-          expected: ['Discrete', 'Step'],
-        }),
-      ]),
-    )
+    expect(result).toEqual({ valid: true, issues: [] })
   })
 
   it.each([
     ['Measure', 'Discrete', [1]],
     ['Measure', 'Linear', [1.5]],
     ['Measure', 'Step', [2]],
+    ['Measure', 'Regression', [1, 3]],
     ['Text', 'Discrete', ['idle']],
     ['Text', 'Step', ['moving']],
     ['IMAGE', 'Discrete', ['https://example.test/frame.png']],
     ['IMAGE', 'Step', ['data:image/png;base64,opaque']],
-    ['IMAGE', 'Linear', ['https://example.test/frame-2.png']],
   ])('accepts %s + %s', (type, interpolation, values) => {
     expect(
       validateMfJson({
         ...validFeature,
         temporalProperties: [
           {
-            datetimes: ['2024-01-01T00:00:00Z'],
+            datetimes: values.map((_, index) =>
+              new Date(Date.UTC(2024, 0, 1, 0, index)).toISOString(),
+            ),
             observed: { type, interpolation, values },
           },
         ],
       }),
     ).toEqual({ valid: true, issues: [] })
+  })
+
+  it('rejects Regression for Text and Regression Measure with one sample', () => {
+    const result = validateMfJson({
+      ...validFeature,
+      temporalProperties: [
+        {
+          datetimes: ['2024-01-01T00:00:00Z'],
+          speed: {
+            type: 'Measure',
+            interpolation: 'Regression',
+            values: [10],
+          },
+          status: {
+            type: 'Text',
+            interpolation: 'Regression',
+            values: ['moving'],
+          },
+        },
+      ],
+    })
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: '$.temporalProperties[0].speed',
+          code: 'count_mismatch',
+        }),
+        expect.objectContaining({
+          path: '$.temporalProperties[0].status.interpolation',
+          code: 'unsupported_value',
+        }),
+      ]),
+    )
   })
 
   it.each([

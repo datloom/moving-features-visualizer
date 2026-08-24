@@ -21,7 +21,7 @@ describe('Moving Feature domain model', () => {
 
     const geometry = {
       type: 'MovingPoint',
-      interpolation: 'Linear',
+      interpolation: 'Step',
       samples: [sample],
     } satisfies TemporalGeometry
 
@@ -57,7 +57,7 @@ describe('Moving Feature domain model', () => {
     const image = {
       type: 'IMAGE',
       name: 'camera',
-      interpolation: 'Linear',
+      interpolation: 'Step',
       samples: [
         { time: 1_700_000_000_000, value: 'data:image/png;base64,opaque' },
       ],

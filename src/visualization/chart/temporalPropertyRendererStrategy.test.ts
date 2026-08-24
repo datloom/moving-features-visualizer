@@ -5,18 +5,23 @@ import { getPropertyRendererStrategy } from './temporalPropertyRendererStrategy'
 
 const property = (
   type: TemporalProperty['type'],
-  interpolation: 'Discrete' | 'Step' | 'Linear',
+  interpolation: 'Discrete' | 'Step' | 'Linear' | 'Regression',
 ): TemporalProperty => {
   if (type === 'Measure') {
     return { type, name: 'speed', interpolation, samples: [] }
   }
   if (type === 'Text') {
-    if (interpolation === 'Linear') {
+    if (interpolation === 'Linear' || interpolation === 'Regression') {
       throw new Error(
         'Text + Linear cannot be represented by the domain model.',
       )
     }
     return { type, name: 'status', interpolation, samples: [] }
+  }
+  if (interpolation === 'Linear' || interpolation === 'Regression') {
+    throw new Error(
+      'IMAGE + continuous numeric interpolation cannot be represented by the domain model.',
+    )
   }
   return { type, name: 'camera', interpolation, samples: [] }
 }
@@ -26,6 +31,7 @@ describe('temporal property renderer strategy', () => {
     ['Discrete', 'sample-only'],
     ['Linear', 'linear-numeric'],
     ['Step', 'previous-value'],
+    ['Regression', 'regression-numeric'],
   ] as const)('classifies Measure + %s', (interpolation, behavior) => {
     expect(
       getPropertyRendererStrategy(property('Measure', interpolation)),
@@ -52,7 +58,6 @@ describe('temporal property renderer strategy', () => {
   it.each([
     ['Discrete', 'sample-only'],
     ['Step', 'previous-value'],
-    ['Linear', 'continuous-image-transition'],
   ] as const)('classifies IMAGE + %s', (interpolation, behavior) => {
     expect(
       getPropertyRendererStrategy(property('IMAGE', interpolation)),

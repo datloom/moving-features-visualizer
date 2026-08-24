@@ -6,10 +6,7 @@ import type {
 } from '../../mfjson/types'
 
 export type PropertyInterpolationBehavior =
-  | 'sample-only'
-  | 'linear-numeric'
-  | 'previous-value'
-  | 'continuous-image-transition'
+  'sample-only' | 'linear-numeric' | 'regression-numeric' | 'previous-value'
 
 interface StrategyBase {
   readonly interpolationBehavior: PropertyInterpolationBehavior
@@ -44,7 +41,9 @@ const measureBehavior = (
 ): PropertyInterpolationBehavior => {
   if (property.interpolation === 'Discrete') return 'sample-only'
   if (property.interpolation === 'Step') return 'previous-value'
-  return 'linear-numeric'
+  return property.interpolation === 'Regression'
+    ? 'regression-numeric'
+    : 'linear-numeric'
 }
 
 const textBehavior = (
@@ -54,11 +53,8 @@ const textBehavior = (
 
 const imageBehavior = (
   property: ImageTemporalProperty,
-): PropertyInterpolationBehavior => {
-  if (property.interpolation === 'Discrete') return 'sample-only'
-  if (property.interpolation === 'Step') return 'previous-value'
-  return 'continuous-image-transition'
-}
+): PropertyInterpolationBehavior =>
+  property.interpolation === 'Discrete' ? 'sample-only' : 'previous-value'
 
 export const getPropertyRendererStrategy = (
   property: TemporalProperty,
