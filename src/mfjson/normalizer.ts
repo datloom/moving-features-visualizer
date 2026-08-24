@@ -1,13 +1,12 @@
 import { z } from 'zod'
 
+import { parseMovingPoint } from './parser'
 import type {
+  MovingFeature,
   TemporalProperty,
   TemporalPropertySample,
 } from './types'
-import {
-  validateMfJson,
-  type ValidationIssue,
-} from './validator'
+import { validateMfJson, type ValidationIssue } from './validator'
 
 const measurePropertySchema = z.object({
   type: z.literal('Measure'),
@@ -41,7 +40,14 @@ export type TemporalPropertiesNormalizationResult =
   | { readonly success: true; readonly data: readonly TemporalProperty[] }
   | { readonly success: false; readonly issues: readonly ValidationIssue[] }
 
-const schemaIssue = (path: PropertyKey[], actual: unknown): ValidationIssue => ({
+export type MovingFeatureNormalizationResult =
+  | { readonly success: true; readonly data: MovingFeature }
+  | { readonly success: false; readonly issues: readonly ValidationIssue[] }
+
+const schemaIssue = (
+  path: PropertyKey[],
+  actual: unknown,
+): ValidationIssue => ({
   path: `$.${path.map(String).join('.')}`,
   code: 'invalid_type',
   message: 'Validated temporal property input could not be narrowed.',
@@ -120,4 +126,41 @@ export const normalizeTemporalProperties = (
   }
 
   return { success: true, data: properties }
+}
+
+export const normalizeMovingFeature = (
+  input: unknown,
+): MovingFeatureNormalizationResult => {
+  const geometry = parseMovingPoint(input)
+  if (!geometry.success) return geometry
+
+  const temporalProperties = normalizeTemporalProperties(input)
+  if (!temporalProperties.success) return temporalProperties
+
+  const feature = z
+    .object({
+      id: z.string().optional(),
+      properties: z.record(z.string(), z.unknown()).optional(),
+    })
+    .safeParse(input)
+
+  if (!feature.success) {
+    return {
+      success: false,
+      issues: feature.error.issues.map((issue) =>
+        schemaIssue(issue.path, issue.input),
+      ),
+    }
+  }
+
+  return {
+    success: true,
+    data: {
+      id: feature.data.id ?? '',
+      type: 'MovingFeature',
+      temporalGeometry: geometry.data,
+      temporalProperties: temporalProperties.data,
+      properties: feature.data.properties ?? {},
+    },
+  }
 }
