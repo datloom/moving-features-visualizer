@@ -45,7 +45,12 @@ export function TextPropertyChart({
     if (!container) return
     const chart = init(container, undefined, { renderer: 'canvas' })
     chartRef.current = chart
-    const resizeObserver = new ResizeObserver(() => chart.resize())
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      const { width, height } = entry.contentRect
+      if (width > 0 && height > 0) chart.resize()
+    })
     resizeObserver.observe(container)
     const unsubscribe = useTimeStore.subscribe((state, previous) => {
       if (state.currentTime === previous.currentTime) return
