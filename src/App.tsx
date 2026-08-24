@@ -1,12 +1,14 @@
 import { useState } from 'react'
 
 import { TemporalPropertiesPanel } from './components/chart/TemporalPropertiesPanel'
+import { LocalFileLoader } from './components/data/LocalFileLoader'
 import { FeatureExplorer } from './components/feature/FeatureExplorer'
 import { AppHeader, type WorkspaceMode } from './components/layout/AppHeader'
 import { WorkspaceState } from './components/layout/WorkspaceState'
 import { MapWorkspace } from './components/map/MapWorkspace'
 import { PlaybackController } from './components/timeline/PlaybackController'
 import { TimelineControls } from './components/timeline/TimelineControls'
+import { useFeatureStore } from './store/featureStore'
 import {
   harborMovingFeature,
   sampleMovingFeature,
@@ -14,30 +16,37 @@ import {
 
 const FEATURES = [sampleMovingFeature, harborMovingFeature]
 
+if (useFeatureStore.getState().features.length === 0) {
+  useFeatureStore.getState().replaceFeatures(FEATURES)
+}
+
 export function App() {
   const [mode, setMode] = useState<WorkspaceMode>('demo')
-  const [selectedFeatureId, setSelectedFeatureId] = useState(
-    sampleMovingFeature.id,
-  )
+  const [datasetName, setDatasetName] = useState('Tokyo field survey')
   const [explorerOpen, setExplorerOpen] = useState(false)
+  const [fileLoaderOpen, setFileLoaderOpen] = useState(false)
+  const features = useFeatureStore((state) => state.features)
+  const selectedFeatureId = useFeatureStore((state) => state.selectedFeatureId)
   const selectedFeature =
-    FEATURES.find((feature) => feature.id === selectedFeatureId) ??
+    features.find((feature) => feature.id === selectedFeatureId) ??
     sampleMovingFeature
 
   return (
     <main className="app-shell">
       <AppHeader
+        datasetName={datasetName}
         explorerOpen={explorerOpen}
         mode={mode}
         onModeChange={setMode}
+        onOpenData={() => setFileLoaderOpen(true)}
         onToggleExplorer={() => setExplorerOpen((open) => !open)}
       />
       <div className="workspace-shell">
         <FeatureExplorer
-          features={FEATURES}
+          features={features}
           onClose={() => setExplorerOpen(false)}
           onSelect={(featureId) => {
-            setSelectedFeatureId(featureId)
+            useFeatureStore.getState().selectFeature(featureId)
             setExplorerOpen(false)
           }}
           open={explorerOpen}
@@ -64,6 +73,14 @@ export function App() {
       </div>
       <TimelineControls />
       <PlaybackController />
+      <LocalFileLoader
+        onClose={() => setFileLoaderOpen(false)}
+        onLoaded={(filename) => {
+          setDatasetName(filename)
+          setMode('demo')
+        }}
+        open={fileLoaderOpen}
+      />
     </main>
   )
 }

@@ -3,16 +3,20 @@ import { Icon } from '../ui/Icon'
 export type WorkspaceMode = 'demo' | 'empty' | 'loading' | 'error'
 
 export interface AppHeaderProps {
+  readonly datasetName: string
   readonly explorerOpen: boolean
   readonly mode: WorkspaceMode
   readonly onModeChange: (mode: WorkspaceMode) => void
+  readonly onOpenData: () => void
   readonly onToggleExplorer: () => void
 }
 
 export function AppHeader({
+  datasetName,
   explorerOpen,
   mode,
   onModeChange,
+  onOpenData,
   onToggleExplorer,
 }: AppHeaderProps) {
   return (
@@ -47,20 +51,26 @@ export function AppHeader({
           }
           value={mode}
         >
-          <option value="demo">Tokyo field survey</option>
+          <option value="demo">{datasetName}</option>
           <option value="loading">Loading state</option>
           <option value="empty">Empty workspace</option>
           <option value="error">Invalid MF-JSON</option>
         </select>
       </label>
 
-      <div className="header-status">
-        <span className={`status-dot status-dot-${mode}`} />
-        {mode === 'demo'
-          ? 'Dataset ready'
-          : mode === 'error'
-            ? 'Validation failed'
-            : mode}
+      <div className="header-actions">
+        <div className="header-status">
+          <span className={`status-dot status-dot-${mode}`} />
+          {mode === 'demo'
+            ? 'Dataset ready'
+            : mode === 'error'
+              ? 'Validation failed'
+              : mode}
+        </div>
+        <button className="open-data-button" onClick={onOpenData} type="button">
+          <Icon name="upload" />
+          Open Data
+        </button>
       </div>
     </header>
   )

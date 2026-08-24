@@ -10,6 +10,7 @@ export type IconName =
   | 'pause'
   | 'play'
   | 'search'
+  | 'upload'
   | 'x'
 
 export interface IconProps {
@@ -53,6 +54,12 @@ export function Icon({ name, size = 16 }: IconProps) {
       <>
         <circle cx="11" cy="11" r="7" />
         <path d="m20 20-4-4" />
+      </>
+    ),
+    upload: (
+      <>
+        <path d="M12 16V4M7 9l5-5 5 5" />
+        <path d="M5 14v5h14v-5" />
       </>
     ),
     x: <path d="M6 6l12 12M18 6 6 18" />,

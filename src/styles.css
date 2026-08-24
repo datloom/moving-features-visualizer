@@ -141,11 +141,32 @@ select {
   font-size: 0.73rem;
 }
 .header-status {
-  justify-self: end;
   gap: 7px;
   color: var(--muted-strong);
   font-size: 0.68rem;
   text-transform: capitalize;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 12px;
+}
+.open-data-button,
+.file-drop-zone button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--primary);
+  border-radius: 2px;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 .status-dot {
   width: 7px;
@@ -562,6 +583,146 @@ select {
 .explorer-scrim {
   display: none;
 }
+.upload-backdrop {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  padding: min(12vh, 96px) 16px 16px;
+  background: rgb(2 5 7 / 62%);
+}
+.upload-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 48%);
+}
+.upload-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.upload-dialog-header span {
+  color: var(--primary);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.upload-dialog-header h2 {
+  margin: 2px 0 0;
+  font-size: 0.86rem;
+}
+.file-drop-zone {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  margin: 14px;
+  padding: 26px 16px 18px;
+  border: 1px dashed var(--border-strong);
+  color: var(--muted);
+  background: var(--background);
+  text-align: center;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+.file-drop-zone.is-drag-over {
+  border-color: var(--primary);
+  background: var(--selected);
+}
+.file-drop-zone > .icon {
+  color: var(--primary);
+}
+.file-drop-zone strong {
+  color: var(--foreground);
+  font-size: 0.78rem;
+}
+.file-drop-zone span,
+.file-drop-zone small {
+  font-size: 0.65rem;
+}
+.file-drop-zone button {
+  margin: 4px 0;
+}
+.file-drop-zone button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+.upload-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  margin: 0 14px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--surface-elevated);
+}
+.upload-status:empty {
+  display: none;
+}
+.upload-status > .icon {
+  color: var(--destructive);
+}
+.upload-status strong,
+.upload-status p {
+  margin: 0;
+  font-size: 0.7rem;
+}
+.upload-status strong {
+  color: var(--foreground);
+}
+.upload-status p {
+  margin-top: 2px;
+}
+.upload-success {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  color: var(--success);
+  border: 1px solid var(--success);
+}
+.upload-issues {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  margin: 0 14px 14px;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.upload-issues li {
+  padding: 9px 10px;
+  border-left: 2px solid var(--destructive);
+  background: #261719;
+}
+.upload-issues li div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.upload-issues strong,
+.upload-issues code,
+.upload-issues p,
+.upload-issues small {
+  font-size: 0.64rem;
+}
+.upload-issues code,
+.upload-issues small {
+  color: var(--muted);
+}
+.upload-issues p {
+  margin: 4px 0;
+}
 .icon-button:focus-visible,
 .map-tool-button:focus-visible,
 .feature-row:focus-visible,
@@ -570,6 +731,11 @@ select {
 .transport-button:focus-visible,
 .playback-rate-control select:focus-visible,
 .timeline-track input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.open-data-button:focus-visible,
+.file-drop-zone button:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
@@ -586,7 +752,7 @@ select {
 }
 @media (max-width: 900px) {
   .app-header {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
   }
   .explorer-toggle {
     display: grid;
@@ -646,6 +812,20 @@ select {
   .dataset-control select {
     min-width: 0;
     width: 134px;
+  }
+  .dataset-control {
+    display: none;
+  }
+  .header-actions {
+    gap: 6px;
+  }
+  .open-data-button {
+    width: 32px;
+    padding: 0;
+    font-size: 0;
+  }
+  .upload-backdrop {
+    padding: 48px 8px 8px;
   }
   .primary-workspace {
     grid-template-rows: minmax(300px, 52vh) 190px;
