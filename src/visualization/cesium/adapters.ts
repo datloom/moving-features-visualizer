@@ -14,16 +14,56 @@ import {
 
 import { geometryAtTime } from '../../mfjson/geometryAtTime'
 import {
+  buildMovingLineStringTrail,
+  buildMovingPointPath,
+  geometryTrailSampleTimes,
+} from '../../mfjson/geometryTrail'
+import {
   buildMovingPolygonTrail,
   movingPolygonTrailSampleTimes,
 } from '../../mfjson/movingPolygonTrail'
 import type {
   MovingFeature,
-  MovingPolygon,
   PositionSample,
   TemporalGeometry,
   Timestamp,
 } from '../../mfjson/types'
+
+export const temporalGeometryStyle = {
+  point: {
+    currentPixelSize: 11,
+    selectedPixelSize: 15,
+    samplePixelSize: 7,
+    selectedSamplePixelSize: 9,
+    sampleOpacity: 0.55,
+    selectedSampleOpacity: 0.7,
+    pathWidth: 2,
+    selectedPathWidth: 4,
+    pathOpacity: 0.5,
+    selectedPathOpacity: 0.75,
+  },
+  lineString: {
+    currentWidth: 4,
+    selectedCurrentWidth: 6,
+    trailWidth: 1.5,
+    selectedTrailWidth: 2,
+    currentOpacity: 0.85,
+    selectedCurrentOpacity: 1,
+    trailOpacity: 0.18,
+    selectedTrailOpacity: 0.3,
+  },
+  polygon: {
+    currentFillOpacity: 0.34,
+    selectedCurrentFillOpacity: 0.5,
+    trailFillOpacity: 0.045,
+    selectedTrailFillOpacity: 0.08,
+    currentOutlineWidth: 3,
+    selectedCurrentOutlineWidth: 5,
+    currentOutlineOpacity: 0.9,
+    trailOutlineOpacity: 0.16,
+    selectedTrailOutlineOpacity: 0.28,
+  },
+} as const
 
 export const timestampToJulianDate = (timestamp: Timestamp): JulianDate => {
   if (!Number.isFinite(timestamp)) {
@@ -123,11 +163,19 @@ export const geometrySegmentPositionEntityId = (
 
 export const geometrySegmentTrailEntityId = (
   featureId: string,
-  segment: MovingPolygon,
+  segment: TemporalGeometry,
   segmentIndex: number,
   timestamp: Timestamp,
 ): string =>
   `${geometrySegmentEntityId(featureId, segment, segmentIndex)}--trail--${timestamp}`
+
+export const geometrySegmentOutlineEntityId = (
+  featureId: string,
+  segment: TemporalGeometry,
+  segmentIndex: number,
+  ringIndex: number,
+): string =>
+  `${geometrySegmentEntityId(featureId, segment, segmentIndex)}--outline--${ringIndex}`
 
 const ringsToPolygonHierarchy = (
   rings: readonly (readonly Pick<
@@ -148,17 +196,39 @@ const ringsToPolygonHierarchy = (
 export const movingFeatureEntityIds = (
   feature: MovingFeature,
   options: { readonly selected?: boolean } = {},
-): readonly string[] =>
-  feature.temporalGeometry.segments.flatMap((segment, index) => {
-    if (segment.type === 'MovingPoint' && options.selected) {
+): readonly string[] => {
+  void options
+  return feature.temporalGeometry.segments.flatMap((segment, index) => {
+    if (segment.type === 'MovingPoint') {
       return [
-        geometrySegmentTrajectoryEntityId(feature.id, segment, index),
-        geometrySegmentPositionEntityId(feature.id, segment, index),
+        geometrySegmentEntityId(feature.id, segment, index),
+        ...(segment.interpolation === 'Discrete' ||
+        segment.interpolation === 'Step'
+          ? geometryTrailSampleTimes(segment).map((time) =>
+              geometrySegmentTrailEntityId(feature.id, segment, index, time),
+            )
+          : [geometrySegmentTrajectoryEntityId(feature.id, segment, index)]),
+      ]
+    }
+    if (segment.type === 'MovingLineString') {
+      return [
+        geometrySegmentEntityId(feature.id, segment, index),
+        ...geometryTrailSampleTimes(segment).map((time) =>
+          geometrySegmentTrailEntityId(feature.id, segment, index, time),
+        ),
       ]
     }
     if (segment.type === 'MovingPolygon') {
       return [
         geometrySegmentEntityId(feature.id, segment, index),
+        ...segment.samples[0]!.rings.map((_, ringIndex) =>
+          geometrySegmentOutlineEntityId(
+            feature.id,
+            segment,
+            index,
+            ringIndex,
+          ),
+        ),
         ...movingPolygonTrailSampleTimes(segment).map((time) =>
           geometrySegmentTrailEntityId(
             feature.id,
@@ -171,6 +241,7 @@ export const movingFeatureEntityIds = (
     }
     return [geometrySegmentEntityId(feature.id, segment, index)]
   })
+}
 
 export const movingFeatureToEntities = (
   feature: MovingFeature,
@@ -180,7 +251,7 @@ export const movingFeatureToEntities = (
   } = {},
 ): readonly Entity[] =>
   feature.temporalGeometry.segments
-    .map((segment, index) => {
+    .flatMap((segment, index): readonly Entity[] => {
       const samples = segment.samples
       const first = samples[0]
       const last = samples.at(-1)
@@ -201,6 +272,7 @@ export const movingFeatureToEntities = (
 
       if (segment.type === 'MovingLineString') {
         const getCurrentTime = options.getCurrentTime ?? (() => startTime)
+        const trail = buildMovingLineStringTrail(segment)
         return [
           new Entity({
             id: geometrySegmentEntityId(feature.id, segment, index),
@@ -213,32 +285,14 @@ export const movingFeatureToEntities = (
                   ? evaluated.positions.map(coordinateToCartesian3)
                   : undefined
               }, false),
-              material: color.withAlpha(options.selected ? 0.95 : 0.75),
-              width: options.selected ? 5 : 3,
-            },
-          }),
-        ]
-      }
-
-      if (segment.type === 'MovingPolygon') {
-        const getCurrentTime = options.getCurrentTime ?? (() => startTime)
-        const trail = buildMovingPolygonTrail(segment)
-        return [
-          new Entity({
-            id: geometrySegmentEntityId(feature.id, segment, index),
-            name: feature.id,
-            availability,
-            polygon: {
-              hierarchy: new CallbackProperty(() => {
-                const evaluated = geometryAtTime(segment, getCurrentTime())
-                return evaluated?.type === 'MovingPolygon'
-                  ? ringsToPolygonHierarchy(evaluated.rings)
-                  : undefined
-              }, false),
-              material: color.withAlpha(options.selected ? 0.45 : 0.3),
-              outline: true,
-              outlineColor: color.withAlpha(0.95),
-              perPositionHeight: true,
+              material: color.withAlpha(
+                options.selected
+                  ? temporalGeometryStyle.lineString.selectedCurrentOpacity
+                  : temporalGeometryStyle.lineString.currentOpacity,
+              ),
+              width: options.selected
+                ? temporalGeometryStyle.lineString.selectedCurrentWidth
+                : temporalGeometryStyle.lineString.currentWidth,
             },
           }),
           ...trail.map(
@@ -251,16 +305,99 @@ export const movingFeatureToEntities = (
                   snapshot.time,
                 ),
                 name: feature.id,
+                polyline: {
+                  positions: snapshot.positions.map(coordinateToCartesian3),
+                  material: color.withAlpha(
+                    options.selected
+                      ? temporalGeometryStyle.lineString.selectedTrailOpacity
+                      : temporalGeometryStyle.lineString.trailOpacity,
+                  ),
+                  width: options.selected
+                    ? temporalGeometryStyle.lineString.selectedTrailWidth
+                    : temporalGeometryStyle.lineString.trailWidth,
+                },
+              }),
+          ),
+        ]
+      }
+
+      if (segment.type === 'MovingPolygon') {
+        const getCurrentTime = options.getCurrentTime ?? (() => startTime)
+        const trail = buildMovingPolygonTrail(segment)
+        const polygonFirst = segment.samples[0]!
+        return [
+          new Entity({
+            id: geometrySegmentEntityId(feature.id, segment, index),
+            name: feature.id,
+            availability,
+            polygon: {
+              hierarchy: new CallbackProperty(() => {
+                const evaluated = geometryAtTime(segment, getCurrentTime())
+                return evaluated?.type === 'MovingPolygon'
+                  ? ringsToPolygonHierarchy(evaluated.rings)
+                  : undefined
+              }, false),
+              material: color.withAlpha(
+                options.selected
+                  ? temporalGeometryStyle.polygon.selectedCurrentFillOpacity
+                  : temporalGeometryStyle.polygon.currentFillOpacity,
+              ),
+              outline: false,
+              perPositionHeight: true,
+            },
+          }),
+          ...polygonFirst.rings.map(
+            (_, ringIndex) =>
+              new Entity({
+                id: geometrySegmentOutlineEntityId(
+                  feature.id,
+                  segment,
+                  index,
+                  ringIndex,
+                ),
+                name: feature.id,
+                availability,
+                polyline: {
+                  positions: new CallbackProperty(() => {
+                    const evaluated = geometryAtTime(
+                      segment,
+                      getCurrentTime(),
+                    )
+                    return evaluated?.type === 'MovingPolygon'
+                      ? evaluated.rings[ringIndex]?.map(coordinateToCartesian3)
+                      : undefined
+                  }, false),
+                  material: color.withAlpha(
+                    temporalGeometryStyle.polygon.currentOutlineOpacity,
+                  ),
+                  width: options.selected
+                    ? temporalGeometryStyle.polygon.selectedCurrentOutlineWidth
+                    : temporalGeometryStyle.polygon.currentOutlineWidth,
+                },
+              }),
+          ),
+          ...trail.map(
+            (snapshot) =>
+              new Entity({
+                id: geometrySegmentTrailEntityId(
+                  feature.id,
+                  segment,
+                  index,
+                  snapshot.time,
+                ),
+                name: feature.id,
                 polygon: {
                   hierarchy: ringsToPolygonHierarchy(snapshot.rings),
-                  show: new CallbackProperty(
-                    () => snapshot.time <= getCurrentTime(),
-                    false,
+                  material: color.withAlpha(
+                    options.selected
+                      ? temporalGeometryStyle.polygon.selectedTrailFillOpacity
+                      : temporalGeometryStyle.polygon.trailFillOpacity,
                   ),
-                  material: color.withAlpha(options.selected ? 0.08 : 0.045),
                   outline: true,
                   outlineColor: color.withAlpha(
-                    options.selected ? 0.28 : 0.16,
+                    options.selected
+                      ? temporalGeometryStyle.polygon.selectedTrailOutlineOpacity
+                      : temporalGeometryStyle.polygon.trailOutlineOpacity,
                   ),
                   perPositionHeight: true,
                 },
@@ -281,35 +418,6 @@ export const movingFeatureToEntities = (
           : undefined
       }, false)
 
-      if (options.selected) {
-        return [
-          new Entity({
-            id: geometrySegmentTrajectoryEntityId(feature.id, segment, index),
-            name: feature.id,
-            polyline: {
-              positions: pointSamples.map(coordinateToCartesian3),
-              material: color.withAlpha(0.75),
-              width: 4,
-            },
-          }),
-          new Entity({
-            id: geometrySegmentPositionEntityId(feature.id, segment, index),
-            name: feature.id,
-            availability,
-            position: motionCurvePosition,
-            point: {
-              color,
-              outlineColor: Color.fromCssColorString('#071b1c'),
-              outlineWidth: 4,
-              pixelSize: 15,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            },
-          }),
-        ]
-      }
-
-      const durationSeconds = Math.max((endTime - startTime) / 1_000, 1)
-
       return [
         new Entity({
           id: geometrySegmentEntityId(feature.id, segment, index),
@@ -319,17 +427,63 @@ export const movingFeatureToEntities = (
           point: {
             color,
             outlineColor: Color.fromCssColorString('#071b1c'),
-            outlineWidth: 3,
-            pixelSize: 11,
+            outlineWidth: options.selected ? 4 : 3,
+            pixelSize: options.selected
+              ? temporalGeometryStyle.point.selectedPixelSize
+              : temporalGeometryStyle.point.currentPixelSize,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
-          path: {
-            leadTime: durationSeconds,
-            trailTime: durationSeconds,
-            material: color.withAlpha(0.75),
-            width: 2,
-          },
         }),
+        ...(segment.interpolation === 'Discrete' ||
+        segment.interpolation === 'Step'
+          ? geometryTrailSampleTimes(segment).map((time) => {
+              const sample = pointSamples.find((candidate) => candidate.time === time)!
+              return new Entity({
+                id: geometrySegmentTrailEntityId(
+                  feature.id,
+                  segment,
+                  index,
+                  time,
+                ),
+                name: feature.id,
+                position: coordinateToCartesian3(sample),
+                point: {
+                  color: color.withAlpha(
+                    options.selected
+                      ? temporalGeometryStyle.point.selectedSampleOpacity
+                      : temporalGeometryStyle.point.sampleOpacity,
+                  ),
+                  outlineColor: Color.fromCssColorString('#071b1c'),
+                  outlineWidth: 2,
+                  pixelSize: options.selected
+                    ? temporalGeometryStyle.point.selectedSamplePixelSize
+                    : temporalGeometryStyle.point.samplePixelSize,
+                  disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                },
+              })
+            })
+          : [
+              new Entity({
+                id: geometrySegmentTrajectoryEntityId(
+                  feature.id,
+                  segment,
+                  index,
+                ),
+                name: feature.id,
+                polyline: {
+                  positions: buildMovingPointPath(segment).map(
+                    coordinateToCartesian3,
+                  ),
+                  material: color.withAlpha(
+                    options.selected
+                      ? temporalGeometryStyle.point.selectedPathOpacity
+                      : temporalGeometryStyle.point.pathOpacity,
+                  ),
+                  width: options.selected
+                    ? temporalGeometryStyle.point.selectedPathWidth
+                    : temporalGeometryStyle.point.pathWidth,
+                },
+              }),
+            ]),
       ]
     })
-    .flat()

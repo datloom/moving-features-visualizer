@@ -29,7 +29,6 @@ const movingFeature: MovingFeature = {
             time: Date.parse('2026-08-24T12:00:10Z'),
             longitude: 139.8,
             latitude: 35.7,
-            height: 120,
           },
         ],
       },
@@ -117,7 +116,13 @@ describe('Cesium adapters', () => {
     expect(entity.id).toBe('vehicle-1--geometry--1')
     expect(entity.position).toBeDefined()
     expect(entity.point).toBeDefined()
-    expect(entity.path).toBeDefined()
+    expect(entity.path).toBeUndefined()
+    expect(
+      movingFeatureToEntities(movingFeature).some(
+        ({ id, polyline }) =>
+          String(id).endsWith('--trajectory') && polyline !== undefined,
+      ),
+    ).toBe(true)
     expect(
       JulianDate.equals(
         interval.start,
@@ -167,8 +172,8 @@ describe('Cesium adapters', () => {
     const trajectories = entities.filter((entity) =>
       String(entity.id).endsWith('--trajectory'),
     )
-    const positions = entities.filter((entity) =>
-      String(entity.id).endsWith('--position'),
+    const positions = entities.filter(
+      (entity) => !String(entity.id).endsWith('--trajectory'),
     )
 
     expect(trajectories.map(({ id }) => id)).toEqual([
@@ -216,8 +221,8 @@ describe('Cesium adapters', () => {
     const selectedTrajectory = selected.find((entity) =>
       String(entity.id).endsWith('--trajectory'),
     )!
-    const selectedPosition = selected.find((entity) =>
-      String(entity.id).endsWith('--position'),
+    const selectedPosition = selected.find(
+      (entity) => !String(entity.id).endsWith('--trajectory'),
     )!
 
     expect(String(selectedTrajectory.id)).toBe(`${normal.id}--trajectory`)
@@ -227,6 +232,29 @@ describe('Cesium adapters', () => {
     expect(
       Number(selectedTrajectory.polyline?.width?.getValue()),
     ).toBeGreaterThan(Number(normal.path?.width?.getValue() ?? 0))
+  })
+
+  it('renders Step MovingPoint previews as sample markers without a path line', () => {
+    const pointSegment = movingFeature.temporalGeometry.segments[0]!
+    if (pointSegment.type !== 'MovingPoint') {
+      throw new Error('Expected MovingPoint test fixture')
+    }
+    const stepFeature: MovingFeature = {
+      ...movingFeature,
+      temporalGeometry: {
+        segments: [
+          {
+            ...pointSegment,
+            interpolation: 'Step',
+          },
+        ],
+      },
+    }
+    const entities = movingFeatureToEntities(stepFeature)
+    const preview = entities.filter(({ id }) => String(id).includes('--trail--'))
+    expect(preview).toHaveLength(2)
+    expect(preview.every(({ point }) => point !== undefined)).toBe(true)
+    expect(entities.every(({ polyline }) => polyline === undefined)).toBe(true)
   })
 
   it('renders the current MovingLineString as one stable dynamic polyline', () => {
@@ -280,7 +308,7 @@ describe('Cesium adapters', () => {
     expect(
       entity.polyline?.positions?.getValue(timestampToJulianDate(currentTime)),
     ).toBeUndefined()
-    expect(movingFeatureToEntities(lineFeature)).toHaveLength(1)
+    expect(movingFeatureToEntities(lineFeature).length).toBeGreaterThan(1)
   })
 
   it('renders a current MovingPolygon with holes and Polygon trail snapshots', () => {
@@ -329,9 +357,9 @@ describe('Cesium adapters', () => {
     const future = entities.find(({ id }) =>
       String(id).endsWith('--trail--10'),
     )!
-    expect(future.polygon?.show?.getValue()).toBe(false)
+    expect(future.polygon?.show?.getValue()).not.toBe(false)
     currentTime = 10
-    expect(future.polygon?.show?.getValue()).toBe(true)
+    expect(future.polygon?.show?.getValue()).not.toBe(false)
   })
 
   it('rejects MovingPoint geometry without samples', () => {
