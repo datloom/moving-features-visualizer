@@ -9,11 +9,7 @@ import {
 
 import { useFeatureStore } from '../../store/featureStore'
 import { useTimeStore } from '../../store/timeStore'
-import {
-  buildSpaceTimeCesiumEntities,
-  type CurrentSpaceTimeEntity,
-  updateCurrentSpaceTimeEntities,
-} from '../../visualization/space-time/cesiumAdapter'
+import { buildSpaceTimeCesiumEntities } from '../../visualization/space-time/cesiumAdapter'
 import {
   DEFAULT_TIME_AXIS_HEIGHT,
   DEFAULT_TIME_TICK_COUNT,
@@ -38,7 +34,6 @@ export function SpaceTimeMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const entitiesRef = useRef<readonly Entity[]>([])
-  const currentEntitiesRef = useRef<readonly CurrentSpaceTimeEntity[]>([])
   const [imageryFailed, setImageryFailed] = useState(false)
   const features = useFeatureStore((state) => state.features)
   const selectedFeatureId = useFeatureStore((state) => state.selectedFeatureId)
@@ -104,7 +99,7 @@ export function SpaceTimeMap({
     for (const entity of entitiesRef.current) viewer.entities.remove(entity)
 
     const collection = buildSpaceTimeCesiumEntities(features, temporalExtent, {
-      currentTime: useTimeStore.getState().currentTime,
+      getCurrentTime: () => useTimeStore.getState().currentTime,
       selectedFeatureId,
       tickCount,
       timeAxisHeight,
@@ -114,7 +109,6 @@ export function SpaceTimeMap({
       viewer.entities.add(entity),
     )
     entitiesRef.current = entities
-    currentEntitiesRef.current = collection.currentGeometryEntities
     if (entities.length > 0) void viewer.zoomTo(entities)
 
     return () => {
@@ -122,7 +116,6 @@ export function SpaceTimeMap({
         for (const entity of entities) viewer.entities.remove(entity)
       }
       entitiesRef.current = []
-      currentEntitiesRef.current = []
     }
   }, [
     effectiveTimeAxisScale,
@@ -132,20 +125,6 @@ export function SpaceTimeMap({
     tickCount,
     timeAxisHeight,
   ])
-
-  useEffect(() => {
-    if (!temporalExtent) return
-    return useTimeStore.subscribe((state, previousState) => {
-      if (state.currentTime === previousState.currentTime) return
-      updateCurrentSpaceTimeEntities(
-        currentEntitiesRef.current,
-        state.currentTime,
-        temporalExtent,
-        timeAxisHeight,
-        effectiveTimeAxisScale,
-      )
-    })
-  }, [effectiveTimeAxisScale, temporalExtent, timeAxisHeight])
 
   if (!temporalExtent) {
     return (

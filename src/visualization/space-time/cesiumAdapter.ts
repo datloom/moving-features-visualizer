@@ -1,9 +1,9 @@
 import {
+  CallbackPositionProperty,
+  CallbackProperty,
   Cartesian2,
   Cartesian3,
   Color,
-  ConstantPositionProperty,
-  ConstantProperty,
   Entity,
   HorizontalOrigin,
   LabelStyle,
@@ -41,6 +41,8 @@ export interface SpaceTimeCesiumOptions {
   readonly tickCount?: number
   readonly selectedFeatureId?: string
   readonly currentTime?: number
+  /** Live current-time getter; re-read on every render frame. Takes priority over `currentTime`. */
+  readonly getCurrentTime?: () => Timestamp
 }
 
 export interface CurrentSpaceTimeEntity {
@@ -93,13 +95,30 @@ const createCurrentEntity = (
   segment: TemporalGeometry,
   segmentIndex: number,
   selected: boolean,
+  getCurrentTime: () => Timestamp,
+  extent: TemporalExtent,
+  timeAxisHeight: number,
+  timeAxisScale: number,
 ): Entity => {
   const id = `${entityBaseId(featureId, segmentIndex)}:current`
+  const evaluateAtCurrentTime = () =>
+    getSpaceTimeGeometryAtTime(
+      segment,
+      getCurrentTime(),
+      extent,
+      timeAxisHeight,
+      timeAxisScale,
+    )
   if (segment.type === 'MovingPoint')
     return new Entity({
       id,
       name: `${featureId} current position`,
-      show: false,
+      position: new CallbackPositionProperty(() => {
+        const evaluated = evaluateAtCurrentTime()
+        return evaluated?.type === 'MovingPoint'
+          ? spaceTimeSampleToCartesian(evaluated.position)
+          : undefined
+      }, false),
       point: {
         color: CURRENT_OBJECT_COLOR,
         outlineColor: OUTLINE,
@@ -112,9 +131,13 @@ const createCurrentEntity = (
     return new Entity({
       id,
       name: `${featureId} current LineString`,
-      show: false,
       polyline: {
-        positions: [],
+        positions: new CallbackProperty(() => {
+          const evaluated = evaluateAtCurrentTime()
+          return evaluated?.type === 'MovingLineString'
+            ? evaluated.positions.map(spaceTimeSampleToCartesian)
+            : undefined
+        }, false),
         material: CURRENT_OBJECT_COLOR,
         width: selected ? 6 : 4,
       },
@@ -122,48 +145,19 @@ const createCurrentEntity = (
   return new Entity({
     id,
     name: `${featureId} current Polygon`,
-    show: false,
     polygon: {
-      hierarchy: new PolygonHierarchy([]),
+      hierarchy: new CallbackProperty(() => {
+        const evaluated = evaluateAtCurrentTime()
+        return evaluated?.type === 'MovingPolygon'
+          ? hierarchy(evaluated.rings)
+          : undefined
+      }, false),
       material: CURRENT_OBJECT_COLOR.withAlpha(selected ? 0.52 : 0.4),
       outline: true,
       outlineColor: CURRENT_OBJECT_COLOR,
       perPositionHeight: true,
     },
   })
-}
-
-export const updateCurrentSpaceTimeEntities = (
-  bindings: readonly CurrentSpaceTimeEntity[],
-  currentTime: Timestamp,
-  temporalExtent: TemporalExtent,
-  timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
-  timeAxisScale = 1,
-): void => {
-  for (const { entity, segment } of bindings) {
-    const evaluated = getSpaceTimeGeometryAtTime(
-      segment,
-      currentTime,
-      temporalExtent,
-      timeAxisHeight,
-      timeAxisScale,
-    )
-    entity.show = evaluated !== undefined
-    if (!evaluated) continue
-    if (evaluated.type === 'MovingPoint') {
-      entity.position = new ConstantPositionProperty(
-        spaceTimeSampleToCartesian(evaluated.position),
-      )
-    } else if (evaluated.type === 'MovingLineString') {
-      entity.polyline!.positions = new ConstantProperty(
-        evaluated.positions.map(spaceTimeSampleToCartesian),
-      )
-    } else {
-      entity.polygon!.hierarchy = new ConstantProperty(
-        hierarchy(evaluated.rings),
-      )
-    }
-  }
 }
 
 export const buildSpaceTimeCesiumEntities = (
@@ -174,6 +168,9 @@ export const buildSpaceTimeCesiumEntities = (
   const timeAxisHeight = options.timeAxisHeight ?? DEFAULT_TIME_AXIS_HEIGHT
   const timeAxisScale = options.timeAxisScale ?? 1
   const tickCount = options.tickCount ?? DEFAULT_TIME_TICK_COUNT
+  const getCurrentTime =
+    options.getCurrentTime ??
+    (() => options.currentTime ?? temporalExtent.minTime)
   const transformed = transformSpaceTimeFeatures(
     features,
     temporalExtent,
@@ -329,6 +326,10 @@ export const buildSpaceTimeCesiumEntities = (
         sourceSegment,
         segment.segmentIndex,
         selected,
+        getCurrentTime,
+        temporalExtent,
+        timeAxisHeight,
+        timeAxisScale,
       )
       entities.push(current)
       currentGeometryEntities.push({ entity: current, segment: sourceSegment })
@@ -339,15 +340,6 @@ export const buildSpaceTimeCesiumEntities = (
         currentPositionEntities.set(feature.id, current)
     })
   })
-
-  if (options.currentTime !== undefined)
-    updateCurrentSpaceTimeEntities(
-      currentGeometryEntities,
-      options.currentTime,
-      temporalExtent,
-      timeAxisHeight,
-      timeAxisScale,
-    )
 
   const spatialExtent = getSpatialExtent(features)
   if (!spatialExtent)

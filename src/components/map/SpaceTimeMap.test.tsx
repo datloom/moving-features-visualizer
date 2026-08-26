@@ -66,7 +66,6 @@ vi.mock('cesium', () => ({
 vi.mock('../../visualization/space-time/cesiumAdapter', () => ({
   buildSpaceTimeCesiumEntities: buildEntities,
   spaceTimeSampleToCartesian: vi.fn(),
-  updateCurrentSpaceTimeEntities: vi.fn(),
 }))
 
 import { SpaceTimeMap } from './SpaceTimeMap'

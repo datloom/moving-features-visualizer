@@ -1,4 +1,10 @@
-import { Cartesian3, Color, JulianDate } from 'cesium'
+import {
+  Cartesian3,
+  Cartographic,
+  Color,
+  JulianDate,
+  PolygonHierarchy,
+} from 'cesium'
 import { describe, expect, it } from 'vitest'
 
 import type { MovingFeature } from '../../mfjson/types'
@@ -8,6 +14,7 @@ import {
   featureIdFromSpaceTimeEntityId,
   spaceTimeSampleToCartesian,
 } from './cesiumAdapter'
+import { getSpaceTimeGeometryAtTime } from './transform'
 
 const movingFeature: MovingFeature = {
   id: 'vehicle:one',
@@ -226,5 +233,254 @@ describe('Space-Time Cesium adapter', () => {
         (color) => !Color.equals(color.withAlpha(1), CURRENT_OBJECT_COLOR),
       ),
     ).toBe(true)
+  })
+
+  it('animates the current MovingLineString with the shared Quadratic evaluator on manual time changes', () => {
+    const segment = {
+      type: 'MovingLineString' as const,
+      interpolation: 'Quadratic' as const,
+      samples: [
+        {
+          time: 0,
+          positions: [
+            { longitude: 0, latitude: 0, height: 0 },
+            { longitude: 10, latitude: 10, height: 10 },
+          ],
+        },
+        {
+          time: 10,
+          positions: [
+            { longitude: 10, latitude: 10, height: 10 },
+            { longitude: 20, latitude: 20, height: 20 },
+          ],
+        },
+        {
+          time: 20,
+          positions: [
+            { longitude: 0, latitude: 0, height: 0 },
+            { longitude: 10, latitude: 10, height: 10 },
+          ],
+        },
+      ],
+    }
+    const feature: MovingFeature = {
+      id: 'quadratic-line',
+      type: 'MovingFeature',
+      temporalGeometry: { segments: [segment] },
+      temporalProperties: [],
+      properties: {},
+    }
+    const extent = { minTime: 0, maxTime: 20 }
+    const timeAxisHeight = 100
+    const timeAxisScale = 4
+    let currentTime = 0
+    const result = buildSpaceTimeCesiumEntities([feature], extent, {
+      getCurrentTime: () => currentTime,
+      timeAxisHeight,
+      timeAxisScale,
+    })
+    const [binding] = result.currentGeometryEntities
+    const entity = binding!.entity
+
+    const expectedCartesians = (time: number): readonly Cartesian3[] => {
+      const evaluated = getSpaceTimeGeometryAtTime(
+        segment,
+        time,
+        extent,
+        timeAxisHeight,
+        timeAxisScale,
+      )
+      if (evaluated?.type !== 'MovingLineString') {
+        throw new Error('expected a MovingLineString evaluation')
+      }
+      return evaluated.positions.map(spaceTimeSampleToCartesian)
+    }
+
+    const readPositions = (): readonly Cartesian3[] =>
+      entity.polyline!.positions!.getValue(JulianDate.now()) as Cartesian3[]
+
+    // t0: reproduces the first sample exactly (no rebuild between reads).
+    const atStart = readPositions()
+    expect(
+      atStart.every((position, index) =>
+        Cartesian3.equals(position, expectedCartesians(0)[index]),
+      ),
+    ).toBe(true)
+
+    // Manual scrub to a non-sample time: the shared Quadratic evaluator moves it.
+    currentTime = 15
+    const atIntermediate = readPositions()
+    expect(
+      atIntermediate.every((position, index) =>
+        Cartesian3.equals(position, expectedCartesians(15)[index]),
+      ),
+    ).toBe(true)
+    expect(Cartesian3.equals(atIntermediate[0], atStart[0])).toBe(false)
+
+    // Manual scrub to t1: reproduces the last sample exactly.
+    currentTime = 20
+    const atEnd = readPositions()
+    expect(
+      atEnd.every((position, index) =>
+        Cartesian3.equals(position, expectedCartesians(20)[index]),
+      ),
+    ).toBe(true)
+    expect(Cartesian3.equals(atEnd[0], atIntermediate[0])).toBe(false)
+  })
+
+  it('scales the current MovingLineString temporal height with the Time Axis Scale', () => {
+    const segment = {
+      type: 'MovingLineString' as const,
+      interpolation: 'Linear' as const,
+      samples: [
+        {
+          time: 0,
+          positions: [
+            { longitude: 0, latitude: 0 },
+            { longitude: 1, latitude: 0 },
+          ],
+        },
+        {
+          time: 10,
+          positions: [
+            { longitude: 10, latitude: 10 },
+            { longitude: 11, latitude: 10 },
+          ],
+        },
+      ],
+    }
+    const buildAt = (timeAxisScale: number) => {
+      const feature: MovingFeature = {
+        id: 'scaled-line',
+        type: 'MovingFeature',
+        temporalGeometry: { segments: [segment] },
+        temporalProperties: [],
+        properties: {},
+      }
+      const result = buildSpaceTimeCesiumEntities(
+        [feature],
+        { minTime: 0, maxTime: 10 },
+        { getCurrentTime: () => 5, timeAxisHeight: 100, timeAxisScale },
+      )
+      const entity = result.currentGeometryEntities[0]!.entity
+      const [position] = entity.polyline!.positions!.getValue(
+        JulianDate.now(),
+      ) as Cartesian3[]
+      return Cartographic.fromCartesian(position!).height
+    }
+    const heightAt1x = buildAt(1)
+    const heightAt4x = buildAt(4)
+    expect(heightAt4x).toBeCloseTo(heightAt1x * 4, 6)
+  })
+
+  it('animates the current MovingPolygon with the shared Quadratic evaluator on manual time changes', () => {
+    const segment = {
+      type: 'MovingPolygon' as const,
+      interpolation: 'Quadratic' as const,
+      samples: [
+        {
+          time: 0,
+          rings: [
+            [
+              { longitude: 0, latitude: 0, height: 0 },
+              { longitude: 2, latitude: 0, height: 0 },
+              { longitude: 2, latitude: 2, height: 0 },
+              { longitude: 0, latitude: 0, height: 0 },
+            ],
+          ],
+        },
+        {
+          time: 10,
+          rings: [
+            [
+              { longitude: 10, latitude: 10, height: 10 },
+              { longitude: 12, latitude: 10, height: 10 },
+              { longitude: 12, latitude: 12, height: 10 },
+              { longitude: 10, latitude: 10, height: 10 },
+            ],
+          ],
+        },
+        {
+          time: 20,
+          rings: [
+            [
+              { longitude: 0, latitude: 0, height: 0 },
+              { longitude: 2, latitude: 0, height: 0 },
+              { longitude: 2, latitude: 2, height: 0 },
+              { longitude: 0, latitude: 0, height: 0 },
+            ],
+          ],
+        },
+      ],
+    }
+    const feature: MovingFeature = {
+      id: 'quadratic-polygon',
+      type: 'MovingFeature',
+      temporalGeometry: { segments: [segment] },
+      temporalProperties: [],
+      properties: {},
+    }
+    const extent = { minTime: 0, maxTime: 20 }
+    const timeAxisHeight = 100
+    const timeAxisScale = 2
+    let currentTime = 0
+    const result = buildSpaceTimeCesiumEntities([feature], extent, {
+      getCurrentTime: () => currentTime,
+      timeAxisHeight,
+      timeAxisScale,
+    })
+    const entity = result.currentGeometryEntities[0]!.entity
+
+    const expectedPositions = (time: number) => {
+      const evaluated = getSpaceTimeGeometryAtTime(
+        segment,
+        time,
+        extent,
+        timeAxisHeight,
+        timeAxisScale,
+      )
+      if (evaluated?.type !== 'MovingPolygon') {
+        throw new Error('expected a MovingPolygon evaluation')
+      }
+      return evaluated.rings[0]!.map(spaceTimeSampleToCartesian)
+    }
+
+    const readHierarchy = (): PolygonHierarchy => {
+      const value: unknown = entity.polygon?.hierarchy?.getValue(
+        JulianDate.now(),
+      )
+      if (!(value instanceof PolygonHierarchy)) {
+        throw new Error('expected a PolygonHierarchy value')
+      }
+      return value
+    }
+
+    const atStart = readHierarchy().positions
+    expect(atStart).toHaveLength(4)
+    expect(
+      atStart.every((position, index) =>
+        Cartesian3.equals(position, expectedPositions(0)[index]),
+      ),
+    ).toBe(true)
+
+    currentTime = 15
+    const atIntermediate = readHierarchy().positions
+    expect(
+      atIntermediate.every((position, index) =>
+        Cartesian3.equals(position, expectedPositions(15)[index]),
+      ),
+    ).toBe(true)
+    expect(Cartesian3.equals(atIntermediate[0], atStart[0])).toBe(false)
+
+    currentTime = 20
+    const atEnd = readHierarchy().positions
+    expect(
+      atEnd.every((position, index) =>
+        Cartesian3.equals(position, expectedPositions(20)[index]),
+      ),
+    ).toBe(true)
+    expect(Cartesian3.equals(atEnd[0], atIntermediate[0])).toBe(false)
+
+    expect(readHierarchy().holes).toEqual([])
   })
 })
