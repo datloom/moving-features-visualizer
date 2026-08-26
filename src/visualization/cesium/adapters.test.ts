@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest'
 import {
   coordinateToCartesian3,
   getFeatureTimeRange,
+  movingFeatureEntityIds,
   movingFeatureToEntity,
   movingFeatureToEntities,
   samplesToPositionProperty,
+  temporalGeometryStyle,
   timestampToJulianDate,
 } from './adapters'
 import type { MovingFeature } from '../../mfjson/types'
@@ -467,6 +469,202 @@ describe('Cesium adapters', () => {
     ).toBe(true)
     currentTime = 10
     expect(future.polygon?.show?.getValue()).not.toBe(false)
+  })
+
+  it('renders a MovingLineString swept-surface path with feature color and no outline', () => {
+    const lineFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'line-surface',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingLineString',
+            interpolation: 'Linear',
+            samples: [
+              {
+                time: 0,
+                positions: [
+                  { longitude: 0, latitude: 0 },
+                  { longitude: 2, latitude: 2 },
+                ],
+              },
+              {
+                time: 10,
+                positions: [
+                  { longitude: 10, latitude: 10 },
+                  { longitude: 12, latitude: 12 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const entities = movingFeatureToEntities(lineFeature)
+    const surfaces = entities.filter(({ id }) => String(id).includes('--surface--'))
+    expect(surfaces.length).toBeGreaterThan(0)
+    expect(surfaces.every(({ polygon }) => polygon !== undefined)).toBe(true)
+    expect(
+      surfaces.every(({ polygon }) => polygon?.outline?.getValue() === false),
+    ).toBe(true)
+    expect(
+      surfaces.every(({ polygon }) => {
+        const hierarchy: unknown = polygon?.hierarchy?.getValue()
+        return hierarchy instanceof PolygonHierarchy
+      }),
+    ).toBe(true)
+    expectColor(
+      materialColor(surfaces[0]?.polygon?.material),
+      featureColor(false).withAlpha(
+        temporalGeometryStyle.lineString.surfaceOpacity,
+      ),
+    )
+  })
+
+  it.each(['Discrete', 'Step'] as const)(
+    'renders no MovingLineString swept-surface path for %s',
+    (interpolation) => {
+      const lineFeature: MovingFeature = {
+        ...movingFeature,
+        id: 'line-no-surface',
+        temporalGeometry: {
+          segments: [
+            {
+              type: 'MovingLineString',
+              interpolation,
+              samples: [
+                {
+                  time: 0,
+                  positions: [
+                    { longitude: 0, latitude: 0 },
+                    { longitude: 2, latitude: 2 },
+                  ],
+                },
+                {
+                  time: 10,
+                  positions: [
+                    { longitude: 10, latitude: 10 },
+                    { longitude: 12, latitude: 12 },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      }
+      const entities = movingFeatureToEntities(lineFeature)
+      expect(
+        entities.filter(({ id }) => String(id).includes('--surface--')),
+      ).toEqual([])
+    },
+  )
+
+  it('renders a MovingPolygon swept-surface path with feature color and no outline', () => {
+    const polygonFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'polygon-surface',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingPolygon',
+            interpolation: 'Linear',
+            samples: [0, 10].map((time) => ({
+              time,
+              rings: [
+                [
+                  { longitude: time, latitude: 0 },
+                  { longitude: time + 4, latitude: 0 },
+                  { longitude: time + 4, latitude: 4 },
+                  { longitude: time, latitude: 0 },
+                ],
+              ],
+            })),
+          },
+        ],
+      },
+    }
+    const entities = movingFeatureToEntities(polygonFeature)
+    const surfaces = entities.filter(({ id }) => String(id).includes('--surface--'))
+    expect(surfaces.length).toBeGreaterThan(0)
+    expect(
+      surfaces.every(({ polygon }) => polygon?.outline?.getValue() === false),
+    ).toBe(true)
+    expectColor(
+      materialColor(surfaces[0]?.polygon?.material),
+      featureColor(false).withAlpha(temporalGeometryStyle.polygon.surfaceOpacity),
+    )
+  })
+
+  it.each(['Discrete', 'Step'] as const)(
+    'renders no MovingPolygon swept-surface path for %s',
+    (interpolation) => {
+      const polygonFeature: MovingFeature = {
+        ...movingFeature,
+        id: 'polygon-no-surface',
+        temporalGeometry: {
+          segments: [
+            {
+              type: 'MovingPolygon',
+              interpolation,
+              samples: [0, 10].map((time) => ({
+                time,
+                rings: [
+                  [
+                    { longitude: time, latitude: 0 },
+                    { longitude: time + 4, latitude: 0 },
+                    { longitude: time + 4, latitude: 4 },
+                    { longitude: time, latitude: 0 },
+                  ],
+                ],
+              })),
+            },
+          ],
+        },
+      }
+      const entities = movingFeatureToEntities(polygonFeature)
+      expect(
+        entities.filter(({ id }) => String(id).includes('--surface--')),
+      ).toEqual([])
+    },
+  )
+
+  it('includes swept-surface ids in movingFeatureEntityIds so the map keeps them in sync', () => {
+    const lineFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'line-ids',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingLineString',
+            interpolation: 'Linear',
+            samples: [
+              {
+                time: 0,
+                positions: [
+                  { longitude: 0, latitude: 0 },
+                  { longitude: 2, latitude: 2 },
+                ],
+              },
+              {
+                time: 10,
+                positions: [
+                  { longitude: 10, latitude: 10 },
+                  { longitude: 12, latitude: 12 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const entityIds = movingFeatureEntityIds(lineFeature)
+    const surfaceEntities = movingFeatureToEntities(lineFeature).filter(
+      ({ id }) => String(id).includes('--surface--'),
+    )
+    expect(surfaceEntities.length).toBeGreaterThan(0)
+    for (const { id } of surfaceEntities) {
+      expect(entityIds).toContain(String(id))
+    }
   })
 
   it('rejects MovingPoint geometry without samples', () => {

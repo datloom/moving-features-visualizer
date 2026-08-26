@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
+import { geometryAtTime } from './geometryAtTime'
 import {
   buildMovingPolygonBoundaryPaths,
+  buildMovingPolygonSurfaces,
   buildMovingPolygonTrail,
   movingPolygonTrailSampleTimes,
 } from './movingPolygonTrail'
@@ -60,6 +62,98 @@ describe('MovingPolygon trail', () => {
       ).toEqual([])
     },
   )
+
+  it.each(['Discrete', 'Step'] as const)(
+    'produces no connecting surface for %s',
+    (interpolation) => {
+      expect(
+        buildMovingPolygonSurfaces(polygon(interpolation, [0, 10])),
+      ).toEqual([])
+    },
+  )
+
+  it('connects the same evaluated Linear slices used by the trail into swept quads', () => {
+    const segment = polygon('Linear', [0, 10])
+    const trail = buildMovingPolygonTrail(segment)
+    const surfaces = buildMovingPolygonSurfaces(segment)
+    // Triangle boundary (3 edges) per pair of consecutive trail slices.
+    expect(surfaces).toHaveLength(3 * (trail.length - 1))
+    expect(surfaces.every(({ ringIndex }) => ringIndex === 0)).toBe(true)
+    const firstEdge = surfaces.find(
+      ({ startTime, edgeIndex }) => startTime === trail[0]!.time && edgeIndex === 0,
+    )!
+    expect(firstEdge.positions[0]).toEqual(trail[0]!.rings[0]![0])
+    expect(firstEdge.positions[1]).toEqual(trail[1]!.rings[0]![0])
+  })
+
+  it('uses nonlinear Quadratic/Cubic evaluated slices, not naive Linear motion', () => {
+    const quadratic = polygon('Quadratic', [0, 10, 0])
+    const surfaces = buildMovingPolygonSurfaces(quadratic)
+    const geometry = geometryAtTime(quadratic, 15)
+    const quadTouchingT15 = surfaces.find(
+      ({ startTime, endTime }) => startTime === 15 || endTime === 15,
+    )!
+    const vertexAtT15 =
+      quadTouchingT15.startTime === 15
+        ? quadTouchingT15.positions[0]
+        : quadTouchingT15.positions[1]
+    expect(geometry?.type).toBe('MovingPolygon')
+    expect(vertexAtT15?.longitude).toBeCloseTo(
+      geometry?.type === 'MovingPolygon' ? geometry.rings[0]![0]!.longitude : NaN,
+    )
+    // A naive Linear sweep between the raw t=0/t=10 samples would place
+    // this vertex at longitude 5; the nonlinear evaluator must not.
+    expect(vertexAtT15?.longitude).not.toBeCloseTo(5)
+  })
+
+  it('produces independent swept quads per ring for polygons with holes', () => {
+    const segment = polygon('Linear', [0, 10])
+    const withHole: MovingPolygon = {
+      ...segment,
+      samples: segment.samples.map((sample) => ({
+        ...sample,
+        rings: [
+          ...sample.rings,
+          [
+            { longitude: sample.rings[0]![0]!.longitude + 0.5, latitude: 0.5 },
+            { longitude: sample.rings[0]![0]!.longitude + 1, latitude: 0.5 },
+            { longitude: sample.rings[0]![0]!.longitude + 0.5, latitude: 1 },
+            { longitude: sample.rings[0]![0]!.longitude + 0.5, latitude: 0.5 },
+          ],
+        ],
+      })),
+    }
+    const surfaces = buildMovingPolygonSurfaces(withHole)
+    const trail = buildMovingPolygonTrail(withHole)
+    const edgesPerRing = 3 * (trail.length - 1)
+    expect(surfaces.filter(({ ringIndex }) => ringIndex === 0)).toHaveLength(
+      edgesPerRing,
+    )
+    expect(surfaces.filter(({ ringIndex }) => ringIndex === 1)).toHaveLength(
+      edgesPerRing,
+    )
+  })
+
+  it('falls back to no surface for incompatible topology', () => {
+    const segment = polygon('Linear', [0, 10])
+    const incompatible: MovingPolygon = {
+      ...segment,
+      samples: [
+        segment.samples[0]!,
+        {
+          ...segment.samples[1]!,
+          rings: [
+            [
+              ...segment.samples[1]!.rings[0]!.slice(0, -1),
+              { longitude: 11, latitude: 1 },
+              segment.samples[1]!.rings[0]![0]!,
+            ],
+          ],
+        },
+      ],
+    }
+    expect(buildMovingPolygonSurfaces(incompatible)).toEqual([])
+  })
 
   it('builds corresponding Linear boundary vertex paths', () => {
     const paths = buildMovingPolygonBoundaryPaths(polygon('Linear', [0, 10]))

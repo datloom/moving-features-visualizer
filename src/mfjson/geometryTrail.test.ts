@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildMovingLineStringSurfaces,
   buildMovingLineStringTrail,
   buildMovingPointPath,
   geometryTrailSampleTimes,
@@ -128,6 +129,87 @@ describe('temporal geometry trail preparation', () => {
       expect(trailVertex?.longitude).not.toBeCloseTo(5)
     },
   )
+
+  it.each(['Discrete', 'Step'] as const)(
+    'produces no connecting surface for %s',
+    (interpolation) => {
+      expect(buildMovingLineStringSurfaces(line(interpolation))).toEqual([])
+    },
+  )
+
+  it('connects the same evaluated Linear slices used by the trail into swept quads', () => {
+    const segment = line('Linear')
+    const surfaces = buildMovingLineStringSurfaces(segment)
+    const trail = buildMovingLineStringTrail(segment)
+    // One quad per edge (1) between every pair of consecutive trail slices.
+    expect(surfaces).toHaveLength(trail.length - 1)
+    expect(surfaces[0]).toEqual({
+      startTime: trail[0]!.time,
+      endTime: trail[1]!.time,
+      edgeIndex: 0,
+      positions: [
+        trail[0]!.positions[0],
+        trail[1]!.positions[0],
+        trail[1]!.positions[1],
+        trail[0]!.positions[1],
+      ],
+    })
+  })
+
+  it.each(['Quadratic', 'Cubic'] as const)(
+    'uses the shared %s evaluator for swept-surface quads, not naive Linear motion',
+    (interpolation: GeometryInterpolation) => {
+      const longitudes =
+        interpolation === 'Quadratic' ? [0, 10, 0] : [0, 10, 0, 20]
+      const segment: MovingLineString = {
+        type: 'MovingLineString',
+        interpolation,
+        samples: longitudes.map((longitude, index) => ({
+          time: index * 10,
+          positions: [
+            { longitude, latitude: 0 },
+            { longitude: longitude + 2, latitude: 2 },
+          ],
+        })),
+      }
+      const surfaces = buildMovingLineStringSurfaces(segment)
+      const geometry = geometryAtTime(segment, 15)
+      const quadTouchingT15 = surfaces.find(
+        ({ startTime, endTime }) => startTime === 15 || endTime === 15,
+      )!
+      const vertexAtT15 =
+        quadTouchingT15.startTime === 15
+          ? quadTouchingT15.positions[0]
+          : quadTouchingT15.positions[1]
+      expect(geometry?.type).toBe('MovingLineString')
+      expect(vertexAtT15?.longitude).toBeCloseTo(
+        geometry?.type === 'MovingLineString'
+          ? geometry.positions[0]!.longitude
+          : NaN,
+      )
+      // A naive Linear sweep between the raw t=0/t=10 samples would place
+      // this vertex at longitude 5; the nonlinear evaluator must not.
+      expect(vertexAtT15?.longitude).not.toBeCloseTo(5)
+    },
+  )
+
+  it('falls back to no surface for incompatible topology', () => {
+    const incompatible: MovingLineString = {
+      type: 'MovingLineString',
+      interpolation: 'Linear',
+      samples: [
+        {
+          time: 0,
+          positions: [
+            { longitude: 0, latitude: 0 },
+            { longitude: 1, latitude: 1 },
+          ],
+        },
+        { time: 10, positions: [{ longitude: 1, latitude: 1 }] },
+      ],
+    }
+    expect(buildMovingLineStringSurfaces(incompatible)).toEqual([])
+  })
 
   it('falls back to source LineString snapshots for incompatible topology', () => {
     const incompatible: MovingLineString = {

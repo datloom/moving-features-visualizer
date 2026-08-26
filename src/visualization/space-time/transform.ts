@@ -5,6 +5,11 @@ import {
 } from '../../mfjson/geometryTrail'
 import { movingPolygonTopologyCompatible } from '../../mfjson/movingPolygonTrail'
 import type { Position } from '../../mfjson/motionCurve'
+import {
+  buildLineStringSweptQuads,
+  buildPolygonSweptQuads,
+  type SweptSurfaceAdapter,
+} from '../../mfjson/sweptSurface'
 import type {
   GeometryInterpolation,
   MovingFeature,
@@ -371,118 +376,27 @@ const toPosition = (
   visualHeight: timestampToVisualHeight(time, extent, height, scale),
 })
 
-const sameSpatialPosition = (
-  first: SpaceTimePosition,
-  second: SpaceTimePosition,
-): boolean =>
-  first.longitude === second.longitude && first.latitude === second.latitude
-
-const ringVertices = (
-  ring: readonly SpaceTimePosition[],
-): readonly SpaceTimePosition[] => {
-  if (
-    ring.length < 3 ||
-    ring.some(
-      ({ longitude, latitude, visualHeight }) =>
-        !Number.isFinite(longitude) ||
-        !Number.isFinite(latitude) ||
-        !Number.isFinite(visualHeight),
-    )
-  )
-    return []
-  return sameSpatialPosition(ring[0]!, ring.at(-1)!) ? ring.slice(0, -1) : ring
+/**
+ * Space-Time's vertical component is temporal height rather than real
+ * altitude; this adapter lets the shared swept-surface topology in
+ * `sweptSurface.ts` operate on it without knowing that.
+ */
+const SPACE_TIME_SURFACE_ADAPTER: SweptSurfaceAdapter<SpaceTimePosition> = {
+  heightOf: (position) => position.visualHeight,
+  withHeight: (position, visualHeight) => ({ ...position, visualHeight }),
 }
-
-const compatiblePolygonSlices = (
-  first: SpaceTimePolygonSlice,
-  second: SpaceTimePolygonSlice,
-): boolean =>
-  first.rings.length > 0 &&
-  first.rings.length === second.rings.length &&
-  first.rings.every((ring, ringIndex) => {
-    const firstVertices = ringVertices(ring)
-    const secondVertices = ringVertices(second.rings[ringIndex] ?? [])
-    return (
-      firstVertices.length >= 3 &&
-      firstVertices.length === secondVertices.length
-    )
-  })
 
 const createPolygonSurfaces = (
   slices: readonly SpaceTimePolygonSlice[],
   step: boolean,
-): readonly SpaceTimePolygonSurface[] => {
-  const surfaces: SpaceTimePolygonSurface[] = []
-  for (let sliceIndex = 0; sliceIndex < slices.length - 1; sliceIndex += 1) {
-    const first = slices[sliceIndex]!
-    const second = slices[sliceIndex + 1]!
-    if (second.time <= first.time || !compatiblePolygonSlices(first, second))
-      continue
-    first.rings.forEach((ring, ringIndex) => {
-      const lower = ringVertices(ring)
-      const evaluatedUpper = ringVertices(second.rings[ringIndex]!)
-      const upperHeight = evaluatedUpper[0]!.visualHeight
-      for (let edgeIndex = 0; edgeIndex < lower.length; edgeIndex += 1) {
-        const nextIndex = (edgeIndex + 1) % lower.length
-        const lowerFirst = lower[edgeIndex]!
-        const lowerSecond = lower[nextIndex]!
-        const upperFirst = step
-          ? { ...lowerFirst, visualHeight: upperHeight }
-          : evaluatedUpper[edgeIndex]!
-        const upperSecond = step
-          ? { ...lowerSecond, visualHeight: upperHeight }
-          : evaluatedUpper[nextIndex]!
-        surfaces.push({
-          startTime: first.time,
-          endTime: second.time,
-          ringIndex,
-          edgeIndex,
-          positions: [lowerFirst, upperFirst, upperSecond, lowerSecond],
-        })
-      }
-    })
-  }
-  return surfaces
-}
+): readonly SpaceTimePolygonSurface[] =>
+  buildPolygonSweptQuads(slices, step, SPACE_TIME_SURFACE_ADAPTER)
 
 const createLineStringSurfaces = (
   slices: readonly SpaceTimeLineStringSlice[],
   step: boolean,
-): readonly SpaceTimeLineStringSurface[] => {
-  const surfaces: SpaceTimeLineStringSurface[] = []
-  for (let sliceIndex = 0; sliceIndex < slices.length - 1; sliceIndex += 1) {
-    const first = slices[sliceIndex]!
-    const second = slices[sliceIndex + 1]!
-    if (
-      second.time <= first.time ||
-      first.positions.length < 2 ||
-      first.positions.length !== second.positions.length
-    )
-      continue
-    for (
-      let edgeIndex = 0;
-      edgeIndex < first.positions.length - 1;
-      edgeIndex += 1
-    ) {
-      const lowerFirst = first.positions[edgeIndex]!
-      const lowerSecond = first.positions[edgeIndex + 1]!
-      const upperHeight = second.positions[0]!.visualHeight
-      const upperFirst = step
-        ? { ...lowerFirst, visualHeight: upperHeight }
-        : second.positions[edgeIndex]!
-      const upperSecond = step
-        ? { ...lowerSecond, visualHeight: upperHeight }
-        : second.positions[edgeIndex + 1]!
-      surfaces.push({
-        startTime: first.time,
-        endTime: second.time,
-        edgeIndex,
-        positions: [lowerFirst, upperFirst, upperSecond, lowerSecond],
-      })
-    }
-  }
-  return surfaces
-}
+): readonly SpaceTimeLineStringSurface[] =>
+  buildLineStringSweptQuads(slices, step, SPACE_TIME_SURFACE_ADAPTER)
 
 const sourcePolygonSlices = (
   segment: Extract<TemporalGeometry, { readonly type: 'MovingPolygon' }>,

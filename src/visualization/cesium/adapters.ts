@@ -14,6 +14,7 @@ import {
 
 import { geometryAtTime } from '../../mfjson/geometryAtTime'
 import {
+  buildMovingLineStringSurfaces,
   buildMovingLineStringTrail,
   buildMovingPointPath,
   geometryTrailSampleTimes,
@@ -21,6 +22,7 @@ import {
 } from '../../mfjson/geometryTrail'
 import {
   buildMovingPolygonBoundaryPaths,
+  buildMovingPolygonSurfaces,
   buildMovingPolygonTrail,
   movingPolygonTopologyCompatible,
 } from '../../mfjson/movingPolygonTrail'
@@ -54,6 +56,8 @@ export const temporalGeometryStyle = {
     selectedCurrentOpacity: 1,
     trailOpacity: 0.18,
     selectedTrailOpacity: 0.3,
+    surfaceOpacity: 0.08,
+    selectedSurfaceOpacity: 0.18,
   },
   polygon: {
     currentFillOpacity: 0.34,
@@ -69,6 +73,8 @@ export const temporalGeometryStyle = {
     selectedPathWidth: 2.5,
     pathOpacity: 0.3,
     selectedPathOpacity: 0.52,
+    surfaceOpacity: 0.1,
+    selectedSurfaceOpacity: 0.22,
   },
 } as const
 
@@ -193,6 +199,19 @@ export const geometrySegmentBoundaryPathEntityId = (
 ): string =>
   `${geometrySegmentEntityId(featureId, segment, segmentIndex)}--boundary-path--${ringIndex}--${vertexIndex}`
 
+/** Identifies one swept-surface quad connecting consecutive evaluated slices. */
+export const geometrySegmentSurfaceEntityId = (
+  featureId: string,
+  segment: TemporalGeometry,
+  segmentIndex: number,
+  startTime: Timestamp,
+  edgeIndex: number,
+  ringIndex?: number,
+): string =>
+  `${geometrySegmentEntityId(featureId, segment, segmentIndex)}--surface--${
+    ringIndex === undefined ? '' : `${ringIndex}--`
+  }${startTime}--${edgeIndex}`
+
 const ringsToPolygonHierarchy = (
   rings: readonly (readonly Pick<
     PositionSample,
@@ -232,6 +251,15 @@ export const movingFeatureEntityIds = (
         ...geometryTrailSampleTimes(segment).map((time) =>
           geometrySegmentTrailEntityId(feature.id, segment, index, time),
         ),
+        ...buildMovingLineStringSurfaces(segment).map((quad) =>
+          geometrySegmentSurfaceEntityId(
+            feature.id,
+            segment,
+            index,
+            quad.startTime,
+            quad.edgeIndex,
+          ),
+        ),
       ]
     }
     if (segment.type === 'MovingPolygon') {
@@ -252,6 +280,16 @@ export const movingFeatureEntityIds = (
               ringIndex,
               vertexIndex,
             ),
+        ),
+        ...buildMovingPolygonSurfaces(segment).map((quad) =>
+          geometrySegmentSurfaceEntityId(
+            feature.id,
+            segment,
+            index,
+            quad.startTime,
+            quad.edgeIndex,
+            quad.ringIndex,
+          ),
         ),
       ]
     }
@@ -331,6 +369,31 @@ export const movingFeatureToEntities = (
                   width: options.selected
                     ? temporalGeometryStyle.lineString.selectedTrailWidth
                     : temporalGeometryStyle.lineString.trailWidth,
+                },
+              }),
+          ),
+          ...buildMovingLineStringSurfaces(segment).map(
+            (quad) =>
+              new Entity({
+                id: geometrySegmentSurfaceEntityId(
+                  feature.id,
+                  segment,
+                  index,
+                  quad.startTime,
+                  quad.edgeIndex,
+                ),
+                name: feature.id,
+                polygon: {
+                  hierarchy: new PolygonHierarchy(
+                    quad.positions.map(coordinateToCartesian3),
+                  ),
+                  material: trailColor.withAlpha(
+                    options.selected
+                      ? temporalGeometryStyle.lineString.selectedSurfaceOpacity
+                      : temporalGeometryStyle.lineString.surfaceOpacity,
+                  ),
+                  outline: false,
+                  perPositionHeight: true,
                 },
               }),
           ),
@@ -442,6 +505,32 @@ export const movingFeatureToEntities = (
                   width: options.selected
                     ? temporalGeometryStyle.polygon.selectedPathWidth
                     : temporalGeometryStyle.polygon.pathWidth,
+                },
+              }),
+          ),
+          ...buildMovingPolygonSurfaces(segment).map(
+            (quad) =>
+              new Entity({
+                id: geometrySegmentSurfaceEntityId(
+                  feature.id,
+                  segment,
+                  index,
+                  quad.startTime,
+                  quad.edgeIndex,
+                  quad.ringIndex,
+                ),
+                name: feature.id,
+                polygon: {
+                  hierarchy: new PolygonHierarchy(
+                    quad.positions.map(coordinateToCartesian3),
+                  ),
+                  material: trailColor.withAlpha(
+                    options.selected
+                      ? temporalGeometryStyle.polygon.selectedSurfaceOpacity
+                      : temporalGeometryStyle.polygon.surfaceOpacity,
+                  ),
+                  outline: false,
+                  perPositionHeight: true,
                 },
               }),
           ),

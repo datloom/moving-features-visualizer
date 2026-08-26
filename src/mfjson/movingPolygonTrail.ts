@@ -2,8 +2,10 @@ import { geometryAtTime } from './geometryAtTime'
 import {
   geometryTrailSampleTimes,
   MAX_GEOMETRY_TRAIL_SNAPSHOTS,
+  POSITION_SURFACE_ADAPTER,
 } from './geometryTrail'
 import type { Position } from './motionCurve'
+import { buildPolygonSweptQuads, type PolygonSweptQuad } from './sweptSurface'
 import type { MovingPolygon, Timestamp } from './types'
 
 export interface MovingPolygonTrailSnapshot {
@@ -83,6 +85,30 @@ export const buildMovingPolygonTrail = (
       ? [{ time, rings: evaluated.rings }]
       : []
   })
+}
+
+/**
+ * Connects corresponding boundary edges of consecutive evaluated Polygon
+ * slices into swept-surface quads, mirroring the Space-Time temporal
+ * surface for the 2D/3D map. Only defined for continuous interpolation with
+ * compatible topology: Discrete has no connecting surface, and Step cannot
+ * be swept without implying motion it doesn't have.
+ */
+export const buildMovingPolygonSurfaces = (
+  segment: MovingPolygon,
+  maximum = MAX_POLYGON_TRAIL_SNAPSHOTS,
+): readonly PolygonSweptQuad<Position>[] => {
+  if (
+    segment.interpolation === 'Discrete' ||
+    segment.interpolation === 'Step' ||
+    !movingPolygonTopologyCompatible(segment)
+  )
+    return []
+  return buildPolygonSweptQuads(
+    buildMovingPolygonTrail(segment, maximum),
+    false,
+    POSITION_SURFACE_ADAPTER,
+  )
 }
 
 /** Transposes evaluated Polygon slices into one path per boundary vertex. */

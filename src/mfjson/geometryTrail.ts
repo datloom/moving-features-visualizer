@@ -1,11 +1,28 @@
 import { geometryAtTime } from './geometryAtTime'
 import type { Position } from './motionCurve'
+import {
+  buildLineStringSweptQuads,
+  type SweptQuad,
+  type SweptSurfaceAdapter,
+} from './sweptSurface'
 import type {
   MovingLineString,
   MovingPoint,
   TemporalGeometry,
   Timestamp,
 } from './types'
+
+/**
+ * Shared vertical-component accessor for the swept-surface topology in
+ * `sweptSurface.ts`: `Position.height` is real, optional altitude (unlike
+ * Space-Time's always-present temporal height), so positions without an
+ * altitude stay flat rather than gaining a synthetic one.
+ */
+export const POSITION_SURFACE_ADAPTER: SweptSurfaceAdapter<Position> = {
+  heightOf: (position) => position.height ?? 0,
+  withHeight: (position, height) =>
+    position.height === undefined ? position : { ...position, height },
+}
 
 const DEFAULT_SUBDIVISIONS = 4
 export const MAX_GEOMETRY_TRAIL_SNAPSHOTS = 64
@@ -108,4 +125,27 @@ export const buildMovingLineStringTrail = (
       ? [{ time, positions: evaluated.positions }]
       : []
   })
+}
+
+/**
+ * Connects corresponding edges of consecutive evaluated LineString slices
+ * into swept-surface quads, mirroring the Space-Time temporal surface for
+ * the 2D/3D map. Only defined for continuous interpolation with compatible
+ * topology: Discrete has no connecting surface, and Step cannot be swept
+ * without implying motion it doesn't have.
+ */
+export const buildMovingLineStringSurfaces = (
+  segment: MovingLineString,
+): readonly SweptQuad<Position>[] => {
+  if (
+    segment.interpolation === 'Discrete' ||
+    segment.interpolation === 'Step' ||
+    !movingLineStringTopologyCompatible(segment)
+  )
+    return []
+  return buildLineStringSweptQuads(
+    buildMovingLineStringTrail(segment),
+    false,
+    POSITION_SURFACE_ADAPTER,
+  )
 }
