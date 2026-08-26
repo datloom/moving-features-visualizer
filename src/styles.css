@@ -508,6 +508,33 @@ select {
 .visualization-mode-control {
   grid-template-columns: 42px 76px;
 }
+.time-axis-scale-control {
+  display: flex;
+  height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding-left: 9px;
+  border: 1px solid var(--border);
+  color: var(--muted-strong);
+  background: rgb(9 14 17 / 88%);
+  font-size: 0.62rem;
+  font-weight: 650;
+}
+.time-axis-scale-control select {
+  height: 30px;
+  min-width: 66px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  padding: 0 22px 0 8px;
+  color: var(--foreground);
+  background: var(--surface-elevated);
+  font: inherit;
+  cursor: pointer;
+}
+.time-axis-scale-control select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
 .space-time-legend {
   position: absolute;
   left: 14px;

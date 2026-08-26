@@ -10,7 +10,9 @@ vi.mock('./CesiumMap', () => ({
 }))
 
 vi.mock('./SpaceTimeMap', () => ({
-  SpaceTimeMap: () => <div data-testid="space-time-map" />,
+  SpaceTimeMap: ({ timeAxisScale }: { readonly timeAxisScale: string }) => (
+    <div data-testid="space-time-map">{timeAxisScale}</div>
+  ),
 }))
 
 vi.mock('../feature/SelectedFeatureInfo', () => ({
@@ -69,5 +71,11 @@ describe('MapWorkspace map mode control', () => {
     expect(
       screen.getByText('Columbus View · time-height axis'),
     ).toBeInTheDocument()
+    expect(screen.getByLabelText('Time Axis Scale')).toHaveValue('auto')
+
+    fireEvent.change(screen.getByLabelText('Time Axis Scale'), {
+      target: { value: '8' },
+    })
+    expect(screen.getByTestId('space-time-map')).toHaveTextContent('8')
   })
 })

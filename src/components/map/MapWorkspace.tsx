@@ -1,6 +1,10 @@
 import { useState } from 'react'
 
 import type { MovingFeature } from '../../mfjson/types'
+import {
+  TIME_AXIS_SCALE_VALUES,
+  type TimeAxisScale,
+} from '../../visualization/space-time/transform'
 import { SelectedFeatureInfo } from '../feature/SelectedFeatureInfo'
 import { Icon } from '../ui/Icon'
 import { CesiumMap, type MapMode } from './CesiumMap'
@@ -19,6 +23,7 @@ export function MapWorkspace({
   const [mapMode, setMapMode] = useState<MapMode>('3d')
   const [visualizationMode, setVisualizationMode] =
     useState<VisualizationMode>('map')
+  const [timeAxisScale, setTimeAxisScale] = useState<TimeAxisScale>('auto')
   return (
     <section aria-label="Primary map workspace" className="map-workspace">
       {visualizationMode === 'map' ? (
@@ -29,7 +34,7 @@ export function MapWorkspace({
           selectedFeatureId={feature.id}
         />
       ) : (
-        <SpaceTimeMap />
+        <SpaceTimeMap timeAxisScale={timeAxisScale} />
       )}
       <SelectedFeatureInfo feature={feature} />
       <div className="map-toolbar">
@@ -88,7 +93,29 @@ export function MapWorkspace({
               ))}
             </div>
           </>
-        ) : null}
+        ) : (
+          <label className="time-axis-scale-control">
+            <span>Time Axis Scale</span>
+            <select
+              aria-label="Time Axis Scale"
+              onChange={(event) => {
+                const value = event.currentTarget.value
+                const manualScale = TIME_AXIS_SCALE_VALUES.find(
+                  (scale) => String(scale) === value,
+                )
+                setTimeAxisScale(manualScale ?? 'auto')
+              }}
+              value={timeAxisScale}
+            >
+              <option value="auto">Auto</option>
+              {TIME_AXIS_SCALE_VALUES.map((scale) => (
+                <option key={scale} value={scale}>
+                  {scale}×
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       <div className="map-attribution">
         {visualizationMode === 'map'

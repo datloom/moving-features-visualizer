@@ -10,6 +10,13 @@ import type {
 
 export const DEFAULT_TIME_AXIS_HEIGHT = 100_000
 export const DEFAULT_TIME_TICK_COUNT = 6
+export const TIME_AXIS_SCALE_VALUES = [1, 2, 4, 8, 16] as const
+export type ManualTimeAxisScale = (typeof TIME_AXIS_SCALE_VALUES)[number]
+export type TimeAxisScale = 'auto' | ManualTimeAxisScale
+
+const EARTH_RADIUS_METERS = 6_371_008.8
+const AUTO_GEOMETRY_SEPARATION_RATIO = 0.15
+const AUTO_MINIMUM_SLICE_SEPARATION_METERS = 5_000
 
 export interface TemporalExtent {
   readonly minTime: Timestamp
@@ -144,19 +151,37 @@ export const timestampToVisualHeight = (
   timestamp: Timestamp,
   extent: TemporalExtent,
   timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+  timeAxisScale = 1,
 ): number => {
   requireFinite(timestamp, 'timestamp')
   requireFinite(extent.minTime, 'minTime')
   requireFinite(extent.maxTime, 'maxTime')
   requireFinite(timeAxisHeight, 'timeAxisHeight')
+  requireFinite(timeAxisScale, 'timeAxisScale')
   if (timeAxisHeight < 0)
     throw new RangeError('timeAxisHeight must not be negative.')
+  if (timeAxisScale < 1)
+    throw new RangeError('timeAxisScale must be at least 1.')
   if (extent.minTime > extent.maxTime)
     throw new RangeError('minTime must not exceed maxTime.')
   return extent.minTime === extent.maxTime
     ? 0
     : ((timestamp - extent.minTime) / (extent.maxTime - extent.minTime)) *
-        timeAxisHeight
+        timeAxisHeight *
+        timeAxisScale
+}
+
+export const scaledTimeAxisHeight = (
+  timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+  timeAxisScale = 1,
+): number => {
+  requireFinite(timeAxisHeight, 'timeAxisHeight')
+  requireFinite(timeAxisScale, 'timeAxisScale')
+  if (timeAxisHeight < 0)
+    throw new RangeError('timeAxisHeight must not be negative.')
+  if (timeAxisScale < 1)
+    throw new RangeError('timeAxisScale must be at least 1.')
+  return timeAxisHeight * timeAxisScale
 }
 
 export const formatUtcTick = (
@@ -177,6 +202,7 @@ export const generateTimeTicks = (
   extent: TemporalExtent,
   tickCount = DEFAULT_TIME_TICK_COUNT,
   timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+  timeAxisScale = 1,
 ): readonly TimeTick[] => {
   if (!Number.isInteger(tickCount) || tickCount < 2)
     throw new RangeError('tickCount must be an integer of at least 2.')
@@ -195,21 +221,125 @@ export const generateTimeTicks = (
     return {
       ratio,
       time,
-      height: timestampToVisualHeight(time, extent, timeAxisHeight),
+      height: timestampToVisualHeight(
+        time,
+        extent,
+        timeAxisHeight,
+        timeAxisScale,
+      ),
       label: formatUtcTick(time, extent),
     }
   })
 }
+
+const toEarthCartesian = (
+  position: Position,
+): readonly [number, number, number] => {
+  const longitude = (position.longitude * Math.PI) / 180
+  const latitude = (position.latitude * Math.PI) / 180
+  const latitudeRadius = EARTH_RADIUS_METERS * Math.cos(latitude)
+  return [
+    latitudeRadius * Math.cos(longitude),
+    latitudeRadius * Math.sin(longitude),
+    EARTH_RADIUS_METERS * Math.sin(latitude),
+  ]
+}
+
+const geometrySamplePositions = (
+  segment: TemporalGeometry,
+  sampleIndex: number,
+): readonly Position[] => {
+  const sample = segment.samples[sampleIndex]
+  if (!sample) return []
+  if (segment.type === 'MovingPoint') return [segment.samples[sampleIndex]!]
+  if (segment.type === 'MovingLineString')
+    return segment.samples[sampleIndex]!.positions
+  return segment.samples[sampleIndex]!.rings.flat()
+}
+
+const geometrySizeMeters = (positions: readonly Position[]): number => {
+  if (positions.length < 2) return 0
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  for (const position of positions) {
+    const [x, y, z] = toEarthCartesian(position)
+    minX = Math.min(minX, x)
+    minY = Math.min(minY, y)
+    minZ = Math.min(minZ, z)
+    maxX = Math.max(maxX, x)
+    maxY = Math.max(maxY, y)
+    maxZ = Math.max(maxZ, z)
+  }
+  return Math.hypot(maxX - minX, maxY - minY, maxZ - minZ)
+}
+
+const nextSupportedScale = (minimum: number): ManualTimeAxisScale =>
+  TIME_AXIS_SCALE_VALUES.find((scale) => scale >= minimum) ?? 16
+
+/**
+ * Chooses enough vertical separation for the densest rendered LineString or
+ * Polygon slices. Geometry size is measured in Earth-centered meters so it is
+ * comparable with Cesium height; MovingPoint alone therefore remains at 1x.
+ */
+export const calculateAutoTimeAxisScale = (
+  features: readonly MovingFeature[],
+  extent: TemporalExtent,
+  timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+): ManualTimeAxisScale => {
+  const duration = extent.maxTime - extent.minTime
+  if (!(duration > 0) || !(timeAxisHeight > 0)) return 1
+  let requiredScale = 1
+  for (const feature of features) {
+    for (const segment of feature.temporalGeometry.segments) {
+      if (segment.type === 'MovingPoint' || segment.samples.length < 2) continue
+      const sampleSizes = segment.samples.map((_, index) =>
+        geometrySizeMeters(geometrySamplePositions(segment, index)),
+      )
+      const averageSize =
+        sampleSizes.reduce((total, size) => total + size, 0) /
+        sampleSizes.length
+      const displayTimes = geometryTrailSampleTimes(segment)
+      let minimumGap = Number.POSITIVE_INFINITY
+      for (let index = 1; index < displayTimes.length; index += 1) {
+        const gap = displayTimes[index]! - displayTimes[index - 1]!
+        if (gap > 0) minimumGap = Math.min(minimumGap, gap)
+      }
+      if (!Number.isFinite(minimumGap)) continue
+      const unscaledGap = (minimumGap / duration) * timeAxisHeight
+      const desiredGap = Math.max(
+        AUTO_MINIMUM_SLICE_SEPARATION_METERS,
+        averageSize * AUTO_GEOMETRY_SEPARATION_RATIO,
+      )
+      requiredScale = Math.max(requiredScale, desiredGap / unscaledGap)
+    }
+  }
+  return nextSupportedScale(requiredScale)
+}
+
+export const resolveTimeAxisScale = (
+  scale: TimeAxisScale,
+  features: readonly MovingFeature[],
+  extent: TemporalExtent,
+  timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+): ManualTimeAxisScale =>
+  scale === 'auto'
+    ? calculateAutoTimeAxisScale(features, extent, timeAxisHeight)
+    : scale
 
 const toPosition = (
   position: Position,
   time: Timestamp,
   extent: TemporalExtent,
   height: number,
+  scale: number,
 ): SpaceTimePosition => ({
   longitude: position.longitude,
   latitude: position.latitude,
-  visualHeight: timestampToVisualHeight(time, extent, height),
+  visualHeight: timestampToVisualHeight(time, extent, height, scale),
 })
 
 const transformSegment = (
@@ -217,12 +347,13 @@ const transformSegment = (
   segmentIndex: number,
   extent: TemporalExtent,
   height: number,
+  scale: number,
 ): SpaceTimeSegment => {
   const times = geometryTrailSampleTimes(segment)
   if (segment.type === 'MovingPoint') {
     const points = segment.samples.map((sample) => ({
       time: sample.time,
-      ...toPosition(sample, sample.time, extent, height),
+      ...toPosition(sample, sample.time, extent, height, scale),
     }))
     if (segment.interpolation === 'Discrete')
       return {
@@ -238,20 +369,19 @@ const transformSegment = (
         interpolation: segment.interpolation,
         segmentIndex,
         points,
-        paths: segment.samples
-          .slice(0, -1)
-          .map((sample, index) => [
-            points[index]!,
-            {
-              time: segment.samples[index + 1]!.time,
-              ...toPosition(
-                sample,
-                segment.samples[index + 1]!.time,
-                extent,
-                height,
-              ),
-            },
-          ]),
+        paths: segment.samples.slice(0, -1).map((sample, index) => [
+          points[index]!,
+          {
+            time: segment.samples[index + 1]!.time,
+            ...toPosition(
+              sample,
+              segment.samples[index + 1]!.time,
+              extent,
+              height,
+              scale,
+            ),
+          },
+        ]),
       }
     return {
       type: segment.type,
@@ -265,7 +395,13 @@ const transformSegment = (
             ? [
                 {
                   time,
-                  ...toPosition(evaluated.position, time, extent, height),
+                  ...toPosition(
+                    evaluated.position,
+                    time,
+                    extent,
+                    height,
+                    scale,
+                  ),
                 },
               ]
             : []
@@ -285,7 +421,7 @@ const transformSegment = (
               {
                 time,
                 positions: evaluated.positions.map((position) =>
-                  toPosition(position, time, extent, height),
+                  toPosition(position, time, extent, height, scale),
                 ),
               },
             ]
@@ -304,7 +440,7 @@ const transformSegment = (
               time,
               rings: evaluated.rings.map((ring) =>
                 ring.map((position) =>
-                  toPosition(position, time, extent, height),
+                  toPosition(position, time, extent, height, scale),
                 ),
               ),
             },
@@ -318,11 +454,12 @@ export const transformSpaceTimeFeatures = (
   features: readonly MovingFeature[],
   extent: TemporalExtent,
   timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+  timeAxisScale = 1,
 ): readonly SpaceTimeFeature[] =>
   features.map((feature) => ({
     id: feature.id,
     segments: feature.temporalGeometry.segments.map((segment, index) =>
-      transformSegment(segment, index, extent, timeAxisHeight),
+      transformSegment(segment, index, extent, timeAxisHeight, timeAxisScale),
     ),
   }))
 
@@ -331,6 +468,7 @@ export const getSpaceTimeGeometryAtTime = (
   time: Timestamp,
   extent: TemporalExtent,
   timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+  timeAxisScale = 1,
 ) => {
   requireFinite(time, 'timestamp')
   const evaluated = geometryAtTime(segment, time)
@@ -338,20 +476,26 @@ export const getSpaceTimeGeometryAtTime = (
   if (evaluated.type === 'MovingPoint')
     return {
       type: evaluated.type,
-      position: toPosition(evaluated.position, time, extent, timeAxisHeight),
+      position: toPosition(
+        evaluated.position,
+        time,
+        extent,
+        timeAxisHeight,
+        timeAxisScale,
+      ),
     } as const
   if (evaluated.type === 'MovingLineString')
     return {
       type: evaluated.type,
       positions: evaluated.positions.map((position) =>
-        toPosition(position, time, extent, timeAxisHeight),
+        toPosition(position, time, extent, timeAxisHeight, timeAxisScale),
       ),
     } as const
   return {
     type: evaluated.type,
     rings: evaluated.rings.map((ring) =>
       ring.map((position) =>
-        toPosition(position, time, extent, timeAxisHeight),
+        toPosition(position, time, extent, timeAxisHeight, timeAxisScale),
       ),
     ),
   } as const
@@ -363,6 +507,7 @@ export const getSpaceTimePositionAtTime = (
   time: Timestamp,
   extent: TemporalExtent,
   timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+  timeAxisScale = 1,
 ): SpaceTimeSample | undefined => {
   for (const segment of feature.temporalGeometry.segments) {
     if (segment.type !== 'MovingPoint') continue
@@ -371,6 +516,7 @@ export const getSpaceTimePositionAtTime = (
       time,
       extent,
       timeAxisHeight,
+      timeAxisScale,
     )
     if (evaluated?.type === 'MovingPoint')
       return { time, ...evaluated.position }

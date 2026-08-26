@@ -22,6 +22,7 @@ import {
   generateTimeTicks,
   getSpaceTimeGeometryAtTime,
   getSpatialExtent,
+  scaledTimeAxisHeight,
   transformSpaceTimeFeatures,
   type SpaceTimePosition,
   type TemporalExtent,
@@ -35,6 +36,7 @@ const OUTLINE = Color.fromCssColorString('#090d10')
 
 export interface SpaceTimeCesiumOptions {
   readonly timeAxisHeight?: number
+  readonly timeAxisScale?: number
   readonly tickCount?: number
   readonly selectedFeatureId?: string
   readonly currentTime?: number
@@ -135,6 +137,7 @@ export const updateCurrentSpaceTimeEntities = (
   currentTime: Timestamp,
   temporalExtent: TemporalExtent,
   timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+  timeAxisScale = 1,
 ): void => {
   for (const { entity, segment } of bindings) {
     const evaluated = getSpaceTimeGeometryAtTime(
@@ -142,6 +145,7 @@ export const updateCurrentSpaceTimeEntities = (
       currentTime,
       temporalExtent,
       timeAxisHeight,
+      timeAxisScale,
     )
     entity.show = evaluated !== undefined
     if (!evaluated) continue
@@ -167,11 +171,13 @@ export const buildSpaceTimeCesiumEntities = (
   options: SpaceTimeCesiumOptions = {},
 ): SpaceTimeCesiumEntities => {
   const timeAxisHeight = options.timeAxisHeight ?? DEFAULT_TIME_AXIS_HEIGHT
+  const timeAxisScale = options.timeAxisScale ?? 1
   const tickCount = options.tickCount ?? DEFAULT_TIME_TICK_COUNT
   const transformed = transformSpaceTimeFeatures(
     features,
     temporalExtent,
     timeAxisHeight,
+    timeAxisScale,
   )
   const entities: Entity[] = []
   const currentGeometryEntities: CurrentSpaceTimeEntity[] = []
@@ -288,6 +294,7 @@ export const buildSpaceTimeCesiumEntities = (
       options.currentTime,
       temporalExtent,
       timeAxisHeight,
+      timeAxisScale,
     )
 
   const spatialExtent = getSpatialExtent(features)
@@ -303,7 +310,13 @@ export const buildSpaceTimeCesiumEntities = (
   )
   const axisLongitude = spatialExtent.minLongitude - longitudePadding
   const axisLatitude = spatialExtent.minLatitude - latitudePadding
-  const ticks = generateTimeTicks(temporalExtent, tickCount, timeAxisHeight)
+  const visualAxisHeight = scaledTimeAxisHeight(timeAxisHeight, timeAxisScale)
+  const ticks = generateTimeTicks(
+    temporalExtent,
+    tickCount,
+    timeAxisHeight,
+    timeAxisScale,
+  )
 
   entities.push(
     new Entity({
@@ -311,7 +324,7 @@ export const buildSpaceTimeCesiumEntities = (
       polyline: {
         positions: [
           Cartesian3.fromDegrees(axisLongitude, axisLatitude, 0),
-          Cartesian3.fromDegrees(axisLongitude, axisLatitude, timeAxisHeight),
+          Cartesian3.fromDegrees(axisLongitude, axisLatitude, visualAxisHeight),
         ],
         width: 2,
         material: AXIS,

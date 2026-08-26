@@ -18,6 +18,8 @@ import {
   DEFAULT_TIME_AXIS_HEIGHT,
   DEFAULT_TIME_TICK_COUNT,
   resolveTemporalExtent,
+  resolveTimeAxisScale,
+  type TimeAxisScale,
 } from '../../visualization/space-time/transform'
 
 const OPEN_STREET_MAP_URL = 'https://tile.openstreetmap.org/'
@@ -25,11 +27,13 @@ const OPEN_STREET_MAP_URL = 'https://tile.openstreetmap.org/'
 export interface SpaceTimeMapProps {
   readonly tickCount?: number
   readonly timeAxisHeight?: number
+  readonly timeAxisScale?: TimeAxisScale
 }
 
 export function SpaceTimeMap({
   tickCount = DEFAULT_TIME_TICK_COUNT,
   timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+  timeAxisScale = 'auto',
 }: SpaceTimeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
@@ -49,6 +53,18 @@ export function SpaceTimeMap({
     [endTime, features, startTime],
   )
   const hasTemporalExtent = temporalExtent !== undefined
+  const effectiveTimeAxisScale = useMemo(
+    () =>
+      temporalExtent
+        ? resolveTimeAxisScale(
+            timeAxisScale,
+            features,
+            temporalExtent,
+            timeAxisHeight,
+          )
+        : 1,
+    [features, temporalExtent, timeAxisHeight, timeAxisScale],
+  )
 
   useEffect(() => {
     if (!hasTemporalExtent) return
@@ -92,6 +108,7 @@ export function SpaceTimeMap({
       selectedFeatureId,
       tickCount,
       timeAxisHeight,
+      timeAxisScale: effectiveTimeAxisScale,
     })
     const entities = collection.entities.map((entity) =>
       viewer.entities.add(entity),
@@ -107,7 +124,14 @@ export function SpaceTimeMap({
       entitiesRef.current = []
       currentEntitiesRef.current = []
     }
-  }, [features, selectedFeatureId, temporalExtent, tickCount, timeAxisHeight])
+  }, [
+    effectiveTimeAxisScale,
+    features,
+    selectedFeatureId,
+    temporalExtent,
+    tickCount,
+    timeAxisHeight,
+  ])
 
   useEffect(() => {
     if (!temporalExtent) return
@@ -118,9 +142,10 @@ export function SpaceTimeMap({
         state.currentTime,
         temporalExtent,
         timeAxisHeight,
+        effectiveTimeAxisScale,
       )
     })
-  }, [features, temporalExtent, timeAxisHeight])
+  }, [effectiveTimeAxisScale, temporalExtent, timeAxisHeight])
 
   if (!temporalExtent) {
     return (
@@ -141,6 +166,12 @@ export function SpaceTimeMap({
       <div className="space-time-legend">
         <strong>Space-Time</strong>
         <span>Vertical axis: UTC time</span>
+        <span>
+          Time scale:{' '}
+          {timeAxisScale === 'auto'
+            ? `Auto (${effectiveTimeAxisScale}×)`
+            : `${effectiveTimeAxisScale}×`}
+        </span>
       </div>
       {imageryFailed ? (
         <div className="map-imagery-error" role="status">

@@ -105,8 +105,8 @@ describe('SpaceTimeMap', () => {
     vi.clearAllMocks()
   })
 
-  it('creates a Columbus View Viewer with OpenStreetMap and destroys it', () => {
-    const { container, unmount } = render(<SpaceTimeMap />)
+  it('creates a Columbus View Viewer and applies reactive time-axis scale', () => {
+    const { container, rerender, unmount } = render(<SpaceTimeMap />)
 
     expect(Viewer).toHaveBeenCalledWith(
       container.querySelector('.cesium-map'),
@@ -124,6 +124,16 @@ describe('SpaceTimeMap', () => {
       expect.objectContaining({ tickCount: 6 }),
     )
     expect(screen.getByText('Vertical axis: UTC time')).toBeInTheDocument()
+    expect(screen.getByText('Time scale: Auto (1×)')).toBeInTheDocument()
+
+    rerender(<SpaceTimeMap timeAxisScale={4} />)
+    expect(buildEntities).toHaveBeenLastCalledWith(
+      [feature],
+      { minTime: 1_000, maxTime: 2_000 },
+      expect.objectContaining({ timeAxisScale: 4 }),
+    )
+    expect(screen.getByText('Time scale: 4×')).toBeInTheDocument()
+    expect(Viewer).toHaveBeenCalledOnce()
 
     unmount()
     expect(removeImageryErrorListener).toHaveBeenCalledOnce()

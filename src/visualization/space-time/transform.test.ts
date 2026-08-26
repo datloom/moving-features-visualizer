@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { MovingFeature } from '../../mfjson/types'
 import {
+  calculateAutoTimeAxisScale,
   generateTimeTicks,
   getSpaceTimePositionAtTime,
   getTemporalExtent,
@@ -36,6 +37,80 @@ describe('Space-Time transformation', () => {
     expect(timestampToVisualHeight(1_000, extent, 500)).toBe(0)
     expect(timestampToVisualHeight(2_000, extent, 500)).toBe(250)
     expect(timestampToVisualHeight(3_000, extent, 500)).toBe(500)
+  })
+
+  it('scales the complete axis while preserving irregular elapsed-time ratios', () => {
+    const irregularExtent = { minTime: 0, maxTime: 7 * 60 * 60 * 1_000 }
+    const oneHour = timestampToVisualHeight(
+      60 * 60 * 1_000,
+      irregularExtent,
+      100,
+      4,
+    )
+    const sevenHours = timestampToVisualHeight(
+      irregularExtent.maxTime,
+      irregularExtent,
+      100,
+      4,
+    )
+    expect(timestampToVisualHeight(0, irregularExtent, 100, 4)).toBe(0)
+    expect(sevenHours).toBe(400)
+    expect(oneHour).toBeCloseTo(400 / 7)
+    expect(sevenHours - oneHour).toBeCloseTo(oneHour * 6)
+  })
+
+  it('keeps MovingPoint Auto scale conservative and expands a dense large Cubic Polygon', () => {
+    expect(
+      calculateAutoTimeAxisScale([feature('point', [[0, 1]])], {
+        minTime: 0,
+        maxTime: 1,
+      }),
+    ).toBe(1)
+
+    const interval = 6 * 60 * 60 * 1_000
+    const polygon: MovingFeature = {
+      ...feature('typhoon-like', []),
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingPolygon',
+            interpolation: 'Cubic',
+            samples: Array.from({ length: 25 }, (_, index) => ({
+              time: index * interval,
+              rings: [
+                [
+                  { longitude: 130 + index * 0.1, latitude: 20 },
+                  { longitude: 134 + index * 0.1, latitude: 20 },
+                  { longitude: 134 + index * 0.1, latitude: 24 },
+                  { longitude: 130 + index * 0.1, latitude: 20 },
+                ],
+              ],
+            })),
+          },
+        ],
+      },
+    }
+    expect(
+      calculateAutoTimeAxisScale(
+        [polygon],
+        { minTime: 0, maxTime: 24 * interval },
+        100_000,
+      ),
+    ).toBe(16)
+    const transformed = transformSpaceTimeFeatures(
+      [polygon],
+      { minTime: 0, maxTime: 24 * interval },
+      100_000,
+      16,
+    )[0]?.segments[0]
+    expect(transformed?.type).toBe('MovingPolygon')
+    if (transformed?.type !== 'MovingPolygon')
+      throw new Error('Expected polygon')
+    expect(transformed.slices.at(-1)?.rings[0]?.[0]).toMatchObject({
+      longitude: 132.4,
+      latitude: 20,
+      visualHeight: 1_600_000,
+    })
   })
 
   it('generates evenly spaced ticks including min and max', () => {
