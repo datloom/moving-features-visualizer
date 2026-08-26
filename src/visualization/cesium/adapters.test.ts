@@ -1,4 +1,10 @@
-import { Cartesian3, Color, JulianDate, PolygonHierarchy } from 'cesium'
+import {
+  Cartesian3,
+  Color,
+  JulianDate,
+  PolygonHierarchy,
+  PolylineOutlineMaterialProperty,
+} from 'cesium'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -868,6 +874,93 @@ describe('Cesium adapters', () => {
       ),
     ).toEqual([])
   })
+
+  it.each(['Discrete', 'Step'] as const)(
+    'renders no outline on MovingLineString/MovingPolygon %s trail snapshots, only on the current geometry',
+    (interpolation) => {
+      const lineFeature: MovingFeature = {
+        ...movingFeature,
+        id: 'line-source-sample-outline',
+        temporalGeometry: {
+          segments: [
+            {
+              type: 'MovingLineString',
+              interpolation,
+              samples: [
+                {
+                  time: 0,
+                  positions: [
+                    { longitude: 0, latitude: 0 },
+                    { longitude: 2, latitude: 2 },
+                  ],
+                },
+                {
+                  time: 10,
+                  positions: [
+                    { longitude: 10, latitude: 10 },
+                    { longitude: 12, latitude: 12 },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      }
+      const lineTrail = movingFeatureToEntities(lineFeature).find(({ id }) =>
+        String(id).includes('--trail--'),
+      )!
+      // A source-sample trail snapshot must use a plain color material, never
+      // a PolylineOutlineMaterialProperty — the rendering role is TRAIL, not
+      // dependent on the snapshot landing exactly on an MF-JSON timestamp.
+      expect(lineTrail.polyline?.material).not.toBeInstanceOf(
+        PolylineOutlineMaterialProperty,
+      )
+
+      const polygonFeature: MovingFeature = {
+        ...movingFeature,
+        id: 'polygon-source-sample-outline',
+        temporalGeometry: {
+          segments: [
+            {
+              type: 'MovingPolygon',
+              interpolation,
+              samples: [0, 10].map((time) => ({
+                time,
+                rings: [
+                  [
+                    { longitude: time, latitude: 0 },
+                    { longitude: time + 4, latitude: 0 },
+                    { longitude: time + 4, latitude: 4 },
+                    { longitude: time, latitude: 0 },
+                  ],
+                ],
+              })),
+            },
+          ],
+        },
+      }
+      const polygonTrail = movingFeatureToEntities(polygonFeature).find(
+        ({ id }) => String(id).includes('--trail--'),
+      )!
+      expect(polygonTrail.polygon?.outline?.getValue()).toBe(false)
+
+      // The current geometry must remain unaffected: still red, and (for
+      // MovingPolygon) still governed by its own dedicated outline ring.
+      const currentLine = movingFeatureToEntities(lineFeature)[0]!
+      expect(
+        materialColor(currentLine.polyline?.material) instanceof Color,
+      ).toBe(true)
+      const currentPolygonOutline = movingFeatureToEntities(
+        polygonFeature,
+      ).find(({ id }) => String(id).includes('--outline--'))!
+      expectColor(
+        materialColor(currentPolygonOutline.polyline?.material),
+        CURRENT_OBJECT_COLOR.withAlpha(
+          temporalGeometryStyle.polygon.currentOutlineOpacity,
+        ),
+      )
+    },
+  )
 
   it('rejects MovingPoint geometry without samples', () => {
     const emptyFeature: MovingFeature = {

@@ -4,6 +4,7 @@ import {
   Color,
   JulianDate,
   PolygonHierarchy,
+  PolylineOutlineMaterialProperty,
 } from 'cesium'
 import { describe, expect, it } from 'vitest'
 
@@ -492,4 +493,74 @@ describe('Space-Time Cesium adapter', () => {
 
     expect(readHierarchy().holes).toEqual([])
   })
+
+  it.each(['Discrete', 'Step'] as const)(
+    'renders no outline on MovingLineString/MovingPolygon %s trail slices, only on the current geometry',
+    (interpolation) => {
+      const geometries: MovingFeature = {
+        id: 'source-sample-outline',
+        type: 'MovingFeature',
+        temporalGeometry: {
+          segments: [
+            {
+              type: 'MovingLineString',
+              interpolation,
+              samples: [0, 10].map((time) => ({
+                time,
+                positions: [
+                  { longitude: time, latitude: 0 },
+                  { longitude: time + 1, latitude: 1 },
+                ],
+              })),
+            },
+            {
+              type: 'MovingPolygon',
+              interpolation,
+              samples: [0, 10].map((time) => ({
+                time,
+                rings: [
+                  [
+                    { longitude: time, latitude: 0 },
+                    { longitude: time + 1, latitude: 0 },
+                    { longitude: time + 1, latitude: 1 },
+                    { longitude: time, latitude: 0 },
+                  ],
+                ],
+              })),
+            },
+          ],
+        },
+        temporalProperties: [],
+        properties: {},
+      }
+      const result = buildSpaceTimeCesiumEntities(
+        [geometries],
+        { minTime: 0, maxTime: 10 },
+        { selectedFeatureId: geometries.id },
+      )
+      const lineSlice = result.entities.find(
+        ({ id }) => id.includes(':segment:0:slice:'),
+      )!
+      // A source-sample slice must use a plain color material, never a
+      // PolylineOutlineMaterialProperty — the rendering role is TRAIL, not
+      // dependent on the slice landing exactly on an MF-JSON timestamp.
+      expect(lineSlice.polyline?.material).not.toBeInstanceOf(
+        PolylineOutlineMaterialProperty,
+      )
+      const polygonSlice = result.entities.find(
+        ({ id }) => id.includes(':segment:1:slice:'),
+      )!
+      expect(polygonSlice.polygon?.outline?.getValue()).toBe(false)
+
+      // The current geometry remains unaffected: still outlined in red.
+      const [, currentPolygon] = result.currentGeometryEntities.map(
+        ({ entity }) => entity,
+      )
+      expect(currentPolygon?.polygon?.outline?.getValue()).toBe(true)
+      expectColor(
+        currentPolygon?.polygon?.outlineColor?.getValue(JulianDate.now()),
+        CURRENT_OBJECT_COLOR,
+      )
+    },
+  )
 })
