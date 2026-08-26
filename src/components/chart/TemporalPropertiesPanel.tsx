@@ -58,7 +58,7 @@ export function TemporalPropertiesPanel({
     () =>
       selectedFeature.temporalProperties.filter(
         (property): property is ImageTemporalProperty =>
-          property.type === 'IMAGE',
+          property.type === 'Image',
       ),
     [selectedFeature],
   )
@@ -115,7 +115,7 @@ export function TemporalPropertiesPanel({
         (name) => ({ key: `Text:${name}`, name, type: 'Text' as const }),
       ),
       ...[...new Set(imageProperties.map((property) => property.name))].map(
-        (name) => ({ key: `IMAGE:${name}`, name, type: 'IMAGE' as const }),
+        (name) => ({ key: `Image:${name}`, name, type: 'Image' as const }),
       ),
     ],
     [imageProperties, logicalMeasureProperties, textProperties],
@@ -151,8 +151,8 @@ export function TemporalPropertiesPanel({
     () =>
       new Set(
         [...selectedPropertyKeys]
-          .filter((key) => key.startsWith('IMAGE:'))
-          .map((key) => key.slice('IMAGE:'.length)),
+          .filter((key) => key.startsWith('Image:'))
+          .map((key) => key.slice('Image:'.length)),
       ),
     [selectedPropertyKeys],
   )
@@ -224,7 +224,7 @@ export function TemporalPropertiesPanel({
       })),
       ...selectedImageProperties.map(({ name, segments }) => ({
         key: `image:${name}`,
-        propertyKeys: [`IMAGE:${name}`],
+        propertyKeys: [`Image:${name}`],
         kind: 'image' as const,
         name,
         segments,

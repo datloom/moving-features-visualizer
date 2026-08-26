@@ -5,6 +5,7 @@ import {
   normalizeGeometryInterpolation,
 } from './geometryInterpolation'
 import { normalizeImageSource } from './imageSource'
+import { normalizeTemporalPropertyType } from './temporalPropertyType'
 
 const recordSchema = z.record(z.string(), z.unknown())
 
@@ -493,18 +494,15 @@ const validatePropertyDefinition = (
     return
   }
 
-  const propertyType = value.type
-  if (
-    propertyType !== 'Measure' &&
-    propertyType !== 'Text' &&
-    propertyType !== 'IMAGE'
-  ) {
+  const rawType = value.type
+  const propertyType = normalizeTemporalPropertyType(rawType)
+  if (propertyType === undefined) {
     addIssue(context, {
       path: `${path}.type`,
-      code: propertyType === undefined ? 'required' : 'unsupported_value',
-      message: 'Temporal property type must be Measure, Text, or IMAGE.',
-      expected: ['Measure', 'Text', 'IMAGE'],
-      actual: propertyType,
+      code: rawType === undefined ? 'required' : 'unsupported_value',
+      message: 'Temporal property type must be Measure, Text, or Image.',
+      expected: ['Measure', 'Text', 'Image'],
+      actual: rawType,
     })
   }
 
@@ -581,14 +579,14 @@ const validatePropertyDefinition = (
       (propertyType === 'Measure' &&
         typeof propertyValue === 'number' &&
         Number.isFinite(propertyValue)) ||
-      ((propertyType === 'Text' || propertyType === 'IMAGE') &&
+      ((propertyType === 'Text' || propertyType === 'Image') &&
         typeof propertyValue === 'string')
 
     if (
       !hasValidType &&
       (propertyType === 'Measure' ||
         propertyType === 'Text' ||
-        propertyType === 'IMAGE')
+        propertyType === 'Image')
     ) {
       addIssue(context, {
         path: `${path}.values[${index}]`,
@@ -601,7 +599,7 @@ const validatePropertyDefinition = (
     }
 
     if (
-      propertyType === 'IMAGE' &&
+      propertyType === 'Image' &&
       typeof propertyValue === 'string' &&
       normalizeImageSource(propertyValue) === undefined
     ) {
@@ -609,8 +607,9 @@ const validatePropertyDefinition = (
         path: `${path}.values[${index}]`,
         code: 'invalid_value',
         message:
-          'An IMAGE value must be an http(s) URL or a data:image/... URL.',
-        expected: 'http(s) URL or data:image/... URL',
+          'An Image value must be an http(s) URL, a data:image/... URL, or a raw base64 image payload.',
+        expected:
+          'http(s) URL, data:image/... URL, or raw base64 image payload',
         actual: propertyValue,
       })
     }

@@ -132,7 +132,7 @@ describe('normalizeTemporalProperties', () => {
         data: [
           {
             name: 'camera',
-            type: 'IMAGE',
+            type: 'Image',
             interpolation,
             form: 'https://example.test/camera',
             samples: [{ time: Date.parse('2026-08-21T10:00:01Z'), value }],
@@ -141,6 +141,45 @@ describe('normalizeTemporalProperties', () => {
       })
     },
   )
+
+  it('converts raw base64 Image values to data URLs, one flat sample per datetime', () => {
+    const first = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7'
+    const second = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA8'
+    const result = normalizeTemporalProperties(
+      featureWith([
+        {
+          datetimes: ['2026-08-21T10:00:01Z', '2026-08-21T10:00:02Z'],
+          camera: {
+            type: 'IMAGE',
+            values: [first, second],
+            interpolation: 'Discrete',
+          },
+        },
+      ]),
+    )
+
+    expect(result).toEqual({
+      success: true,
+      data: [
+        {
+          name: 'camera',
+          type: 'Image',
+          interpolation: 'Discrete',
+          form: undefined,
+          samples: [
+            {
+              time: Date.parse('2026-08-21T10:00:01Z'),
+              value: `data:image/gif;base64,${first}`,
+            },
+            {
+              time: Date.parse('2026-08-21T10:00:02Z'),
+              value: `data:image/gif;base64,${second}`,
+            },
+          ],
+        },
+      ],
+    })
+  })
 
   it('normalizes multiple properties from one group', () => {
     const result = normalizeTemporalProperties(

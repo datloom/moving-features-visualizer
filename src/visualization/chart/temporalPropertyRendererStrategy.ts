@@ -73,7 +73,7 @@ export const getPropertyRendererStrategy = (
         interpolationBehavior: textBehavior(property),
         renderable: true,
       }
-    case 'IMAGE':
+    case 'Image':
       return {
         renderer: 'image-viewer',
         property,

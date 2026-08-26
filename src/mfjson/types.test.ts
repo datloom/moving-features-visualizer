@@ -53,9 +53,9 @@ describe('Moving Feature domain model', () => {
     >()
   })
 
-  it('represents IMAGE values as opaque timestamped strings', () => {
+  it('represents Image values as opaque timestamped strings', () => {
     const image = {
-      type: 'IMAGE',
+      type: 'Image',
       name: 'camera',
       interpolation: 'Step',
       samples: [

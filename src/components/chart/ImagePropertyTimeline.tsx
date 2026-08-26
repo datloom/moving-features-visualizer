@@ -159,7 +159,7 @@ export function ImagePropertyTimeline({
       className="measure-chart-panel image-timeline-panel"
     >
       <PropertyChartHeader
-        properties={[{ name: propertyName, type: 'IMAGE', interpolation }]}
+        properties={[{ name: propertyName, type: 'Image', interpolation }]}
         trailing={
           <time
             className="image-current-time"

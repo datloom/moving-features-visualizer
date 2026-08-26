@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
+import { normalizeImageSource } from './imageSource'
 import { parseTemporalGeometryTrack } from './parser'
+import { normalizeTemporalPropertyType } from './temporalPropertyType'
 import type {
   MovingFeature,
   TemporalProperty,
@@ -26,7 +28,7 @@ const textPropertySchema = z.object({
 })
 
 const imagePropertySchema = z.object({
-  type: z.literal('IMAGE'),
+  type: z.literal('Image'),
   values: z.array(z.string()),
   interpolation: z.enum(['Discrete', 'Step']).default('Discrete'),
   form: z.string().optional(),
@@ -73,6 +75,22 @@ const createSamples = <Value extends number | string>(
     value,
   }))
 
+/**
+ * Rewrites a raw property definition's `type` field to its canonical casing
+ * (e.g. "IMAGE" -> "Image") so the case-sensitive zod schema below matches
+ * regardless of the input's original casing.
+ */
+const canonicalizeDefinitionType = (rawDefinition: unknown): unknown => {
+  if (typeof rawDefinition !== 'object' || rawDefinition === null) {
+    return rawDefinition
+  }
+  const canonicalType = normalizeTemporalPropertyType(
+    (rawDefinition as { type?: unknown }).type,
+  )
+  if (canonicalType === undefined) return rawDefinition
+  return { ...rawDefinition, type: canonicalType }
+}
+
 export const normalizeTemporalProperties = (
   input: unknown,
 ): TemporalPropertiesNormalizationResult => {
@@ -99,7 +117,9 @@ export const normalizeTemporalProperties = (
     for (const [name, rawDefinition] of Object.entries(group)) {
       if (name === 'datetimes') continue
 
-      const parsedDefinition = propertyDefinitionSchema.safeParse(rawDefinition)
+      const parsedDefinition = propertyDefinitionSchema.safeParse(
+        canonicalizeDefinitionType(rawDefinition),
+      )
       if (!parsedDefinition.success) {
         return {
           success: false,
@@ -132,12 +152,17 @@ export const normalizeTemporalProperties = (
           samples: createSamples(group.datetimes, definition.values),
         })
       } else {
+        // Convert raw base64 Image values into data URLs once, here, rather
+        // than on every render — base64 payloads can be large.
+        const values = definition.values.map(
+          (value) => normalizeImageSource(value)?.src ?? value,
+        )
         properties.push({
           type: definition.type,
           name,
           interpolation: definition.interpolation,
           form: definition.form,
-          samples: createSamples(group.datetimes, definition.values),
+          samples: createSamples(group.datetimes, values),
         })
       }
     }

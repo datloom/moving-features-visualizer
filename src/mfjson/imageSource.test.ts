@@ -29,8 +29,14 @@ describe('normalizeImageSource', () => {
     )
   })
 
-  it('rejects a bare base64 payload with no scheme', () => {
-    expect(normalizeImageSource('iVBORw0KGgoAAAANSUhEUg==')).toBeUndefined()
+  it('converts a raw base64 image payload into a data URL', () => {
+    // A real, tiny (1x1) GIF, encoded as base64 with no scheme prefix.
+    const rawBase64 =
+      'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7'
+    expect(normalizeImageSource(rawBase64)).toEqual({
+      kind: 'data-url',
+      src: `data:image/gif;base64,${rawBase64}`,
+    })
   })
 
   it('rejects an unsupported scheme or an arbitrary string', () => {
@@ -38,5 +44,8 @@ describe('normalizeImageSource', () => {
     expect(normalizeImageSource('not-a-url')).toBeUndefined()
     expect(normalizeImageSource('data:text/plain,hello')).toBeUndefined()
     expect(normalizeImageSource('')).toBeUndefined()
+    expect(normalizeImageSource('foo.jpg')).toBeUndefined()
+    expect(normalizeImageSource('camera-frame')).toBeUndefined()
+    expect(normalizeImageSource('hello')).toBeUndefined()
   })
 })

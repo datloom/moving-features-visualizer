@@ -95,7 +95,7 @@ describe('TemporalPropertiesPanel', () => {
 
   it('supports a Text-only Feature in Property Comparison', () => {
     const imageOnly = featureWith('camera-feature', [
-      { type: 'IMAGE', name: 'camera', interpolation: 'Step', samples: [] },
+      { type: 'Image', name: 'camera', interpolation: 'Step', samples: [] },
       { type: 'Text', name: 'state', interpolation: 'Step', samples: [] },
     ])
     useFeatureStore.getState().replaceFeatures([imageOnly])
@@ -146,7 +146,7 @@ describe('TemporalPropertiesPanel', () => {
   it('renders a selected Image property via the Image renderer', () => {
     const withCamera = featureWith('camera-feature', [
       {
-        type: 'IMAGE',
+        type: 'Image',
         name: 'camera',
         interpolation: 'Step',
         samples: [{ time: 1_000, value: 'https://example.test/frame.png' }],
@@ -155,7 +155,7 @@ describe('TemporalPropertiesPanel', () => {
     useFeatureStore.getState().replaceFeatures([withCamera])
     render(<TemporalPropertiesPanel feature={withCamera} />)
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'camera · IMAGE' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'camera · Image' }))
     expect(screen.getByTestId('image-timeline')).toHaveTextContent('camera:1')
     expect(screen.queryByTestId('comparison-chart')).not.toBeInTheDocument()
   })

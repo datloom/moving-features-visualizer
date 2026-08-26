@@ -20,7 +20,7 @@ const property = (
   }
   if (interpolation === 'Linear' || interpolation === 'Regression') {
     throw new Error(
-      'IMAGE + continuous numeric interpolation cannot be represented by the domain model.',
+      'Image + continuous numeric interpolation cannot be represented by the domain model.',
     )
   }
   return { type, name: 'camera', interpolation, samples: [] }
@@ -58,9 +58,9 @@ describe('temporal property renderer strategy', () => {
   it.each([
     ['Discrete', 'sample-only'],
     ['Step', 'previous-value'],
-  ] as const)('classifies IMAGE + %s', (interpolation, behavior) => {
+  ] as const)('classifies Image + %s', (interpolation, behavior) => {
     expect(
-      getPropertyRendererStrategy(property('IMAGE', interpolation)),
+      getPropertyRendererStrategy(property('Image', interpolation)),
     ).toMatchObject({
       renderer: 'image-viewer',
       interpolationBehavior: behavior,

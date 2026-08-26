@@ -6,7 +6,7 @@ export function PropertyChartHeader({
 }: {
   readonly properties: readonly {
     readonly name: string
-    readonly type: 'Measure' | 'Text' | 'IMAGE'
+    readonly type: 'Measure' | 'Text' | 'Image'
     readonly interpolation: string
   }[]
   readonly trailing?: ReactNode

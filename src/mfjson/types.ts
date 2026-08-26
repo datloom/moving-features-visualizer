@@ -8,7 +8,7 @@ export type MeasureInterpolation = 'Discrete' | 'Step' | 'Linear' | 'Regression'
 export type TextInterpolation = 'Discrete' | 'Step'
 export type ImageInterpolation = 'Discrete' | 'Step'
 
-export type TemporalPropertyType = 'Measure' | 'Text' | 'IMAGE'
+export type TemporalPropertyType = 'Measure' | 'Text' | 'Image'
 
 export interface PositionSample {
   readonly time: Timestamp
@@ -81,7 +81,7 @@ export interface TextTemporalProperty {
 }
 
 export interface ImageTemporalProperty {
-  readonly type: 'IMAGE'
+  readonly type: 'Image'
   readonly name: string
   readonly interpolation: ImageInterpolation
   readonly form?: string

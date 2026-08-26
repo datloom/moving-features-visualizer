@@ -16,7 +16,7 @@ const property = (
   interpolation: 'Discrete' | 'Step',
   samples: readonly { readonly time: number; readonly value: string }[],
 ): ImageTemporalProperty => ({
-  type: 'IMAGE',
+  type: 'Image',
   name: 'camera',
   interpolation,
   samples,

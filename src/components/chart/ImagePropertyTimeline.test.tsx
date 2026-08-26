@@ -17,7 +17,7 @@ const t1 = 2_000
 const t2 = 3_000
 
 const camera: ImageTemporalProperty = {
-  type: 'IMAGE',
+  type: 'Image',
   name: 'camera',
   interpolation: 'Step',
   samples: [
@@ -151,7 +151,7 @@ describe('ImagePropertyTimeline', () => {
 
   it('shows an unavailable state for an unsupported image value without crashing', () => {
     const badCamera: ImageTemporalProperty = {
-      type: 'IMAGE',
+      type: 'Image',
       name: 'camera',
       interpolation: 'Discrete',
       samples: [{ time: t0, value: 'not-a-supported-value' }],

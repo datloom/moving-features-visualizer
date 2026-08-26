@@ -452,7 +452,7 @@ describe('validateMfJson', () => {
 
   it.each([
     ['a plain string with no scheme', 'not-a-url'],
-    ['a bare base64 payload', 'iVBORw0KGgoAAAANSUhEUg=='],
+    ['an arbitrary word', 'camera-frame'],
     ['an unsupported scheme', 'ftp://example.test/frame.png'],
   ])('rejects an IMAGE value that is %s', (_description, value) => {
     const result = validateMfJson({
@@ -471,7 +471,8 @@ describe('validateMfJson', () => {
         expect.objectContaining({
           path: '$.temporalProperties[0].camera.values[0]',
           code: 'invalid_value',
-          expected: 'http(s) URL or data:image/... URL',
+          expected:
+            'http(s) URL, data:image/... URL, or raw base64 image payload',
         }),
       ],
     })
