@@ -65,9 +65,22 @@ export interface SpaceTimePolygonSlice {
   readonly time: Timestamp
   readonly rings: readonly (readonly SpaceTimePosition[])[]
 }
+export interface SpaceTimePolygonSurface {
+  readonly startTime: Timestamp
+  readonly endTime: Timestamp
+  readonly ringIndex: number
+  readonly edgeIndex: number
+  readonly positions: readonly [
+    SpaceTimePosition,
+    SpaceTimePosition,
+    SpaceTimePosition,
+    SpaceTimePosition,
+  ]
+}
 export interface SpaceTimePolygonSegment extends SegmentBase {
   readonly type: 'MovingPolygon'
   readonly slices: readonly SpaceTimePolygonSlice[]
+  readonly surfaces: readonly SpaceTimePolygonSurface[]
 }
 export type SpaceTimeSegment =
   SpaceTimePointSegment | SpaceTimeLineStringSegment | SpaceTimePolygonSegment
@@ -342,6 +355,130 @@ const toPosition = (
   visualHeight: timestampToVisualHeight(time, extent, height, scale),
 })
 
+const sameSpatialPosition = (
+  first: SpaceTimePosition,
+  second: SpaceTimePosition,
+): boolean =>
+  first.longitude === second.longitude && first.latitude === second.latitude
+
+const ringVertices = (
+  ring: readonly SpaceTimePosition[],
+): readonly SpaceTimePosition[] => {
+  if (
+    ring.length < 3 ||
+    ring.some(
+      ({ longitude, latitude, visualHeight }) =>
+        !Number.isFinite(longitude) ||
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(visualHeight),
+    )
+  )
+    return []
+  return sameSpatialPosition(ring[0]!, ring.at(-1)!) ? ring.slice(0, -1) : ring
+}
+
+const compatiblePolygonSlices = (
+  first: SpaceTimePolygonSlice,
+  second: SpaceTimePolygonSlice,
+): boolean =>
+  first.rings.length > 0 &&
+  first.rings.length === second.rings.length &&
+  first.rings.every((ring, ringIndex) => {
+    const firstVertices = ringVertices(ring)
+    const secondVertices = ringVertices(second.rings[ringIndex] ?? [])
+    return (
+      firstVertices.length >= 3 &&
+      firstVertices.length === secondVertices.length
+    )
+  })
+
+const createPolygonSurfaces = (
+  slices: readonly SpaceTimePolygonSlice[],
+  step: boolean,
+): readonly SpaceTimePolygonSurface[] => {
+  const surfaces: SpaceTimePolygonSurface[] = []
+  for (let sliceIndex = 0; sliceIndex < slices.length - 1; sliceIndex += 1) {
+    const first = slices[sliceIndex]!
+    const second = slices[sliceIndex + 1]!
+    if (second.time <= first.time || !compatiblePolygonSlices(first, second))
+      continue
+    first.rings.forEach((ring, ringIndex) => {
+      const lower = ringVertices(ring)
+      const evaluatedUpper = ringVertices(second.rings[ringIndex]!)
+      const upperHeight = evaluatedUpper[0]!.visualHeight
+      for (let edgeIndex = 0; edgeIndex < lower.length; edgeIndex += 1) {
+        const nextIndex = (edgeIndex + 1) % lower.length
+        const lowerFirst = lower[edgeIndex]!
+        const lowerSecond = lower[nextIndex]!
+        const upperFirst = step
+          ? { ...lowerFirst, visualHeight: upperHeight }
+          : evaluatedUpper[edgeIndex]!
+        const upperSecond = step
+          ? { ...lowerSecond, visualHeight: upperHeight }
+          : evaluatedUpper[nextIndex]!
+        surfaces.push({
+          startTime: first.time,
+          endTime: second.time,
+          ringIndex,
+          edgeIndex,
+          positions: [lowerFirst, upperFirst, upperSecond, lowerSecond],
+        })
+      }
+    })
+  }
+  return surfaces
+}
+
+const sourcePolygonSlices = (
+  segment: Extract<TemporalGeometry, { readonly type: 'MovingPolygon' }>,
+  extent: TemporalExtent,
+  height: number,
+  scale: number,
+): readonly SpaceTimePolygonSlice[] =>
+  segment.samples.map((sample) => ({
+    time: sample.time,
+    rings: sample.rings.map((ring) =>
+      ring.map((position) =>
+        toPosition(position, sample.time, extent, height, scale),
+      ),
+    ),
+  }))
+
+const polygonTopologyCompatible = (
+  segment: Extract<TemporalGeometry, { readonly type: 'MovingPolygon' }>,
+): boolean => {
+  const first = segment.samples[0]
+  if (!first) return true
+  const vertexCounts = first.rings.map((ring) => {
+    if (
+      ring.some(
+        ({ longitude, latitude }) =>
+          !Number.isFinite(longitude) || !Number.isFinite(latitude),
+      )
+    )
+      return 0
+    const closed =
+      ring.length > 0 &&
+      ring[0]!.longitude === ring.at(-1)!.longitude &&
+      ring[0]!.latitude === ring.at(-1)!.latitude
+    return ring.length - (closed ? 1 : 0)
+  })
+  return (
+    vertexCounts.every((count) => count >= 3) &&
+    segment.samples.slice(1).every(
+      (sample) =>
+        sample.rings.length === vertexCounts.length &&
+        sample.rings.every((ring, ringIndex) => {
+          const closed =
+            ring.length > 0 &&
+            ring[0]!.longitude === ring.at(-1)!.longitude &&
+            ring[0]!.latitude === ring.at(-1)!.latitude
+          return ring.length - (closed ? 1 : 0) === vertexCounts[ringIndex]
+        }),
+    )
+  )
+}
+
 const transformSegment = (
   segment: TemporalGeometry,
   segmentIndex: number,
@@ -428,25 +565,52 @@ const transformSegment = (
           : []
       }),
     }
+  const sourceSlices = sourcePolygonSlices(segment, extent, height, scale)
+  if (segment.interpolation === 'Discrete')
+    return {
+      type: segment.type,
+      interpolation: segment.interpolation,
+      segmentIndex,
+      slices: sourceSlices,
+      surfaces: [],
+    }
+  if (segment.interpolation === 'Step')
+    return {
+      type: segment.type,
+      interpolation: segment.interpolation,
+      segmentIndex,
+      slices: sourceSlices,
+      surfaces: createPolygonSurfaces(sourceSlices, true),
+    }
+  if (!polygonTopologyCompatible(segment))
+    return {
+      type: segment.type,
+      interpolation: segment.interpolation,
+      segmentIndex,
+      slices: sourceSlices,
+      surfaces: [],
+    }
+  const slices = times.flatMap((time): readonly SpaceTimePolygonSlice[] => {
+    const evaluated = geometryAtTime(segment, time)
+    return evaluated?.type === 'MovingPolygon'
+      ? [
+          {
+            time,
+            rings: evaluated.rings.map((ring) =>
+              ring.map((position) =>
+                toPosition(position, time, extent, height, scale),
+              ),
+            ),
+          },
+        ]
+      : []
+  })
   return {
     type: segment.type,
     interpolation: segment.interpolation,
     segmentIndex,
-    slices: times.flatMap((time) => {
-      const evaluated = geometryAtTime(segment, time)
-      return evaluated?.type === 'MovingPolygon'
-        ? [
-            {
-              time,
-              rings: evaluated.rings.map((ring) =>
-                ring.map((position) =>
-                  toPosition(position, time, extent, height, scale),
-                ),
-              ),
-            },
-          ]
-        : []
-    }),
+    slices,
+    surfaces: createPolygonSurfaces(slices, false),
   }
 }
 

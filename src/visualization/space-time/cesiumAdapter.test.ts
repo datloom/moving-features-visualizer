@@ -79,4 +79,49 @@ describe('Space-Time Cesium adapter', () => {
       result.entities.filter(({ id }) => id.startsWith('space-time:tick:')),
     ).toHaveLength(3)
   })
+
+  it('renders MovingPolygon boundary surfaces as translucent-height polygons', () => {
+    const polygon: MovingFeature = {
+      id: 'storm',
+      type: 'MovingFeature',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingPolygon',
+            interpolation: 'Linear',
+            samples: [0, 10].map((time, offset) => ({
+              time,
+              rings: [
+                [
+                  { longitude: offset, latitude: 0 },
+                  { longitude: 1 + offset, latitude: 0 },
+                  { longitude: 1 + offset, latitude: 1 },
+                  { longitude: offset, latitude: 1 },
+                  { longitude: offset, latitude: 0 },
+                ],
+              ],
+            })),
+          },
+        ],
+      },
+      temporalProperties: [],
+      properties: {},
+    }
+    const result = buildSpaceTimeCesiumEntities(
+      [polygon],
+      { minTime: 0, maxTime: 10 },
+      { selectedFeatureId: polygon.id, timeAxisHeight: 100, timeAxisScale: 8 },
+    )
+    const surfaces = result.entities.filter(({ id }) =>
+      id.includes(':surface:'),
+    )
+    expect(surfaces).toHaveLength(16)
+    expect(
+      surfaces.every(
+        ({ polygon: surface }) =>
+          surface?.perPositionHeight?.getValue(JulianDate.now()) === true &&
+          surface.outline?.getValue(JulianDate.now()) === false,
+      ),
+    ).toBe(true)
+  })
 })

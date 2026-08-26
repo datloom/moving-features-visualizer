@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import type { MovingFeature } from '../../mfjson/types'
+import type {
+  GeometryInterpolation,
+  MovingFeature,
+  MovingPolygon,
+} from '../../mfjson/types'
 import {
   calculateAutoTimeAxisScale,
   generateTimeTicks,
@@ -26,6 +30,46 @@ const feature = (id: string, times: readonly number[][]): MovingFeature => ({
       })),
     })),
   },
+  temporalProperties: [],
+  properties: {},
+})
+
+const polygonSegment = (
+  interpolation: GeometryInterpolation,
+  secondRing: readonly {
+    readonly longitude: number
+    readonly latitude: number
+  }[] = [
+    { longitude: 1, latitude: 0 },
+    { longitude: 2, latitude: 0 },
+    { longitude: 2, latitude: 1 },
+    { longitude: 1, latitude: 1 },
+    { longitude: 1, latitude: 0 },
+  ],
+): MovingPolygon => ({
+  type: 'MovingPolygon',
+  interpolation,
+  samples: [
+    {
+      time: 0,
+      rings: [
+        [
+          { longitude: 0, latitude: 0 },
+          { longitude: 1, latitude: 0 },
+          { longitude: 1, latitude: 1 },
+          { longitude: 0, latitude: 1 },
+          { longitude: 0, latitude: 0 },
+        ],
+      ],
+    },
+    { time: 10, rings: [secondRing] },
+  ],
+})
+
+const polygonFeature = (segment: MovingPolygon): MovingFeature => ({
+  id: `polygon-${segment.interpolation}`,
+  type: 'MovingFeature',
+  temporalGeometry: { segments: [segment] },
   temporalProperties: [],
   properties: {},
 })
@@ -106,6 +150,11 @@ describe('Space-Time transformation', () => {
     expect(transformed?.type).toBe('MovingPolygon')
     if (transformed?.type !== 'MovingPolygon')
       throw new Error('Expected polygon')
+    expect(
+      transformed.surfaces.some(
+        ({ endTime }) => endTime > 0 && endTime < interval,
+      ),
+    ).toBe(true)
     expect(transformed.slices.at(-1)?.rings[0]?.[0]).toMatchObject({
       longitude: 132.4,
       latitude: 20,
@@ -230,10 +279,14 @@ describe('Space-Time transformation', () => {
                 [
                   { longitude: offset, latitude: 0 },
                   { longitude: 2 + offset, latitude: 0 },
+                  { longitude: 2 + offset, latitude: 2 },
+                  { longitude: offset, latitude: 2 },
                   { longitude: offset, latitude: 0 },
                 ],
                 [
                   { longitude: 0.5 + offset, latitude: 0.5 },
+                  { longitude: 1 + offset, latitude: 0.5 },
+                  { longitude: 0.5 + offset, latitude: 1 },
                   { longitude: 0.5 + offset, latitude: 0.5 },
                 ],
               ],
@@ -248,6 +301,7 @@ describe('Space-Time transformation', () => {
     if (segment?.type !== 'MovingPolygon') throw new Error('Expected polygon')
     expect(segment.slices).toHaveLength(5)
     expect(segment.slices[2]?.rings).toHaveLength(2)
+    expect(segment.surfaces.some(({ ringIndex }) => ringIndex === 1)).toBe(true)
     expect(segment.slices[2]?.rings[0]?.[0]).toEqual({
       longitude: 0.5,
       latitude: 0,
@@ -258,6 +312,76 @@ describe('Space-Time transformation', () => {
         .flat()
         .every(({ visualHeight }) => visualHeight === 200),
     ).toBe(true)
+  })
+
+  it('builds Linear temporal edge surfaces between evaluated Polygon slices', () => {
+    const segment = transformSpaceTimeFeatures(
+      [polygonFeature(polygonSegment('Linear'))],
+      { minTime: 0, maxTime: 10 },
+      100,
+      4,
+    )[0]?.segments[0]
+    expect(segment?.type).toBe('MovingPolygon')
+    if (segment?.type !== 'MovingPolygon') throw new Error('Expected polygon')
+    expect(segment.slices).toHaveLength(5)
+    expect(segment.surfaces).toHaveLength(16)
+    expect(segment.surfaces[0]).toMatchObject({
+      startTime: 0,
+      endTime: 2.5,
+      ringIndex: 0,
+      edgeIndex: 0,
+      positions: [
+        { longitude: 0, latitude: 0, visualHeight: 0 },
+        { longitude: 0.25, latitude: 0, visualHeight: 100 },
+        { longitude: 1.25, latitude: 0, visualHeight: 100 },
+        { longitude: 1, latitude: 0, visualHeight: 0 },
+      ],
+    })
+  })
+
+  it('uses vertical earlier-state surfaces for Step and none for Discrete', () => {
+    const step = transformSpaceTimeFeatures(
+      [polygonFeature(polygonSegment('Step'))],
+      { minTime: 0, maxTime: 10 },
+      100,
+      4,
+    )[0]?.segments[0]
+    expect(step?.type).toBe('MovingPolygon')
+    if (step?.type !== 'MovingPolygon') throw new Error('Expected polygon')
+    expect(step.surfaces).toHaveLength(4)
+    expect(step.surfaces[0]?.positions).toEqual([
+      { longitude: 0, latitude: 0, visualHeight: 0 },
+      { longitude: 0, latitude: 0, visualHeight: 400 },
+      { longitude: 1, latitude: 0, visualHeight: 400 },
+      { longitude: 1, latitude: 0, visualHeight: 0 },
+    ])
+
+    const discrete = transformSpaceTimeFeatures(
+      [polygonFeature(polygonSegment('Discrete'))],
+      { minTime: 0, maxTime: 10 },
+    )[0]?.segments[0]
+    expect(discrete?.type === 'MovingPolygon' ? discrete.surfaces : []).toEqual(
+      [],
+    )
+  })
+
+  it('keeps incompatible Polygon snapshots visible and skips temporal surfaces', () => {
+    const incompatible = polygonSegment('Linear', [
+      { longitude: 1, latitude: 0 },
+      { longitude: 2, latitude: 0 },
+      { longitude: 2.5, latitude: 0.5 },
+      { longitude: 2, latitude: 1 },
+      { longitude: 1, latitude: 1 },
+      { longitude: 1, latitude: 0 },
+    ])
+    const segment = transformSpaceTimeFeatures([polygonFeature(incompatible)], {
+      minTime: 0,
+      maxTime: 10,
+    })[0]?.segments[0]
+    expect(segment?.type).toBe('MovingPolygon')
+    if (segment?.type !== 'MovingPolygon') throw new Error('Expected polygon')
+    expect(segment.slices).toHaveLength(2)
+    expect(segment.surfaces).toEqual([])
   })
 
   it('keeps temporal segments independent across a gap', () => {

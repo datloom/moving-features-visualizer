@@ -246,6 +246,32 @@ export const buildSpaceTimeCesiumEntities = (
           ),
         )
       } else {
+        segment.surfaces.forEach((surface, index) =>
+          entities.push(
+            new Entity({
+              id: `${baseId}:surface:${index}`,
+              name: `${feature.id} temporal surface`,
+              polygon: {
+                hierarchy: new PolygonHierarchy(
+                  surface.positions.map(spaceTimeSampleToCartesian),
+                ),
+                material: (selected ? PRIMARY : MUTED).withAlpha(
+                  selected ? 0.22 : 0.1,
+                ),
+                outline: false,
+                perPositionHeight: true,
+              },
+              properties: {
+                featureId: feature.id,
+                interpolation: segment.interpolation,
+                startTime: surface.startTime,
+                endTime: surface.endTime,
+                ringIndex: surface.ringIndex,
+                edgeIndex: surface.edgeIndex,
+              },
+            }),
+          ),
+        )
         segment.slices.forEach((slice, index) =>
           entities.push(
             new Entity({
