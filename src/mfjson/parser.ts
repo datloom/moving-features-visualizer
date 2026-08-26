@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { normalizeGeometryInterpolation } from './geometryInterpolation'
 import type {
   MovingPoint,
   MovingLineString,
@@ -14,13 +15,10 @@ const positionSchema = z.union([
   z.tuple([z.number(), z.number(), z.number()]),
 ])
 
-const geometryInterpolationSchema = z.enum([
-  'Discrete',
-  'Step',
-  'Linear',
-  'Quadratic',
-  'Cubic',
-])
+const geometryInterpolationSchema = z.preprocess(
+  normalizeGeometryInterpolation,
+  z.enum(['Discrete', 'Step', 'Linear', 'Quadratic', 'Cubic']),
+)
 
 const movingPointSchema = z.object({
   id: z.string().optional(),

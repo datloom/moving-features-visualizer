@@ -1,5 +1,10 @@
 import { z } from 'zod'
 
+import {
+  GEOMETRY_INTERPOLATIONS,
+  normalizeGeometryInterpolation,
+} from './geometryInterpolation'
+
 const recordSchema = z.record(z.string(), z.unknown())
 
 export type ValidationIssueCode =
@@ -237,18 +242,15 @@ const validateTemporalGeometrySegment = (
   }
 
   const interpolation =
-    typeof value.interpolation === 'string' &&
-    value.interpolation in geometrySampleMinimums
-      ? (value.interpolation as keyof typeof geometrySampleMinimums)
-      : value.interpolation === undefined
-        ? 'Linear'
-        : undefined
+    value.interpolation === undefined
+      ? 'Linear'
+      : normalizeGeometryInterpolation(value.interpolation)
   if (interpolation === undefined) {
     addIssue(context, {
       path: `${path}.interpolation`,
       code: 'unsupported_value',
       message: 'Temporal geometry interpolation is not currently supported.',
-      expected: Object.keys(geometrySampleMinimums),
+      expected: [...GEOMETRY_INTERPOLATIONS, 'Stepwise'],
       actual: value.interpolation,
     })
   }

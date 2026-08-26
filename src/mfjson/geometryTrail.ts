@@ -15,8 +15,10 @@ const boundedSelection = (
   maximum: number,
 ): readonly Timestamp[] => {
   if (times.length <= maximum) return times
-  return Array.from({ length: maximum }, (_, index) =>
-    times[Math.round((index * (times.length - 1)) / (maximum - 1))]!,
+  return Array.from(
+    { length: maximum },
+    (_, index) =>
+      times[Math.round((index * (times.length - 1)) / (maximum - 1))]!,
   ).filter((time, index, selected) => time !== selected[index - 1])
 }
 
@@ -25,7 +27,9 @@ export const geometryTrailSampleTimes = (
   maximum = MAX_GEOMETRY_TRAIL_SNAPSHOTS,
 ): readonly Timestamp[] => {
   if (!Number.isInteger(maximum) || maximum < 2) {
-    throw new RangeError('maximum trail snapshots must be an integer of at least 2.')
+    throw new RangeError(
+      'maximum trail snapshots must be an integer of at least 2.',
+    )
   }
   const sourceTimes = segment.samples.map((sample) => sample.time)
   if (
@@ -39,7 +43,11 @@ export const geometryTrailSampleTimes = (
     const start = sourceTimes[index]!
     const end = sourceTimes[index + 1]!
     if (index === 0) times.push(start)
-    for (let subdivision = 1; subdivision <= DEFAULT_SUBDIVISIONS; subdivision += 1) {
+    for (
+      let subdivision = 1;
+      subdivision <= DEFAULT_SUBDIVISIONS;
+      subdivision += 1
+    ) {
       times.push(start + ((end - start) * subdivision) / DEFAULT_SUBDIVISIONS)
     }
   }
@@ -48,8 +56,10 @@ export const geometryTrailSampleTimes = (
 
 export const buildMovingPointPath = (
   segment: MovingPoint,
-): readonly Position[] =>
-  geometryTrailSampleTimes(segment).flatMap((time) => {
+): readonly Position[] => {
+  if (segment.interpolation === 'Discrete' || segment.interpolation === 'Step')
+    return []
+  return geometryTrailSampleTimes(segment).flatMap((time) => {
     const evaluated = geometryAtTime(segment, time)
     if (evaluated?.type !== 'MovingPoint') return []
     const { longitude, latitude, height } = evaluated.position
@@ -61,18 +71,41 @@ export const buildMovingPointPath = (
       },
     ]
   })
+}
 
 export interface MovingLineStringTrailSnapshot {
   readonly time: Timestamp
   readonly positions: readonly Position[]
 }
 
+export const movingLineStringTopologyCompatible = (
+  segment: MovingLineString,
+): boolean => {
+  const first = segment.samples[0]
+  if (!first || first.positions.length < 2) return false
+  return segment.samples.every(
+    ({ positions }) =>
+      positions.length === first.positions.length &&
+      positions.every(
+        ({ longitude, latitude, height }, index) =>
+          Number.isFinite(longitude) &&
+          Number.isFinite(latitude) &&
+          (height === undefined) ===
+            (first.positions[index]?.height === undefined) &&
+          (height === undefined || Number.isFinite(height)),
+      ),
+  )
+}
+
 export const buildMovingLineStringTrail = (
   segment: MovingLineString,
-): readonly MovingLineStringTrailSnapshot[] =>
-  geometryTrailSampleTimes(segment).flatMap((time) => {
+): readonly MovingLineStringTrailSnapshot[] => {
+  if (!movingLineStringTopologyCompatible(segment))
+    return segment.samples.map(({ time, positions }) => ({ time, positions }))
+  return geometryTrailSampleTimes(segment).flatMap((time) => {
     const evaluated = geometryAtTime(segment, time)
     return evaluated?.type === 'MovingLineString'
       ? [{ time, positions: evaluated.positions }]
       : []
   })
+}

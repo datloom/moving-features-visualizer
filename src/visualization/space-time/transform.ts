@@ -1,5 +1,8 @@
 import { geometryAtTime } from '../../mfjson/geometryAtTime'
-import { geometryTrailSampleTimes } from '../../mfjson/geometryTrail'
+import {
+  geometryTrailSampleTimes,
+  movingLineStringTopologyCompatible,
+} from '../../mfjson/geometryTrail'
 import { movingPolygonTopologyCompatible } from '../../mfjson/movingPolygonTrail'
 import type { Position } from '../../mfjson/motionCurve'
 import type {
@@ -58,9 +61,21 @@ export interface SpaceTimeLineStringSlice {
   readonly time: Timestamp
   readonly positions: readonly SpaceTimePosition[]
 }
+export interface SpaceTimeLineStringSurface {
+  readonly startTime: Timestamp
+  readonly endTime: Timestamp
+  readonly edgeIndex: number
+  readonly positions: readonly [
+    SpaceTimePosition,
+    SpaceTimePosition,
+    SpaceTimePosition,
+    SpaceTimePosition,
+  ]
+}
 export interface SpaceTimeLineStringSegment extends SegmentBase {
   readonly type: 'MovingLineString'
   readonly slices: readonly SpaceTimeLineStringSlice[]
+  readonly surfaces: readonly SpaceTimeLineStringSurface[]
 }
 export interface SpaceTimePolygonSlice {
   readonly time: Timestamp
@@ -430,6 +445,45 @@ const createPolygonSurfaces = (
   return surfaces
 }
 
+const createLineStringSurfaces = (
+  slices: readonly SpaceTimeLineStringSlice[],
+  step: boolean,
+): readonly SpaceTimeLineStringSurface[] => {
+  const surfaces: SpaceTimeLineStringSurface[] = []
+  for (let sliceIndex = 0; sliceIndex < slices.length - 1; sliceIndex += 1) {
+    const first = slices[sliceIndex]!
+    const second = slices[sliceIndex + 1]!
+    if (
+      second.time <= first.time ||
+      first.positions.length < 2 ||
+      first.positions.length !== second.positions.length
+    )
+      continue
+    for (
+      let edgeIndex = 0;
+      edgeIndex < first.positions.length - 1;
+      edgeIndex += 1
+    ) {
+      const lowerFirst = first.positions[edgeIndex]!
+      const lowerSecond = first.positions[edgeIndex + 1]!
+      const upperHeight = second.positions[0]!.visualHeight
+      const upperFirst = step
+        ? { ...lowerFirst, visualHeight: upperHeight }
+        : second.positions[edgeIndex]!
+      const upperSecond = step
+        ? { ...lowerSecond, visualHeight: upperHeight }
+        : second.positions[edgeIndex + 1]!
+      surfaces.push({
+        startTime: first.time,
+        endTime: second.time,
+        edgeIndex,
+        positions: [lowerFirst, upperFirst, upperSecond, lowerSecond],
+      })
+    }
+  }
+  return surfaces
+}
+
 const sourcePolygonSlices = (
   segment: Extract<TemporalGeometry, { readonly type: 'MovingPolygon' }>,
   extent: TemporalExtent,
@@ -512,25 +566,44 @@ const transformSegment = (
       ],
     }
   }
-  if (segment.type === 'MovingLineString')
+  if (segment.type === 'MovingLineString') {
+    if (!movingLineStringTopologyCompatible(segment))
+      return {
+        type: segment.type,
+        interpolation: segment.interpolation,
+        segmentIndex,
+        slices: segment.samples.map((sample) => ({
+          time: sample.time,
+          positions: sample.positions.map((position) =>
+            toPosition(position, sample.time, extent, height, scale),
+          ),
+        })),
+        surfaces: [],
+      }
+    const slices = times.flatMap((time) => {
+      const evaluated = geometryAtTime(segment, time)
+      return evaluated?.type === 'MovingLineString'
+        ? [
+            {
+              time,
+              positions: evaluated.positions.map((position) =>
+                toPosition(position, time, extent, height, scale),
+              ),
+            },
+          ]
+        : []
+    })
     return {
       type: segment.type,
       interpolation: segment.interpolation,
       segmentIndex,
-      slices: times.flatMap((time) => {
-        const evaluated = geometryAtTime(segment, time)
-        return evaluated?.type === 'MovingLineString'
-          ? [
-              {
-                time,
-                positions: evaluated.positions.map((position) =>
-                  toPosition(position, time, extent, height, scale),
-                ),
-              },
-            ]
-          : []
-      }),
+      slices,
+      surfaces:
+        segment.interpolation === 'Discrete'
+          ? []
+          : createLineStringSurfaces(slices, segment.interpolation === 'Step'),
     }
+  }
   const sourceSlices = sourcePolygonSlices(segment, extent, height, scale)
   if (segment.interpolation === 'Discrete')
     return {
@@ -602,8 +675,10 @@ export const getSpaceTimeGeometryAtTime = (
 ) => {
   requireFinite(time, 'timestamp')
   if (
-    segment.type === 'MovingPolygon' &&
-    !movingPolygonTopologyCompatible(segment)
+    (segment.type === 'MovingLineString' &&
+      !movingLineStringTopologyCompatible(segment)) ||
+    (segment.type === 'MovingPolygon' &&
+      !movingPolygonTopologyCompatible(segment))
   )
     return undefined
   const evaluated = geometryAtTime(segment, time)

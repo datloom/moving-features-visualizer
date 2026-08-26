@@ -17,6 +17,7 @@ import {
   buildMovingLineStringTrail,
   buildMovingPointPath,
   geometryTrailSampleTimes,
+  movingLineStringTopologyCompatible,
 } from '../../mfjson/geometryTrail'
 import {
   buildMovingPolygonBoundaryPaths,
@@ -201,9 +202,9 @@ const ringsToPolygonHierarchy = (
   if (!outer) return undefined
   return new PolygonHierarchy(
     outer.map(coordinateToCartesian3),
-    rings.slice(1).map(
-      (hole) => new PolygonHierarchy(hole.map(coordinateToCartesian3)),
-    ),
+    rings
+      .slice(1)
+      .map((hole) => new PolygonHierarchy(hole.map(coordinateToCartesian3))),
   )
 }
 
@@ -236,20 +237,10 @@ export const movingFeatureEntityIds = (
       return [
         geometrySegmentEntityId(feature.id, segment, index),
         ...segment.samples[0]!.rings.map((_, ringIndex) =>
-          geometrySegmentOutlineEntityId(
-            feature.id,
-            segment,
-            index,
-            ringIndex,
-          ),
+          geometrySegmentOutlineEntityId(feature.id, segment, index, ringIndex),
         ),
         ...buildMovingPolygonTrail(segment).map(({ time }) =>
-          geometrySegmentTrailEntityId(
-            feature.id,
-            segment,
-            index,
-            time,
-          ),
+          geometrySegmentTrailEntityId(feature.id, segment, index, time),
         ),
         ...buildMovingPolygonBoundaryPaths(segment).map(
           ({ ringIndex, vertexIndex }) =>
@@ -274,8 +265,8 @@ export const movingFeatureToEntities = (
     readonly getCurrentTime?: () => Timestamp
   } = {},
 ): readonly Entity[] =>
-  feature.temporalGeometry.segments
-    .flatMap((segment, index): readonly Entity[] => {
+  feature.temporalGeometry.segments.flatMap(
+    (segment, index): readonly Entity[] => {
       const samples = segment.samples
       const first = samples[0]
       const last = samples.at(-1)
@@ -297,6 +288,7 @@ export const movingFeatureToEntities = (
       if (segment.type === 'MovingLineString') {
         const getCurrentTime = options.getCurrentTime ?? (() => startTime)
         const trail = buildMovingLineStringTrail(segment)
+        const topologyCompatible = movingLineStringTopologyCompatible(segment)
         return [
           new Entity({
             id: geometrySegmentEntityId(feature.id, segment, index),
@@ -304,6 +296,7 @@ export const movingFeatureToEntities = (
             availability,
             polyline: {
               positions: new CallbackProperty(() => {
+                if (!topologyCompatible) return undefined
                 const evaluated = geometryAtTime(segment, getCurrentTime())
                 return evaluated?.type === 'MovingLineString'
                   ? evaluated.positions.map(coordinateToCartesian3)
@@ -387,10 +380,7 @@ export const movingFeatureToEntities = (
                 polyline: {
                   positions: new CallbackProperty(() => {
                     if (!topologyCompatible) return undefined
-                    const evaluated = geometryAtTime(
-                      segment,
-                      getCurrentTime(),
-                    )
+                    const evaluated = geometryAtTime(segment, getCurrentTime())
                     return evaluated?.type === 'MovingPolygon'
                       ? evaluated.rings[ringIndex]?.map(coordinateToCartesian3)
                       : undefined
@@ -424,7 +414,8 @@ export const movingFeatureToEntities = (
                   outline: true,
                   outlineColor: color.withAlpha(
                     options.selected
-                      ? temporalGeometryStyle.polygon.selectedTrailOutlineOpacity
+                      ? temporalGeometryStyle.polygon
+                          .selectedTrailOutlineOpacity
                       : temporalGeometryStyle.polygon.trailOutlineOpacity,
                   ),
                   perPositionHeight: true,
@@ -489,7 +480,9 @@ export const movingFeatureToEntities = (
         ...(segment.interpolation === 'Discrete' ||
         segment.interpolation === 'Step'
           ? geometryTrailSampleTimes(segment).map((time) => {
-              const sample = pointSamples.find((candidate) => candidate.time === time)!
+              const sample = pointSamples.find(
+                (candidate) => candidate.time === time,
+              )!
               return new Entity({
                 id: geometrySegmentTrailEntityId(
                   feature.id,
@@ -538,4 +531,5 @@ export const movingFeatureToEntities = (
               }),
             ]),
       ]
-    })
+    },
+  )

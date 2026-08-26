@@ -131,6 +131,25 @@ describe('parseTemporalGeometryTrack MovingPolygon', () => {
 })
 
 describe('parseMovingPoint', () => {
+  it('normalizes Stepwise to the internal Step interpolation', () => {
+    const result = parseMovingPoint(
+      featureWith({
+        type: 'MovingPoint',
+        interpolation: 'Stepwise',
+        datetimes: ['2026-08-21T10:00:00Z', '2026-08-21T10:01:00Z'],
+        coordinates: [
+          [0, 0],
+          [1, 1],
+        ],
+      }),
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { interpolation: 'Step' },
+    })
+  })
+
   it('normalizes a valid 2D MovingPoint', () => {
     const result = parseMovingPoint(
       featureWith({

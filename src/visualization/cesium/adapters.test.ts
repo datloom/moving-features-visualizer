@@ -251,7 +251,9 @@ describe('Cesium adapters', () => {
       },
     }
     const entities = movingFeatureToEntities(stepFeature)
-    const preview = entities.filter(({ id }) => String(id).includes('--trail--'))
+    const preview = entities.filter(({ id }) =>
+      String(id).includes('--trail--'),
+    )
     expect(preview).toHaveLength(2)
     expect(preview.every(({ point }) => point !== undefined)).toBe(true)
     expect(entities.every(({ polyline }) => polyline === undefined)).toBe(true)
@@ -309,6 +311,40 @@ describe('Cesium adapters', () => {
       entity.polyline?.positions?.getValue(timestampToJulianDate(currentTime)),
     ).toBeUndefined()
     expect(movingFeatureToEntities(lineFeature).length).toBeGreaterThan(1)
+  })
+
+  it('skips the current MovingLineString for incompatible manual topology', () => {
+    const lineFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'invalid-line',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingLineString',
+            interpolation: 'Linear',
+            samples: [
+              {
+                time: 0,
+                positions: [
+                  { longitude: 0, latitude: 0 },
+                  { longitude: 1, latitude: 1 },
+                ],
+              },
+              {
+                time: 10,
+                positions: [{ longitude: 2, latitude: 2 }],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const current = movingFeatureToEntities(lineFeature, {
+      getCurrentTime: () => 5,
+    })[0]!
+    expect(
+      current.polyline?.positions?.getValue(timestampToJulianDate(5)),
+    ).toBeUndefined()
   })
 
   it('renders a current MovingPolygon with holes and Polygon trail snapshots', () => {

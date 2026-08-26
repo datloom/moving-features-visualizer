@@ -36,6 +36,18 @@ describe('validateMfJson', () => {
     expect(validateMfJson(validFeature)).toEqual({ valid: true, issues: [] })
   })
 
+  it('accepts Stepwise as an alias for temporal geometry Step', () => {
+    expect(
+      validateMfJson({
+        ...validFeature,
+        temporalGeometry: {
+          ...validFeature.temporalGeometry,
+          interpolation: 'Stepwise',
+        },
+      }),
+    ).toEqual({ valid: true, issues: [] })
+  })
+
   it.each([null, [], 'invalid', 42])(
     'rejects a non-object root: %j',
     (input) => {

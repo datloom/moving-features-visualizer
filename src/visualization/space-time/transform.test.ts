@@ -264,6 +264,91 @@ describe('Space-Time transformation', () => {
       { longitude: 1, latitude: 2, visualHeight: 200 },
       { longitude: 3, latitude: 4, visualHeight: 200 },
     ])
+    expect(segment.surfaces).toEqual([])
+  })
+
+  it('uses evaluated LineString slices for continuous surfaces and earlier-state slices for Step', () => {
+    const makeLine = (interpolation: 'Step' | 'Quadratic'): MovingFeature => ({
+      ...feature(`line-${interpolation}`, []),
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingLineString',
+            interpolation,
+            samples: [0, 10, 0].map((longitude, index) => ({
+              time: index * 10,
+              positions: [
+                { longitude, latitude: 0 },
+                { longitude: longitude + 2, latitude: 2 },
+              ],
+            })),
+          },
+        ],
+      },
+    })
+    const quadratic = transformSpaceTimeFeatures(
+      [makeLine('Quadratic')],
+      { minTime: 0, maxTime: 20 },
+      100,
+    )[0]?.segments[0]
+    expect(quadratic?.type).toBe('MovingLineString')
+    if (quadratic?.type !== 'MovingLineString') throw new Error('Expected line')
+    expect(
+      quadratic.surfaces.find(
+        ({ startTime, endTime }) => startTime === 12.5 && endTime === 15,
+      )?.positions[1],
+    ).toMatchObject({ longitude: 10, visualHeight: 75 })
+
+    const step = transformSpaceTimeFeatures(
+      [makeLine('Step')],
+      { minTime: 0, maxTime: 20 },
+      100,
+    )[0]?.segments[0]
+    expect(step?.type).toBe('MovingLineString')
+    if (step?.type !== 'MovingLineString') throw new Error('Expected line')
+    expect(step.surfaces[0]?.positions).toEqual([
+      { longitude: 0, latitude: 0, visualHeight: 0 },
+      { longitude: 0, latitude: 0, visualHeight: 50 },
+      { longitude: 2, latitude: 2, visualHeight: 50 },
+      { longitude: 2, latitude: 2, visualHeight: 0 },
+    ])
+  })
+
+  it('keeps incompatible LineString source slices and safely skips its current highlight', () => {
+    const line: MovingFeature = {
+      ...feature('incompatible-line', []),
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingLineString',
+            interpolation: 'Linear',
+            samples: [
+              {
+                time: 1_000,
+                positions: [
+                  { longitude: 0, latitude: 0 },
+                  { longitude: 1, latitude: 1 },
+                ],
+              },
+              {
+                time: 3_000,
+                positions: [{ longitude: 2, latitude: 2 }],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const source = line.temporalGeometry.segments[0]!
+    const transformed = transformSpaceTimeFeatures([line], extent)[0]
+      ?.segments[0]
+    expect(transformed?.type).toBe('MovingLineString')
+    expect(
+      transformed?.type === 'MovingLineString'
+        ? transformed.slices.map(({ time }) => time)
+        : [],
+    ).toEqual([1_000, 3_000])
+    expect(getSpaceTimeGeometryAtTime(source, 2_000, extent)).toBeUndefined()
   })
 
   it('preserves Polygon rings and samples continuous geometry through the evaluator', () => {
@@ -360,9 +445,11 @@ describe('Space-Time transformation', () => {
       100,
     )[0]?.segments[0]
     expect(transformed?.type).toBe('MovingPolygon')
-    if (transformed?.type !== 'MovingPolygon') throw new Error('Expected polygon')
-    expect(transformed.slices.find(({ time }) => time === 15)?.rings[0]?.[0])
-      .toMatchObject({ longitude: 10, visualHeight: 75 })
+    if (transformed?.type !== 'MovingPolygon')
+      throw new Error('Expected polygon')
+    expect(
+      transformed.slices.find(({ time }) => time === 15)?.rings[0]?.[0],
+    ).toMatchObject({ longitude: 10, visualHeight: 75 })
     expect(
       transformed.surfaces.find(
         ({ startTime, endTime, edgeIndex }) =>
@@ -391,7 +478,8 @@ describe('Space-Time transformation', () => {
       120,
     )[0]?.segments[0]
     expect(transformed?.type).toBe('MovingPolygon')
-    if (transformed?.type !== 'MovingPolygon') throw new Error('Expected polygon')
+    if (transformed?.type !== 'MovingPolygon')
+      throw new Error('Expected polygon')
     const surface = transformed.surfaces.find(
       ({ startTime, endTime, edgeIndex }) =>
         startTime === 12.5 && endTime === 15 && edgeIndex === 0,
@@ -448,11 +536,7 @@ describe('Space-Time transformation', () => {
     expect(segment.slices).toHaveLength(2)
     expect(segment.surfaces).toEqual([])
     expect(
-      getSpaceTimeGeometryAtTime(
-        incompatible,
-        5,
-        { minTime: 0, maxTime: 10 },
-      ),
+      getSpaceTimeGeometryAtTime(incompatible, 5, { minTime: 0, maxTime: 10 }),
     ).toBeUndefined()
   })
 
