@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ConstantPositionProperty,
   type Entity,
   ImageryLayer,
   OpenStreetMapImageryProvider,
@@ -12,12 +11,12 @@ import { useFeatureStore } from '../../store/featureStore'
 import { useTimeStore } from '../../store/timeStore'
 import {
   buildSpaceTimeCesiumEntities,
-  spaceTimeSampleToCartesian,
+  type CurrentSpaceTimeEntity,
+  updateCurrentSpaceTimeEntities,
 } from '../../visualization/space-time/cesiumAdapter'
 import {
   DEFAULT_TIME_AXIS_HEIGHT,
   DEFAULT_TIME_TICK_COUNT,
-  getSpaceTimePositionAtTime,
   resolveTemporalExtent,
 } from '../../visualization/space-time/transform'
 
@@ -35,7 +34,7 @@ export function SpaceTimeMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const entitiesRef = useRef<readonly Entity[]>([])
-  const currentEntitiesRef = useRef<ReadonlyMap<string, Entity>>(new Map())
+  const currentEntitiesRef = useRef<readonly CurrentSpaceTimeEntity[]>([])
   const [imageryFailed, setImageryFailed] = useState(false)
   const features = useFeatureStore((state) => state.features)
   const selectedFeatureId = useFeatureStore((state) => state.selectedFeatureId)
@@ -98,7 +97,7 @@ export function SpaceTimeMap({
       viewer.entities.add(entity),
     )
     entitiesRef.current = entities
-    currentEntitiesRef.current = collection.currentPositionEntities
+    currentEntitiesRef.current = collection.currentGeometryEntities
     if (entities.length > 0) void viewer.zoomTo(entities)
 
     return () => {
@@ -106,7 +105,7 @@ export function SpaceTimeMap({
         for (const entity of entities) viewer.entities.remove(entity)
       }
       entitiesRef.current = []
-      currentEntitiesRef.current = new Map()
+      currentEntitiesRef.current = []
     }
   }, [features, selectedFeatureId, temporalExtent, tickCount, timeAxisHeight])
 
@@ -114,20 +113,12 @@ export function SpaceTimeMap({
     if (!temporalExtent) return
     return useTimeStore.subscribe((state, previousState) => {
       if (state.currentTime === previousState.currentTime) return
-      for (const feature of features) {
-        const entity = currentEntitiesRef.current.get(feature.id)
-        if (!entity) continue
-        const position = getSpaceTimePositionAtTime(
-          feature,
-          state.currentTime,
-          temporalExtent,
-          timeAxisHeight,
-        )
-        entity.position = position
-          ? new ConstantPositionProperty(spaceTimeSampleToCartesian(position))
-          : undefined
-        entity.show = position !== undefined
-      }
+      updateCurrentSpaceTimeEntities(
+        currentEntitiesRef.current,
+        state.currentTime,
+        temporalExtent,
+        timeAxisHeight,
+      )
     })
   }, [features, temporalExtent, timeAxisHeight])
 

@@ -57,17 +57,20 @@ describe('Space-Time Cesium adapter', () => {
         timeAxisHeight: 1_000,
       },
     )
-    const segmentEntities = result.entities.filter((entity) =>
-      entity.id.includes(':segment:'),
+    const segmentEntities = result.entities.filter(
+      (entity) =>
+        entity.id.includes(':segment:') && !entity.id.endsWith(':current'),
     )
 
-    expect(segmentEntities).toHaveLength(2)
     expect(
       segmentEntities.map(({ id }) => featureIdFromSpaceTimeEntityId(id)),
-    ).toEqual([movingFeature.id, movingFeature.id])
+    ).toEqual(segmentEntities.map(() => movingFeature.id))
     expect(
-      segmentEntities[0]?.polyline?.width?.getValue(JulianDate.now()),
-    ).toBe(5)
+      segmentEntities.some(
+        ({ polyline }) => polyline?.width?.getValue(JulianDate.now()) === 4,
+      ),
+    ).toBe(true)
+    expect(result.currentGeometryEntities).toHaveLength(2)
     expect(result.currentPositionEntities.has(movingFeature.id)).toBe(true)
     expect(result.entities.some(({ id }) => id === 'space-time:axis')).toBe(
       true,

@@ -2,21 +2,28 @@ import {
   Cartesian2,
   Cartesian3,
   Color,
+  ConstantPositionProperty,
+  ConstantProperty,
   Entity,
   HorizontalOrigin,
   LabelStyle,
+  PolygonHierarchy,
   VerticalOrigin,
 } from 'cesium'
 
-import type { MovingFeature } from '../../mfjson/types'
+import type {
+  MovingFeature,
+  TemporalGeometry,
+  Timestamp,
+} from '../../mfjson/types'
 import {
   DEFAULT_TIME_AXIS_HEIGHT,
   DEFAULT_TIME_TICK_COUNT,
   generateTimeTicks,
+  getSpaceTimeGeometryAtTime,
   getSpatialExtent,
-  getSpaceTimePositionAtTime,
   transformSpaceTimeFeatures,
-  type SpaceTimeSample,
+  type SpaceTimePosition,
   type TemporalExtent,
 } from './transform'
 
@@ -33,24 +40,125 @@ export interface SpaceTimeCesiumOptions {
   readonly currentTime?: number
 }
 
+export interface CurrentSpaceTimeEntity {
+  readonly entity: Entity
+  readonly segment: TemporalGeometry
+}
+
 export interface SpaceTimeCesiumEntities {
   readonly entities: readonly Entity[]
+  readonly currentGeometryEntities: readonly CurrentSpaceTimeEntity[]
+  /** Retained for compatibility with the original MovingPoint adapter. */
   readonly currentPositionEntities: ReadonlyMap<string, Entity>
 }
 
 export const spaceTimeSampleToCartesian = (
-  sample: Pick<SpaceTimeSample, 'longitude' | 'latitude' | 'visualHeight'>,
+  sample: Pick<SpaceTimePosition, 'longitude' | 'latitude' | 'visualHeight'>,
 ): Cartesian3 =>
   Cartesian3.fromDegrees(sample.longitude, sample.latitude, sample.visualHeight)
 
-const trajectoryEntityId = (featureId: string, segmentIndex: number): string =>
+const hierarchy = (
+  rings: readonly (readonly SpaceTimePosition[])[],
+): PolygonHierarchy | undefined => {
+  const outer = rings[0]
+  if (!outer) return undefined
+  return new PolygonHierarchy(
+    outer.map(spaceTimeSampleToCartesian),
+    rings
+      .slice(1)
+      .map(
+        (ring) => new PolygonHierarchy(ring.map(spaceTimeSampleToCartesian)),
+      ),
+  )
+}
+
+const entityBaseId = (featureId: string, segmentIndex: number): string =>
   `space-time:${encodeURIComponent(featureId)}:segment:${segmentIndex}`
 
 export const featureIdFromSpaceTimeEntityId = (
   entityId: string,
 ): string | undefined => {
-  const match = /^space-time:([^:]+):segment:\d+$/.exec(entityId)
+  const match = /^space-time:([^:]+):segment:\d+(?::|$)/.exec(entityId)
   return match ? decodeURIComponent(match[1]!) : undefined
+}
+
+const sliceColor = (selected: boolean): Color =>
+  selected ? PRIMARY.withAlpha(0.55) : MUTED.withAlpha(0.36)
+
+const createCurrentEntity = (
+  featureId: string,
+  segment: TemporalGeometry,
+  segmentIndex: number,
+  selected: boolean,
+): Entity => {
+  const id = `${entityBaseId(featureId, segmentIndex)}:current`
+  if (segment.type === 'MovingPoint')
+    return new Entity({
+      id,
+      name: `${featureId} current position`,
+      show: false,
+      point: {
+        color: selected ? AXIS : PRIMARY,
+        outlineColor: OUTLINE,
+        outlineWidth: 2,
+        pixelSize: selected ? 12 : 9,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    })
+  if (segment.type === 'MovingLineString')
+    return new Entity({
+      id,
+      name: `${featureId} current LineString`,
+      show: false,
+      polyline: {
+        positions: [],
+        material: selected ? AXIS : PRIMARY,
+        width: selected ? 6 : 4,
+      },
+    })
+  return new Entity({
+    id,
+    name: `${featureId} current Polygon`,
+    show: false,
+    polygon: {
+      hierarchy: new PolygonHierarchy([]),
+      material: (selected ? AXIS : PRIMARY).withAlpha(selected ? 0.52 : 0.4),
+      outline: true,
+      outlineColor: selected ? AXIS : PRIMARY,
+      perPositionHeight: true,
+    },
+  })
+}
+
+export const updateCurrentSpaceTimeEntities = (
+  bindings: readonly CurrentSpaceTimeEntity[],
+  currentTime: Timestamp,
+  temporalExtent: TemporalExtent,
+  timeAxisHeight = DEFAULT_TIME_AXIS_HEIGHT,
+): void => {
+  for (const { entity, segment } of bindings) {
+    const evaluated = getSpaceTimeGeometryAtTime(
+      segment,
+      currentTime,
+      temporalExtent,
+      timeAxisHeight,
+    )
+    entity.show = evaluated !== undefined
+    if (!evaluated) continue
+    if (evaluated.type === 'MovingPoint') {
+      entity.position = new ConstantPositionProperty(
+        spaceTimeSampleToCartesian(evaluated.position),
+      )
+    } else if (evaluated.type === 'MovingLineString') {
+      entity.polyline!.positions = new ConstantProperty(
+        evaluated.positions.map(spaceTimeSampleToCartesian),
+      )
+    } else {
+      entity.polygon!.hierarchy = new ConstantProperty(
+        hierarchy(evaluated.rings),
+      )
+    }
+  }
 }
 
 export const buildSpaceTimeCesiumEntities = (
@@ -66,64 +174,133 @@ export const buildSpaceTimeCesiumEntities = (
     timeAxisHeight,
   )
   const entities: Entity[] = []
+  const currentGeometryEntities: CurrentSpaceTimeEntity[] = []
   const currentPositionEntities = new Map<string, Entity>()
 
-  for (const feature of transformed) {
+  transformed.forEach((feature, featureIndex) => {
     const selected = feature.id === options.selectedFeatureId
-    feature.segments.forEach((segment, segmentIndex) => {
-      if (segment.samples.length === 0) return
-      entities.push(
-        new Entity({
-          id: trajectoryEntityId(feature.id, segmentIndex),
-          name: feature.id,
-          polyline: {
-            positions: segment.samples.map(spaceTimeSampleToCartesian),
-            width: selected ? 5 : 3,
-            material: selected ? PRIMARY : MUTED.withAlpha(0.78),
-          },
-          properties: {
-            featureId: feature.id,
-            interpolation: segment.interpolation,
-          },
-        }),
-      )
-    })
-
-    if (options.currentTime !== undefined) {
-      const sourceFeature = features.find(({ id }) => id === feature.id)
-      const position = sourceFeature
-        ? getSpaceTimePositionAtTime(
-            sourceFeature,
-            options.currentTime,
-            temporalExtent,
-            timeAxisHeight,
+    const sourceFeature = features[featureIndex]!
+    feature.segments.forEach((segment) => {
+      const baseId = entityBaseId(feature.id, segment.segmentIndex)
+      if (segment.type === 'MovingPoint') {
+        segment.points.forEach((point, index) =>
+          entities.push(
+            new Entity({
+              id: `${baseId}:sample:${index}`,
+              name: feature.id,
+              position: spaceTimeSampleToCartesian(point),
+              point: {
+                color: selected ? AXIS.withAlpha(0.72) : MUTED.withAlpha(0.72),
+                pixelSize: selected ? 7 : 5,
+                outlineColor: OUTLINE,
+                outlineWidth: 1,
+              },
+              properties: {
+                featureId: feature.id,
+                interpolation: segment.interpolation,
+              },
+            }),
+          ),
+        )
+        segment.paths.forEach((path, index) => {
+          if (path.length < 2) return
+          entities.push(
+            new Entity({
+              id: `${baseId}:path:${index}`,
+              name: feature.id,
+              polyline: {
+                positions: path.map(spaceTimeSampleToCartesian),
+                width: selected ? 4 : 2.5,
+                material: sliceColor(selected),
+              },
+              properties: {
+                featureId: feature.id,
+                interpolation: segment.interpolation,
+              },
+            }),
           )
-        : undefined
-      const entity = new Entity({
-        id: `space-time:${encodeURIComponent(feature.id)}:current`,
-        name: `${feature.id} current position`,
-        position: position ? spaceTimeSampleToCartesian(position) : undefined,
-        show: position !== undefined,
-        point: {
-          color: selected ? AXIS : PRIMARY,
-          outlineColor: OUTLINE,
-          outlineWidth: 2,
-          pixelSize: selected ? 11 : 8,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-      })
-      entities.push(entity)
-      currentPositionEntities.set(feature.id, entity)
-    }
-  }
+        })
+      } else if (segment.type === 'MovingLineString') {
+        segment.slices.forEach((slice, index) =>
+          entities.push(
+            new Entity({
+              id: `${baseId}:slice:${index}`,
+              name: feature.id,
+              polyline: {
+                positions: slice.positions.map(spaceTimeSampleToCartesian),
+                width: selected ? 2.5 : 1.5,
+                material: sliceColor(selected),
+              },
+              properties: {
+                featureId: feature.id,
+                interpolation: segment.interpolation,
+                time: slice.time,
+              },
+            }),
+          ),
+        )
+      } else {
+        segment.slices.forEach((slice, index) =>
+          entities.push(
+            new Entity({
+              id: `${baseId}:slice:${index}`,
+              name: feature.id,
+              polygon: {
+                hierarchy: hierarchy(slice.rings),
+                material: sliceColor(selected).withAlpha(
+                  selected ? 0.16 : 0.08,
+                ),
+                outline: true,
+                outlineColor: sliceColor(selected),
+                perPositionHeight: true,
+              },
+              properties: {
+                featureId: feature.id,
+                interpolation: segment.interpolation,
+                time: slice.time,
+              },
+            }),
+          ),
+        )
+      }
+
+      const sourceSegment =
+        sourceFeature.temporalGeometry.segments[segment.segmentIndex]!
+      const current = createCurrentEntity(
+        feature.id,
+        sourceSegment,
+        segment.segmentIndex,
+        selected,
+      )
+      entities.push(current)
+      currentGeometryEntities.push({ entity: current, segment: sourceSegment })
+      if (
+        sourceSegment.type === 'MovingPoint' &&
+        !currentPositionEntities.has(feature.id)
+      )
+        currentPositionEntities.set(feature.id, current)
+    })
+  })
+
+  if (options.currentTime !== undefined)
+    updateCurrentSpaceTimeEntities(
+      currentGeometryEntities,
+      options.currentTime,
+      temporalExtent,
+      timeAxisHeight,
+    )
 
   const spatialExtent = getSpatialExtent(features)
-  if (!spatialExtent) return { entities, currentPositionEntities }
-
-  const longitudeSpan = spatialExtent.maxLongitude - spatialExtent.minLongitude
-  const latitudeSpan = spatialExtent.maxLatitude - spatialExtent.minLatitude
-  const longitudePadding = Math.max(longitudeSpan * 0.08, 0.001)
-  const latitudePadding = Math.max(latitudeSpan * 0.08, 0.001)
+  if (!spatialExtent)
+    return { entities, currentGeometryEntities, currentPositionEntities }
+  const longitudePadding = Math.max(
+    (spatialExtent.maxLongitude - spatialExtent.minLongitude) * 0.08,
+    0.001,
+  )
+  const latitudePadding = Math.max(
+    (spatialExtent.maxLatitude - spatialExtent.minLatitude) * 0.08,
+    0.001,
+  )
   const axisLongitude = spatialExtent.minLongitude - longitudePadding
   const axisLatitude = spatialExtent.minLatitude - latitudePadding
   const ticks = generateTimeTicks(temporalExtent, tickCount, timeAxisHeight)
@@ -141,8 +318,7 @@ export const buildSpaceTimeCesiumEntities = (
       },
     }),
   )
-
-  for (const [index, tick] of ticks.entries()) {
+  ticks.forEach((tick, index) => {
     const tickLongitude = axisLongitude + longitudePadding * 0.4
     entities.push(
       new Entity({
@@ -174,8 +350,7 @@ export const buildSpaceTimeCesiumEntities = (
         },
       }),
     )
-
-    if (spatialExtent.maxLongitude !== spatialExtent.minLongitude) {
+    if (spatialExtent.maxLongitude !== spatialExtent.minLongitude)
       entities.push(
         new Entity({
           id: `space-time:guide:${index}`,
@@ -197,8 +372,6 @@ export const buildSpaceTimeCesiumEntities = (
           },
         }),
       )
-    }
-  }
-
-  return { entities, currentPositionEntities }
+  })
+  return { entities, currentGeometryEntities, currentPositionEntities }
 }

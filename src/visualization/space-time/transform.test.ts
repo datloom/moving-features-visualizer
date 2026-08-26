@@ -59,7 +59,13 @@ describe('Space-Time transformation', () => {
     const transformed = transformSpaceTimeFeatures(features, extent, 600)
     expect(transformed.map(({ id }) => id)).toEqual(['one', 'two'])
     expect(transformed[0]?.segments).toHaveLength(2)
-    expect(transformed[0]?.segments[1]?.samples[1]).toEqual({
+    const secondSegment = transformed[0]?.segments[1]
+    expect(secondSegment?.type).toBe('MovingPoint')
+    expect(
+      secondSegment?.type === 'MovingPoint'
+        ? secondSegment.points[1]
+        : undefined,
+    ).toEqual({
       time: 3_000,
       longitude: 2,
       latitude: 0,
@@ -93,10 +99,109 @@ describe('Space-Time transformation', () => {
     const degenerate = { minTime: 2_000, maxTime: 2_000 }
     expect(timestampToVisualHeight(2_000, degenerate, 500)).toBe(0)
     expect(generateTimeTicks(degenerate, 6, 500)).toHaveLength(1)
+    const segment = transformSpaceTimeFeatures(
+      [feature('single', [[2_000]])],
+      degenerate,
+    )[0]?.segments[0]
     expect(
-      transformSpaceTimeFeatures([feature('single', [[2_000]])], degenerate)[0]
-        ?.segments[0]?.samples[0]?.visualHeight,
+      segment?.type === 'MovingPoint'
+        ? segment.points[0]?.visualHeight
+        : undefined,
     ).toBe(0)
+  })
+
+  it('preserves every LineString vertex on one temporal plane', () => {
+    const line: MovingFeature = {
+      ...feature('line', []),
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingLineString',
+            interpolation: 'Discrete',
+            samples: [
+              {
+                time: 2_000,
+                positions: [
+                  { longitude: 1, latitude: 2, height: 500 },
+                  { longitude: 3, latitude: 4, height: 900 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const segment = transformSpaceTimeFeatures([line], extent, 400)[0]
+      ?.segments[0]
+    expect(segment?.type).toBe('MovingLineString')
+    if (segment?.type !== 'MovingLineString') throw new Error('Expected line')
+    expect(segment.slices[0]?.positions).toEqual([
+      { longitude: 1, latitude: 2, visualHeight: 200 },
+      { longitude: 3, latitude: 4, visualHeight: 200 },
+    ])
+  })
+
+  it('preserves Polygon rings and samples continuous geometry through the evaluator', () => {
+    const polygon: MovingFeature = {
+      ...feature('polygon', []),
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingPolygon',
+            interpolation: 'Linear',
+            samples: [1_000, 3_000].map((time, offset) => ({
+              time,
+              rings: [
+                [
+                  { longitude: offset, latitude: 0 },
+                  { longitude: 2 + offset, latitude: 0 },
+                  { longitude: offset, latitude: 0 },
+                ],
+                [
+                  { longitude: 0.5 + offset, latitude: 0.5 },
+                  { longitude: 0.5 + offset, latitude: 0.5 },
+                ],
+              ],
+            })),
+          },
+        ],
+      },
+    }
+    const segment = transformSpaceTimeFeatures([polygon], extent, 400)[0]
+      ?.segments[0]
+    expect(segment?.type).toBe('MovingPolygon')
+    if (segment?.type !== 'MovingPolygon') throw new Error('Expected polygon')
+    expect(segment.slices).toHaveLength(5)
+    expect(segment.slices[2]?.rings).toHaveLength(2)
+    expect(segment.slices[2]?.rings[0]?.[0]).toEqual({
+      longitude: 0.5,
+      latitude: 0,
+      visualHeight: 200,
+    })
+    expect(
+      segment.slices[2]?.rings
+        .flat()
+        .every(({ visualHeight }) => visualHeight === 200),
+    ).toBe(true)
+  })
+
+  it('keeps temporal segments independent across a gap', () => {
+    const transformed = transformSpaceTimeFeatures(
+      [
+        feature('gapped', [
+          [1_000, 1_500],
+          [2_500, 3_000],
+        ]),
+      ],
+      extent,
+    )[0]!
+    expect(transformed.segments).toHaveLength(2)
+    expect(
+      transformed.segments.every(
+        (segment) =>
+          segment.type === 'MovingPoint' && segment.paths.length === 1,
+      ),
+    ).toBe(true)
   })
 
   it('rejects invalid timestamps and interpolates current positions within segments', () => {
