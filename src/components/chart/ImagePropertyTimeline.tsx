@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { normalizeImageSource } from '../../mfjson/imageSource'
 import type { ImageTemporalProperty } from '../../mfjson/types'
@@ -136,9 +136,17 @@ export function ImagePropertyTimeline({
   const domainEnd = useTimeStore((state) => state.endTime)
   const [previewOpen, setPreviewOpen] = useState(false)
 
+  // Recomputed only when the property data or active window changes — not on
+  // every currentTime tick, which only needs to resolve the current sample.
+  const domain = useMemo(
+    () => ({ start: domainStart, end: domainEnd }),
+    [domainStart, domainEnd],
+  )
+  const visibleSamples = useMemo(
+    () => getVisibleImageSamples(properties, domain),
+    [properties, domain],
+  )
   const currentSample = resolveImageSample(properties, currentTime)
-  const domain = { start: domainStart, end: domainEnd }
-  const visibleSamples = getVisibleImageSamples(properties, domain)
   const interpolation = properties[0]?.interpolation ?? 'Discrete'
 
   useEffect(() => {
