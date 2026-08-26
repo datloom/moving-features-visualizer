@@ -67,8 +67,6 @@ export const temporalGeometryStyle = {
     currentOutlineWidth: 3,
     selectedCurrentOutlineWidth: 5,
     currentOutlineOpacity: 0.9,
-    trailOutlineOpacity: 0.16,
-    selectedTrailOutlineOpacity: 0.28,
     pathWidth: 1.5,
     selectedPathWidth: 2.5,
     pathOpacity: 0.3,
@@ -473,13 +471,7 @@ export const movingFeatureToEntities = (
                       ? temporalGeometryStyle.polygon.selectedTrailFillOpacity
                       : temporalGeometryStyle.polygon.trailFillOpacity,
                   ),
-                  outline: true,
-                  outlineColor: trailColor.withAlpha(
-                    options.selected
-                      ? temporalGeometryStyle.polygon
-                          .selectedTrailOutlineOpacity
-                      : temporalGeometryStyle.polygon.trailOutlineOpacity,
-                  ),
+                  outline: false,
                   perPositionHeight: true,
                 },
               }),

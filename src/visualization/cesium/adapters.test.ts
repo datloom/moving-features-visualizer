@@ -441,6 +441,9 @@ describe('Cesium adapters', () => {
       materialColor(current.polygon?.material),
       CURRENT_OBJECT_COLOR.withAlpha(0.34),
     )
+    // The current fill has no self-outline; a dedicated red ring entity
+    // provides the current Polygon's outline instead.
+    expect(current.polygon?.outline?.getValue()).toBe(false)
     const currentOutline = entities.find(({ id }) =>
       String(id).includes('--outline--'),
     )!
@@ -457,6 +460,7 @@ describe('Cesium adapters', () => {
       materialColor(future.polygon?.material),
       featureColor(false).withAlpha(0.045),
     )
+    expect(future.polygon?.outline?.getValue()).toBe(false)
     const boundaryPaths = entities.filter(({ id }) =>
       String(id).includes('--boundary-path--'),
     )

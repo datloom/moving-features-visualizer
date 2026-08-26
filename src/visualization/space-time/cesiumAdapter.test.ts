@@ -145,6 +145,14 @@ describe('Space-Time Cesium adapter', () => {
           surface.outline?.getValue(JulianDate.now()) === false,
       ),
     ).toBe(true)
+
+    const slices = result.entities.filter(({ id }) => id.includes(':slice:'))
+    expect(slices.length).toBeGreaterThan(0)
+    expect(
+      slices.every(
+        ({ polygon: slice }) => slice?.outline?.getValue(JulianDate.now()) === false,
+      ),
+    ).toBe(true)
   })
 
   it('uses red current geometry and feature-colored historical geometry for every type', () => {
@@ -213,6 +221,7 @@ describe('Space-Time Cesium adapter', () => {
       polygon?.polygon?.outlineColor?.getValue(JulianDate.now()),
       CURRENT_OBJECT_COLOR,
     )
+    expect(polygon?.polygon?.outline?.getValue(JulianDate.now())).toBe(true)
 
     const historical = result.entities.filter(
       ({ id }) => !id.endsWith(':current') && id.includes(':segment:'),

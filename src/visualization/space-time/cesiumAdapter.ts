@@ -305,8 +305,7 @@ export const buildSpaceTimeCesiumEntities = (
                 material: sliceColor(selected).withAlpha(
                   selected ? 0.16 : 0.08,
                 ),
-                outline: true,
-                outlineColor: sliceColor(selected),
+                outline: false,
                 perPositionHeight: true,
               },
               properties: {
