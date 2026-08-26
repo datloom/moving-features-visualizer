@@ -358,6 +358,16 @@ describe('Cesium adapters', () => {
       String(id).endsWith('--trail--10'),
     )!
     expect(future.polygon?.show?.getValue()).not.toBe(false)
+    const boundaryPaths = entities.filter(({ id }) =>
+      String(id).includes('--boundary-path--'),
+    )
+    expect(boundaryPaths).toHaveLength(6)
+    expect(
+      boundaryPaths.every(({ polyline }) => {
+        const positions: unknown = polyline?.positions?.getValue()
+        return Array.isArray(positions) && positions.length === 5
+      }),
+    ).toBe(true)
     currentTime = 10
     expect(future.polygon?.show?.getValue()).not.toBe(false)
   })

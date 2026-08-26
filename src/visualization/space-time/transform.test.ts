@@ -8,6 +8,7 @@ import type {
 import {
   calculateAutoTimeAxisScale,
   generateTimeTicks,
+  getSpaceTimeGeometryAtTime,
   getSpaceTimePositionAtTime,
   getTemporalExtent,
   resolveTemporalExtent,
@@ -339,6 +340,70 @@ describe('Space-Time transformation', () => {
     })
   })
 
+  it('builds Quadratic surfaces from nonlinear intermediate Polygon slices', () => {
+    const segment = polygonSegment('Quadratic')
+    const nonlinear: MovingPolygon = {
+      ...segment,
+      samples: [0, 10, 0].map((longitude, index) => ({
+        time: index * 10,
+        rings: segment.samples[0]!.rings.map((ring) =>
+          ring.map((position) => ({
+            ...position,
+            longitude: position.longitude + longitude,
+          })),
+        ),
+      })),
+    }
+    const transformed = transformSpaceTimeFeatures(
+      [polygonFeature(nonlinear)],
+      { minTime: 0, maxTime: 20 },
+      100,
+    )[0]?.segments[0]
+    expect(transformed?.type).toBe('MovingPolygon')
+    if (transformed?.type !== 'MovingPolygon') throw new Error('Expected polygon')
+    expect(transformed.slices.find(({ time }) => time === 15)?.rings[0]?.[0])
+      .toMatchObject({ longitude: 10, visualHeight: 75 })
+    expect(
+      transformed.surfaces.find(
+        ({ startTime, endTime, edgeIndex }) =>
+          startTime === 12.5 && endTime === 15 && edgeIndex === 0,
+      )?.positions[1],
+    ).toMatchObject({ longitude: 10, visualHeight: 75 })
+  })
+
+  it('builds Cubic surface quads from nonlinear intermediate Polygon slices', () => {
+    const segment = polygonSegment('Cubic')
+    const nonlinear: MovingPolygon = {
+      ...segment,
+      samples: [0, 10, 0, 20].map((longitude, index) => ({
+        time: index * 10,
+        rings: segment.samples[0]!.rings.map((ring) =>
+          ring.map((position) => ({
+            ...position,
+            longitude: position.longitude + longitude,
+          })),
+        ),
+      })),
+    }
+    const transformed = transformSpaceTimeFeatures(
+      [polygonFeature(nonlinear)],
+      { minTime: 0, maxTime: 30 },
+      120,
+    )[0]?.segments[0]
+    expect(transformed?.type).toBe('MovingPolygon')
+    if (transformed?.type !== 'MovingPolygon') throw new Error('Expected polygon')
+    const surface = transformed.surfaces.find(
+      ({ startTime, endTime, edgeIndex }) =>
+        startTime === 12.5 && endTime === 15 && edgeIndex === 0,
+    )
+    expect(surface?.positions).toMatchObject([
+      { visualHeight: 50 },
+      { longitude: 4.375, visualHeight: 60 },
+      { longitude: 5.375, visualHeight: 60 },
+      { visualHeight: 50 },
+    ])
+  })
+
   it('uses vertical earlier-state surfaces for Step and none for Discrete', () => {
     const step = transformSpaceTimeFeatures(
       [polygonFeature(polygonSegment('Step'))],
@@ -382,6 +447,13 @@ describe('Space-Time transformation', () => {
     if (segment?.type !== 'MovingPolygon') throw new Error('Expected polygon')
     expect(segment.slices).toHaveLength(2)
     expect(segment.surfaces).toEqual([])
+    expect(
+      getSpaceTimeGeometryAtTime(
+        incompatible,
+        5,
+        { minTime: 0, maxTime: 10 },
+      ),
+    ).toBeUndefined()
   })
 
   it('keeps temporal segments independent across a gap', () => {

@@ -1,5 +1,6 @@
 import { geometryAtTime } from '../../mfjson/geometryAtTime'
 import { geometryTrailSampleTimes } from '../../mfjson/geometryTrail'
+import { movingPolygonTopologyCompatible } from '../../mfjson/movingPolygonTrail'
 import type { Position } from '../../mfjson/motionCurve'
 import type {
   GeometryInterpolation,
@@ -444,41 +445,6 @@ const sourcePolygonSlices = (
     ),
   }))
 
-const polygonTopologyCompatible = (
-  segment: Extract<TemporalGeometry, { readonly type: 'MovingPolygon' }>,
-): boolean => {
-  const first = segment.samples[0]
-  if (!first) return true
-  const vertexCounts = first.rings.map((ring) => {
-    if (
-      ring.some(
-        ({ longitude, latitude }) =>
-          !Number.isFinite(longitude) || !Number.isFinite(latitude),
-      )
-    )
-      return 0
-    const closed =
-      ring.length > 0 &&
-      ring[0]!.longitude === ring.at(-1)!.longitude &&
-      ring[0]!.latitude === ring.at(-1)!.latitude
-    return ring.length - (closed ? 1 : 0)
-  })
-  return (
-    vertexCounts.every((count) => count >= 3) &&
-    segment.samples.slice(1).every(
-      (sample) =>
-        sample.rings.length === vertexCounts.length &&
-        sample.rings.every((ring, ringIndex) => {
-          const closed =
-            ring.length > 0 &&
-            ring[0]!.longitude === ring.at(-1)!.longitude &&
-            ring[0]!.latitude === ring.at(-1)!.latitude
-          return ring.length - (closed ? 1 : 0) === vertexCounts[ringIndex]
-        }),
-    )
-  )
-}
-
 const transformSegment = (
   segment: TemporalGeometry,
   segmentIndex: number,
@@ -582,7 +548,7 @@ const transformSegment = (
       slices: sourceSlices,
       surfaces: createPolygonSurfaces(sourceSlices, true),
     }
-  if (!polygonTopologyCompatible(segment))
+  if (!movingPolygonTopologyCompatible(segment))
     return {
       type: segment.type,
       interpolation: segment.interpolation,
@@ -635,6 +601,11 @@ export const getSpaceTimeGeometryAtTime = (
   timeAxisScale = 1,
 ) => {
   requireFinite(time, 'timestamp')
+  if (
+    segment.type === 'MovingPolygon' &&
+    !movingPolygonTopologyCompatible(segment)
+  )
+    return undefined
   const evaluated = geometryAtTime(segment, time)
   if (!evaluated) return undefined
   if (evaluated.type === 'MovingPoint')

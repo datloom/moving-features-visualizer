@@ -19,8 +19,9 @@ import {
   geometryTrailSampleTimes,
 } from '../../mfjson/geometryTrail'
 import {
+  buildMovingPolygonBoundaryPaths,
   buildMovingPolygonTrail,
-  movingPolygonTrailSampleTimes,
+  movingPolygonTopologyCompatible,
 } from '../../mfjson/movingPolygonTrail'
 import type {
   MovingFeature,
@@ -62,6 +63,10 @@ export const temporalGeometryStyle = {
     currentOutlineOpacity: 0.9,
     trailOutlineOpacity: 0.16,
     selectedTrailOutlineOpacity: 0.28,
+    pathWidth: 1.5,
+    selectedPathWidth: 2.5,
+    pathOpacity: 0.3,
+    selectedPathOpacity: 0.52,
   },
 } as const
 
@@ -177,6 +182,15 @@ export const geometrySegmentOutlineEntityId = (
 ): string =>
   `${geometrySegmentEntityId(featureId, segment, segmentIndex)}--outline--${ringIndex}`
 
+export const geometrySegmentBoundaryPathEntityId = (
+  featureId: string,
+  segment: TemporalGeometry,
+  segmentIndex: number,
+  ringIndex: number,
+  vertexIndex: number,
+): string =>
+  `${geometrySegmentEntityId(featureId, segment, segmentIndex)}--boundary-path--${ringIndex}--${vertexIndex}`
+
 const ringsToPolygonHierarchy = (
   rings: readonly (readonly Pick<
     PositionSample,
@@ -229,13 +243,23 @@ export const movingFeatureEntityIds = (
             ringIndex,
           ),
         ),
-        ...movingPolygonTrailSampleTimes(segment).map((time) =>
+        ...buildMovingPolygonTrail(segment).map(({ time }) =>
           geometrySegmentTrailEntityId(
             feature.id,
             segment,
             index,
             time,
           ),
+        ),
+        ...buildMovingPolygonBoundaryPaths(segment).map(
+          ({ ringIndex, vertexIndex }) =>
+            geometrySegmentBoundaryPathEntityId(
+              feature.id,
+              segment,
+              index,
+              ringIndex,
+              vertexIndex,
+            ),
         ),
       ]
     }
@@ -324,6 +348,8 @@ export const movingFeatureToEntities = (
       if (segment.type === 'MovingPolygon') {
         const getCurrentTime = options.getCurrentTime ?? (() => startTime)
         const trail = buildMovingPolygonTrail(segment)
+        const boundaryPaths = buildMovingPolygonBoundaryPaths(segment)
+        const topologyCompatible = movingPolygonTopologyCompatible(segment)
         const polygonFirst = segment.samples[0]!
         return [
           new Entity({
@@ -332,6 +358,7 @@ export const movingFeatureToEntities = (
             availability,
             polygon: {
               hierarchy: new CallbackProperty(() => {
+                if (!topologyCompatible) return undefined
                 const evaluated = geometryAtTime(segment, getCurrentTime())
                 return evaluated?.type === 'MovingPolygon'
                   ? ringsToPolygonHierarchy(evaluated.rings)
@@ -359,6 +386,7 @@ export const movingFeatureToEntities = (
                 availability,
                 polyline: {
                   positions: new CallbackProperty(() => {
+                    if (!topologyCompatible) return undefined
                     const evaluated = geometryAtTime(
                       segment,
                       getCurrentTime(),
@@ -400,6 +428,30 @@ export const movingFeatureToEntities = (
                       : temporalGeometryStyle.polygon.trailOutlineOpacity,
                   ),
                   perPositionHeight: true,
+                },
+              }),
+          ),
+          ...boundaryPaths.map(
+            (path) =>
+              new Entity({
+                id: geometrySegmentBoundaryPathEntityId(
+                  feature.id,
+                  segment,
+                  index,
+                  path.ringIndex,
+                  path.vertexIndex,
+                ),
+                name: feature.id,
+                polyline: {
+                  positions: path.positions.map(coordinateToCartesian3),
+                  material: color.withAlpha(
+                    options.selected
+                      ? temporalGeometryStyle.polygon.selectedPathOpacity
+                      : temporalGeometryStyle.polygon.pathOpacity,
+                  ),
+                  width: options.selected
+                    ? temporalGeometryStyle.polygon.selectedPathWidth
+                    : temporalGeometryStyle.polygon.pathWidth,
                 },
               }),
           ),

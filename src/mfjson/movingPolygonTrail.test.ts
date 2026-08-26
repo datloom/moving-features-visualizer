@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildMovingPolygonBoundaryPaths,
   buildMovingPolygonTrail,
   movingPolygonTrailSampleTimes,
 } from './movingPolygonTrail'
@@ -49,6 +50,79 @@ describe('MovingPolygon trail', () => {
     expect(movingPolygonTrailSampleTimes(polygon('Step', [0, 10]))).toEqual([
       0, 10,
     ])
+  })
+
+  it.each(['Discrete', 'Step'] as const)(
+    'does not imply spatial vertex travel for %s',
+    (interpolation) => {
+      expect(
+        buildMovingPolygonBoundaryPaths(polygon(interpolation, [0, 10])),
+      ).toEqual([])
+    },
+  )
+
+  it('builds corresponding Linear boundary vertex paths', () => {
+    const paths = buildMovingPolygonBoundaryPaths(polygon('Linear', [0, 10]))
+    expect(paths).toHaveLength(3)
+    expect(paths[0]?.positions.map(({ longitude }) => longitude)).toEqual([
+      0, 2.5, 5, 7.5, 10,
+    ])
+  })
+
+  it('uses nonlinear Quadratic and Cubic evaluator coordinates', () => {
+    const quadratic = buildMovingPolygonBoundaryPaths(
+      polygon('Quadratic', [0, 10, 0]),
+    )[0]
+    const cubic = buildMovingPolygonBoundaryPaths(
+      polygon('Cubic', [0, 10, 0, 20]),
+    )[0]
+    expect(quadratic?.positions[6]?.longitude).toBe(10)
+    expect(cubic?.positions[6]?.longitude).toBe(4.375)
+  })
+
+  it('builds paths for exterior and interior ring vertices', () => {
+    const segment = polygon('Linear', [0, 10])
+    const withHole: MovingPolygon = {
+      ...segment,
+      samples: segment.samples.map((sample) => ({
+        ...sample,
+        rings: [
+          ...sample.rings,
+          [
+            { longitude: sample.rings[0]![0]!.longitude + 0.5, latitude: 0.5 },
+            { longitude: sample.rings[0]![0]!.longitude + 1, latitude: 0.5 },
+            { longitude: sample.rings[0]![0]!.longitude + 0.5, latitude: 1 },
+            { longitude: sample.rings[0]![0]!.longitude + 0.5, latitude: 0.5 },
+          ],
+        ],
+      })),
+    }
+    const paths = buildMovingPolygonBoundaryPaths(withHole)
+    expect(paths.filter(({ ringIndex }) => ringIndex === 0)).toHaveLength(3)
+    expect(paths.filter(({ ringIndex }) => ringIndex === 1)).toHaveLength(3)
+  })
+
+  it('keeps source snapshots and skips paths for incompatible topology', () => {
+    const segment = polygon('Linear', [0, 10])
+    const incompatible: MovingPolygon = {
+      ...segment,
+      samples: [
+        segment.samples[0]!,
+        {
+          ...segment.samples[1]!,
+          rings: [
+            [
+              ...segment.samples[1]!.rings[0]!.slice(0, -1),
+              { longitude: 11, latitude: 1 },
+              segment.samples[1]!.rings[0]![0]!,
+            ],
+          ],
+        },
+      ],
+    }
+    expect(() => buildMovingPolygonBoundaryPaths(incompatible)).not.toThrow()
+    expect(buildMovingPolygonBoundaryPaths(incompatible)).toEqual([])
+    expect(buildMovingPolygonTrail(incompatible)).toHaveLength(2)
   })
 
   it('samples segments independently without filling temporal gaps', () => {
