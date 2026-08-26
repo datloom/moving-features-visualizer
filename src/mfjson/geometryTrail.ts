@@ -5,12 +5,21 @@ import {
   type SweptQuad,
   type SweptSurfaceAdapter,
 } from './sweptSurface'
+import {
+  boundedSelection,
+  DEFAULT_SUBDIVISIONS,
+  MAX_GEOMETRY_TRAIL_SNAPSHOTS,
+  windowedGeometrySampleTimes,
+  type TemporalWindow,
+} from './temporalWindow'
 import type {
   MovingLineString,
   MovingPoint,
   TemporalGeometry,
   Timestamp,
 } from './types'
+
+export { MAX_GEOMETRY_TRAIL_SNAPSHOTS } from './temporalWindow'
 
 /**
  * Shared vertical-component accessor for the swept-surface topology in
@@ -22,21 +31,6 @@ export const POSITION_SURFACE_ADAPTER: SweptSurfaceAdapter<Position> = {
   heightOf: (position) => position.height ?? 0,
   withHeight: (position, height) =>
     position.height === undefined ? position : { ...position, height },
-}
-
-const DEFAULT_SUBDIVISIONS = 4
-export const MAX_GEOMETRY_TRAIL_SNAPSHOTS = 64
-
-const boundedSelection = (
-  times: readonly Timestamp[],
-  maximum: number,
-): readonly Timestamp[] => {
-  if (times.length <= maximum) return times
-  return Array.from(
-    { length: maximum },
-    (_, index) =>
-      times[Math.round((index * (times.length - 1)) / (maximum - 1))]!,
-  ).filter((time, index, selected) => time !== selected[index - 1])
 }
 
 export const geometryTrailSampleTimes = (
@@ -71,12 +65,26 @@ export const geometryTrailSampleTimes = (
   return boundedSelection(times, maximum)
 }
 
+/**
+ * Sample times for a segment, optionally clipped to a Time Query window.
+ * The single dispatch point every trail/path builder below uses, so
+ * windowing logic lives in one place rather than in each renderer.
+ */
+export const resolveGeometrySampleTimes = (
+  segment: TemporalGeometry,
+  window?: TemporalWindow,
+): readonly Timestamp[] =>
+  window
+    ? windowedGeometrySampleTimes(segment, window)
+    : geometryTrailSampleTimes(segment)
+
 export const buildMovingPointPath = (
   segment: MovingPoint,
+  window?: TemporalWindow,
 ): readonly Position[] => {
   if (segment.interpolation === 'Discrete' || segment.interpolation === 'Step')
     return []
-  return geometryTrailSampleTimes(segment).flatMap((time) => {
+  return resolveGeometrySampleTimes(segment, window).flatMap((time) => {
     const evaluated = geometryAtTime(segment, time)
     if (evaluated?.type !== 'MovingPoint') return []
     const { longitude, latitude, height } = evaluated.position
@@ -116,10 +124,17 @@ export const movingLineStringTopologyCompatible = (
 
 export const buildMovingLineStringTrail = (
   segment: MovingLineString,
+  window?: TemporalWindow,
 ): readonly MovingLineStringTrailSnapshot[] => {
-  if (!movingLineStringTopologyCompatible(segment))
-    return segment.samples.map(({ time, positions }) => ({ time, positions }))
-  return geometryTrailSampleTimes(segment).flatMap((time) => {
+  if (!movingLineStringTopologyCompatible(segment)) {
+    const samples = window
+      ? segment.samples.filter(
+          ({ time }) => time >= window.start && time <= window.end,
+        )
+      : segment.samples
+    return samples.map(({ time, positions }) => ({ time, positions }))
+  }
+  return resolveGeometrySampleTimes(segment, window).flatMap((time) => {
     const evaluated = geometryAtTime(segment, time)
     return evaluated?.type === 'MovingLineString'
       ? [{ time, positions: evaluated.positions }]
@@ -136,6 +151,7 @@ export const buildMovingLineStringTrail = (
  */
 export const buildMovingLineStringSurfaces = (
   segment: MovingLineString,
+  window?: TemporalWindow,
 ): readonly SweptQuad<Position>[] => {
   if (
     segment.interpolation === 'Discrete' ||
@@ -144,7 +160,7 @@ export const buildMovingLineStringSurfaces = (
   )
     return []
   return buildLineStringSweptQuads(
-    buildMovingLineStringTrail(segment),
+    buildMovingLineStringTrail(segment, window),
     false,
     POSITION_SURFACE_ADAPTER,
   )

@@ -259,6 +259,30 @@ describe('CesiumMap', () => {
     })
   })
 
+  it('rebuilds entities with the active Time Query window on Apply and Reset', () => {
+    render(<CesiumMap features={[feature]} />)
+    expect(useTimeStore.getState()).toMatchObject({
+      startTime: 100,
+      endTime: 200,
+    })
+    movingFeatureToEntity.mockClear()
+
+    act(() => useTimeStore.getState().applyTimeQuery(120, 180))
+
+    expect(movingFeatureToEntity).toHaveBeenCalledWith(
+      feature,
+      expect.objectContaining({ window: { start: 120, end: 180 } }),
+    )
+
+    movingFeatureToEntity.mockClear()
+    act(() => useTimeStore.getState().resetTimeQuery())
+
+    expect(movingFeatureToEntity).toHaveBeenCalledWith(
+      feature,
+      expect.objectContaining({ window: undefined }),
+    )
+  })
+
   it('renders every loaded Feature while styling selection independently', () => {
     const loadedFeatures = Array.from({ length: 10 }, (_, index) => ({
       ...feature,

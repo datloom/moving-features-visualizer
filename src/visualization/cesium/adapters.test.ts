@@ -671,6 +671,204 @@ describe('Cesium adapters', () => {
     }
   })
 
+  it('clips the MovingPoint trajectory path to a Time Query window', () => {
+    const lineFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'point-window',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingPoint',
+            interpolation: 'Linear',
+            samples: [
+              { time: 0, longitude: 0, latitude: 0 },
+              { time: 10, longitude: 10, latitude: 10 },
+              { time: 20, longitude: 20, latitude: 20 },
+            ],
+          },
+        ],
+      },
+    }
+    const window = { start: 5, end: 15 }
+    const entities = movingFeatureToEntities(lineFeature, { window })
+    const trajectory = entities.find(({ id }) =>
+      String(id).endsWith('--trajectory'),
+    )!
+    const positions = trajectory.polyline?.positions?.getValue() as
+      | { x: number }[]
+      | undefined
+    expect(Array.isArray(positions)).toBe(true)
+    if (!Array.isArray(positions)) return
+    expect(
+      Cartesian3.equals(positions[0] as Cartesian3, Cartesian3.fromDegrees(5, 5, 0)),
+    ).toBe(true)
+    expect(
+      Cartesian3.equals(
+        positions.at(-1) as Cartesian3,
+        Cartesian3.fromDegrees(15, 15, 0),
+      ),
+    ).toBe(true)
+  })
+
+  it('clips MovingPoint Discrete/Step sample markers to a Time Query window', () => {
+    const segment: MovingFeature['temporalGeometry']['segments'][number] = {
+      type: 'MovingPoint',
+      interpolation: 'Step',
+      samples: [
+        { time: 0, longitude: 0, latitude: 0 },
+        { time: 10, longitude: 10, latitude: 10 },
+        { time: 20, longitude: 20, latitude: 20 },
+      ],
+    }
+    const stepFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'point-step-window',
+      temporalGeometry: { segments: [segment] },
+    }
+    const entities = movingFeatureToEntities(stepFeature, {
+      window: { start: 5, end: 15 },
+    })
+    const markers = entities.filter(({ id }) => String(id).includes('--trail--'))
+    expect(markers.length).toBeGreaterThan(0)
+    // The boundary marker at t=5 must hold the Step value (0,0), not crash
+    // and not invent a new position.
+    const boundaryMarker = entities.find(({ id }) => String(id).endsWith('--5'))!
+    const position = boundaryMarker.position?.getValue() as
+      | { x: number }
+      | undefined
+    expect(position).toBeDefined()
+    expect(
+      Cartesian3.equals(position as Cartesian3, Cartesian3.fromDegrees(0, 0, 0)),
+    ).toBe(true)
+  })
+
+  it('clips MovingLineString trail/surface entities to a Time Query window', () => {
+    const lineFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'line-window',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingLineString',
+            interpolation: 'Linear',
+            samples: [
+              {
+                time: 0,
+                positions: [
+                  { longitude: 0, latitude: 0 },
+                  { longitude: 2, latitude: 2 },
+                ],
+              },
+              {
+                time: 20,
+                positions: [
+                  { longitude: 20, latitude: 20 },
+                  { longitude: 22, latitude: 22 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const window = { start: 5, end: 15 }
+    const entities = movingFeatureToEntities(lineFeature, { window })
+    const trail = entities.filter(({ id }) => String(id).includes('--trail--'))
+    const surfaces = entities.filter(({ id }) =>
+      String(id).includes('--surface--'),
+    )
+    expect(trail.length).toBeGreaterThan(0)
+    expect(surfaces.length).toBeGreaterThan(0)
+    const trailTimes = trail.map(({ id }) =>
+      Number(String(id).split('--trail--')[1]),
+    )
+    expect(Math.min(...trailTimes)).toBe(5)
+    expect(Math.max(...trailTimes)).toBe(15)
+    // The entity id set must match movingFeatureEntityIds for the same window.
+    const entityIds = movingFeatureEntityIds(lineFeature, { window })
+    for (const { id } of [...trail, ...surfaces]) {
+      expect(entityIds).toContain(String(id))
+    }
+  })
+
+  it('clips MovingPolygon trail/surface entities to a Time Query window', () => {
+    const polygonFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'polygon-window',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingPolygon',
+            interpolation: 'Linear',
+            samples: [0, 20].map((time) => ({
+              time,
+              rings: [
+                [
+                  { longitude: time, latitude: 0 },
+                  { longitude: time + 4, latitude: 0 },
+                  { longitude: time + 4, latitude: 4 },
+                  { longitude: time, latitude: 0 },
+                ],
+              ],
+            })),
+          },
+        ],
+      },
+    }
+    const window = { start: 5, end: 15 }
+    const entities = movingFeatureToEntities(polygonFeature, { window })
+    const trail = entities.filter(({ id }) => String(id).includes('--trail--'))
+    const surfaces = entities.filter(({ id }) =>
+      String(id).includes('--surface--'),
+    )
+    expect(trail.length).toBeGreaterThan(0)
+    expect(surfaces.length).toBeGreaterThan(0)
+    const entityIds = movingFeatureEntityIds(polygonFeature, { window })
+    for (const { id } of [...trail, ...surfaces]) {
+      expect(entityIds).toContain(String(id))
+    }
+  })
+
+  it('omits trail/surface entities for a segment entirely outside the Time Query window', () => {
+    const lineFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'line-outside-window',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingLineString',
+            interpolation: 'Linear',
+            samples: [
+              {
+                time: 0,
+                positions: [
+                  { longitude: 0, latitude: 0 },
+                  { longitude: 2, latitude: 2 },
+                ],
+              },
+              {
+                time: 10,
+                positions: [
+                  { longitude: 10, latitude: 10 },
+                  { longitude: 12, latitude: 12 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const entities = movingFeatureToEntities(lineFeature, {
+      window: { start: 100, end: 200 },
+    })
+    expect(
+      entities.filter(
+        ({ id }) =>
+          String(id).includes('--trail--') || String(id).includes('--surface--'),
+      ),
+    ).toEqual([])
+  })
+
   it('rejects MovingPoint geometry without samples', () => {
     const emptyFeature: MovingFeature = {
       ...movingFeature,

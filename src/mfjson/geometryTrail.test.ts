@@ -245,3 +245,102 @@ describe('temporal geometry trail preparation', () => {
     )
   })
 })
+
+describe('Time Query window integration', () => {
+  it('clips the MovingPoint path to the window using evaluated boundaries', () => {
+    const segment: MovingPoint = {
+      type: 'MovingPoint',
+      interpolation: 'Linear',
+      samples: [
+        { time: 0, longitude: 0, latitude: 0 },
+        { time: 10, longitude: 10, latitude: 10 },
+        { time: 20, longitude: 20, latitude: 20 },
+      ],
+    }
+    const path = buildMovingPointPath(segment, { start: 5, end: 15 })
+    expect(path[0]).toEqual({ longitude: 5, latitude: 5 })
+    expect(path.at(-1)).toEqual({ longitude: 15, latitude: 15 })
+    expect(path.every(({ longitude }) => longitude >= 5 && longitude <= 15)).toBe(
+      true,
+    )
+  })
+
+  it('omits a MovingPoint path entirely when the window misses the segment', () => {
+    const segment = point('Linear')
+    expect(buildMovingPointPath(segment, { start: 100, end: 200 })).toEqual([])
+  })
+
+  it('clips the MovingLineString trail to the window using evaluated boundaries', () => {
+    const segment = line('Linear')
+    const trail = buildMovingLineStringTrail(segment, { start: 2, end: 8 })
+    expect(trail[0]!.time).toBe(2)
+    expect(trail.at(-1)!.time).toBe(8)
+    expect(trail.every(({ time }) => time >= 2 && time <= 8)).toBe(true)
+  })
+
+  it('clips a topologically-incompatible MovingLineString trail by raw sample time', () => {
+    const incompatible: MovingLineString = {
+      type: 'MovingLineString',
+      interpolation: 'Linear',
+      samples: [
+        {
+          time: 0,
+          positions: [
+            { longitude: 0, latitude: 0 },
+            { longitude: 1, latitude: 1 },
+          ],
+        },
+        { time: 10, positions: [{ longitude: 1, latitude: 1 }] },
+        {
+          time: 20,
+          positions: [
+            { longitude: 2, latitude: 2 },
+            { longitude: 3, latitude: 3 },
+          ],
+        },
+      ],
+    }
+    expect(
+      buildMovingLineStringTrail(incompatible, { start: 5, end: 25 }).map(
+        ({ time }) => time,
+      ),
+    ).toEqual([10, 20])
+  })
+
+  it('clips MovingLineString swept surfaces to the window', () => {
+    const segment = line('Linear')
+    const surfaces = buildMovingLineStringSurfaces(segment, {
+      start: 2,
+      end: 8,
+    })
+    expect(surfaces.length).toBeGreaterThan(0)
+    expect(
+      surfaces.every(
+        ({ startTime, endTime }) => startTime >= 2 && endTime <= 8,
+      ),
+    ).toBe(true)
+  })
+
+  it.each(['Quadratic', 'Cubic'] as const)(
+    'uses the shared %s evaluator for a windowed MovingPoint path boundary',
+    (interpolation: GeometryInterpolation) => {
+      const longitudes =
+        interpolation === 'Quadratic' ? [0, 10, 0] : [0, 10, 0, 20]
+      const segment: MovingPoint = {
+        type: 'MovingPoint',
+        interpolation,
+        samples: longitudes.map((longitude, index) => ({
+          time: index * 10,
+          longitude,
+          latitude: 0,
+        })),
+      }
+      const path = buildMovingPointPath(segment, { start: 15, end: 20 })
+      const geometry = geometryAtTime(segment, 15)
+      expect(path[0]?.longitude).toBeCloseTo(
+        geometry?.type === 'MovingPoint' ? geometry.position.longitude : NaN,
+      )
+      expect(path[0]?.longitude).not.toBeCloseTo(5)
+    },
+  )
+})

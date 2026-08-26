@@ -38,6 +38,8 @@ export function TextPropertyChart({
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<ECharts | null>(null)
   const currentTime = useTimeStore((state) => state.currentTime)
+  const startTime = useTimeStore((state) => state.startTime)
+  const endTime = useTimeStore((state) => state.endTime)
   const currentValue = resolveTextValue(properties, currentTime)
 
   useEffect(() => {
@@ -78,10 +80,12 @@ export function TextPropertyChart({
         propertyName,
         properties,
         useTimeStore.getState().currentTime,
+        startTime,
+        endTime,
       ),
       { notMerge: true },
     )
-  }, [featureId, propertyName, properties])
+  }, [featureId, propertyName, properties, startTime, endTime])
 
   return (
     <section

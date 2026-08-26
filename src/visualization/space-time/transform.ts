@@ -1,8 +1,5 @@
 import { geometryAtTime } from '../../mfjson/geometryAtTime'
-import {
-  geometryTrailSampleTimes,
-  movingLineStringTopologyCompatible,
-} from '../../mfjson/geometryTrail'
+import { movingLineStringTopologyCompatible } from '../../mfjson/geometryTrail'
 import { movingPolygonTopologyCompatible } from '../../mfjson/movingPolygonTrail'
 import type { Position } from '../../mfjson/motionCurve'
 import {
@@ -10,6 +7,7 @@ import {
   buildPolygonSweptQuads,
   type SweptSurfaceAdapter,
 } from '../../mfjson/sweptSurface'
+import { windowedGeometrySampleTimes } from '../../mfjson/temporalWindow'
 import type {
   GeometryInterpolation,
   MovingFeature,
@@ -336,7 +334,10 @@ export const calculateAutoTimeAxisScale = (
       const averageSize =
         sampleSizes.reduce((total, size) => total + size, 0) /
         sampleSizes.length
-      const displayTimes = geometryTrailSampleTimes(segment)
+      const displayTimes = windowedGeometrySampleTimes(segment, {
+        start: extent.minTime,
+        end: extent.maxTime,
+      })
       let minimumGap = Number.POSITIVE_INFINITY
       for (let index = 1; index < displayTimes.length; index += 1) {
         const gap = displayTimes[index]! - displayTimes[index - 1]!
@@ -398,13 +399,22 @@ const createLineStringSurfaces = (
 ): readonly SpaceTimeLineStringSurface[] =>
   buildLineStringSweptQuads(slices, step, SPACE_TIME_SURFACE_ADAPTER)
 
+/** Space-Time only displays the active window: `extent` doubles as that window. */
+const samplesInWindow = <T extends { readonly time: Timestamp }>(
+  samples: readonly T[],
+  extent: TemporalExtent,
+): readonly T[] =>
+  samples.filter(
+    (sample) => sample.time >= extent.minTime && sample.time <= extent.maxTime,
+  )
+
 const sourcePolygonSlices = (
   segment: Extract<TemporalGeometry, { readonly type: 'MovingPolygon' }>,
   extent: TemporalExtent,
   height: number,
   scale: number,
 ): readonly SpaceTimePolygonSlice[] =>
-  segment.samples.map((sample) => ({
+  samplesInWindow(segment.samples, extent).map((sample) => ({
     time: sample.time,
     rings: sample.rings.map((ring) =>
       ring.map((position) =>
@@ -420,9 +430,10 @@ const transformSegment = (
   height: number,
   scale: number,
 ): SpaceTimeSegment => {
-  const times = geometryTrailSampleTimes(segment)
+  const window = { start: extent.minTime, end: extent.maxTime }
+  const times = windowedGeometrySampleTimes(segment, window)
   if (segment.type === 'MovingPoint') {
-    const points = segment.samples.map((sample) => ({
+    const points = samplesInWindow(segment.samples, extent).map((sample) => ({
       time: sample.time,
       ...toPosition(sample, sample.time, extent, height, scale),
     }))
@@ -440,19 +451,28 @@ const transformSegment = (
         interpolation: segment.interpolation,
         segmentIndex,
         points,
-        paths: segment.samples.slice(0, -1).map((sample, index) => [
-          points[index]!,
-          {
-            time: segment.samples[index + 1]!.time,
-            ...toPosition(
-              sample,
-              segment.samples[index + 1]!.time,
-              extent,
-              height,
-              scale,
-            ),
-          },
-        ]),
+        paths: segment.samples
+          .slice(0, -1)
+          .flatMap((sample, index) => {
+            const nextSample = segment.samples[index + 1]!
+            if (
+              nextSample.time < extent.minTime ||
+              sample.time > extent.maxTime
+            )
+              return []
+            return [
+              [
+                {
+                  time: sample.time,
+                  ...toPosition(sample, sample.time, extent, height, scale),
+                },
+                {
+                  time: nextSample.time,
+                  ...toPosition(sample, nextSample.time, extent, height, scale),
+                },
+              ],
+            ]
+          }),
       }
     return {
       type: segment.type,
@@ -486,7 +506,7 @@ const transformSegment = (
         type: segment.type,
         interpolation: segment.interpolation,
         segmentIndex,
-        slices: segment.samples.map((sample) => ({
+        slices: samplesInWindow(segment.samples, extent).map((sample) => ({
           time: sample.time,
           positions: sample.positions.map((position) =>
             toPosition(position, sample.time, extent, height, scale),

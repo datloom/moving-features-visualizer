@@ -90,9 +90,16 @@ export function CesiumMap({
     }
   }, [])
 
+  const queryActive = useTimeStore((state) => state.queryActive)
+  const windowStart = useTimeStore((state) => state.startTime)
+  const windowEnd = useTimeStore((state) => state.endTime)
+
   useEffect(() => {
     const viewer = viewerRef.current
     if (!viewer) return
+    const window = queryActive
+      ? { start: windowStart, end: windowEnd }
+      : undefined
 
     const seenFeatureIds = new Set<string>()
     const uniqueFeatures = features.filter((feature) => {
@@ -106,7 +113,7 @@ export function CesiumMap({
       const selected = feature.id === selectedFeatureId
       const selectionChanged =
         renderedSelectionRef.current.get(feature.id) !== selected
-      const entityIds = movingFeatureEntityIds(feature, { selected })
+      const entityIds = movingFeatureEntityIds(feature, { selected, window })
       entityIds.forEach((id) => desiredEntityIds.add(id))
       if (selectionChanged) {
         for (const [id, existing] of featureEntitiesRef.current) {
@@ -118,6 +125,7 @@ export function CesiumMap({
       for (const entity of movingFeatureToEntities(feature, {
         selected,
         getCurrentTime: () => useTimeStore.getState().currentTime,
+        window,
       })) {
         const id = String(entity.id)
         if (!featureEntitiesRef.current.has(id)) {
@@ -145,7 +153,7 @@ export function CesiumMap({
       useTimeStore.getState().setRange(startTime, endTime)
       if (featureSetChanged) void viewer.zoomTo(entities)
     }
-  }, [features, selectedFeatureId])
+  }, [features, selectedFeatureId, queryActive, windowStart, windowEnd])
 
   useEffect(() => {
     if (previousMapModeRef.current === mapMode) return

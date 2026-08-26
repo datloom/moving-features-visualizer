@@ -39,6 +39,8 @@ export function MeasureComparisonChart({
   const chartRef = useRef<ECharts | null>(null)
   const firstSeriesIdRef = useRef(group.series[0]?.id)
   const currentTime = useTimeStore((state) => state.currentTime)
+  const startTime = useTimeStore((state) => state.startTime)
+  const endTime = useTimeStore((state) => state.endTime)
   const currentValues = useMemo(() => {
     const byName = new Map<string, number | undefined>()
     for (const item of group.series) {
@@ -76,18 +78,17 @@ export function MeasureComparisonChart({
 
   useEffect(() => {
     firstSeriesIdRef.current = group.series[0]?.id
-    const time = useTimeStore.getState()
     chartRef.current?.setOption(
       buildMeasureComparisonChartOption(
         group.series,
-        time.currentTime,
-        time.startTime,
-        time.endTime,
+        useTimeStore.getState().currentTime,
+        startTime,
+        endTime,
         group.unitLabel,
       ),
       { notMerge: true },
     )
-  }, [group])
+  }, [group, startTime, endTime])
 
   return (
     <section

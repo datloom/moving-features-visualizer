@@ -6,6 +6,7 @@ import {
 } from './geometryTrail'
 import type { Position } from './motionCurve'
 import { buildPolygonSweptQuads, type PolygonSweptQuad } from './sweptSurface'
+import { windowedGeometrySampleTimes, type TemporalWindow } from './temporalWindow'
 import type { MovingPolygon, Timestamp } from './types'
 
 export interface MovingPolygonTrailSnapshot {
@@ -19,12 +20,23 @@ export interface MovingPolygonBoundaryPath {
   readonly positions: readonly Position[]
 }
 
+/** Optional Time Query window and snapshot cap shared by every trail/surface builder below. */
+export interface MovingPolygonSelectionOptions {
+  readonly maximum?: number
+  readonly window?: TemporalWindow
+}
+
 export const MAX_POLYGON_TRAIL_SNAPSHOTS = MAX_GEOMETRY_TRAIL_SNAPSHOTS
 
 export const movingPolygonTrailSampleTimes = (
   segment: MovingPolygon,
-  maximum = MAX_POLYGON_TRAIL_SNAPSHOTS,
-): readonly Timestamp[] => geometryTrailSampleTimes(segment, maximum)
+  options: MovingPolygonSelectionOptions = {},
+): readonly Timestamp[] => {
+  const maximum = options.maximum ?? MAX_POLYGON_TRAIL_SNAPSHOTS
+  return options.window
+    ? windowedGeometrySampleTimes(segment, options.window, maximum)
+    : geometryTrailSampleTimes(segment, maximum)
+}
 
 const positionsEqual = (first: Position, second: Position): boolean =>
   first.longitude === second.longitude &&
@@ -75,11 +87,18 @@ export const movingPolygonTopologyCompatible = (
 
 export const buildMovingPolygonTrail = (
   segment: MovingPolygon,
-  maximum = MAX_POLYGON_TRAIL_SNAPSHOTS,
+  options: MovingPolygonSelectionOptions = {},
 ): readonly MovingPolygonTrailSnapshot[] => {
-  if (!movingPolygonTopologyCompatible(segment))
-    return segment.samples.map(({ time, rings }) => ({ time, rings }))
-  return movingPolygonTrailSampleTimes(segment, maximum).flatMap((time) => {
+  if (!movingPolygonTopologyCompatible(segment)) {
+    const { window } = options
+    const samples = window
+      ? segment.samples.filter(
+          ({ time }) => time >= window.start && time <= window.end,
+        )
+      : segment.samples
+    return samples.map(({ time, rings }) => ({ time, rings }))
+  }
+  return movingPolygonTrailSampleTimes(segment, options).flatMap((time) => {
     const evaluated = geometryAtTime(segment, time)
     return evaluated?.type === 'MovingPolygon'
       ? [{ time, rings: evaluated.rings }]
@@ -96,7 +115,7 @@ export const buildMovingPolygonTrail = (
  */
 export const buildMovingPolygonSurfaces = (
   segment: MovingPolygon,
-  maximum = MAX_POLYGON_TRAIL_SNAPSHOTS,
+  options: MovingPolygonSelectionOptions = {},
 ): readonly PolygonSweptQuad<Position>[] => {
   if (
     segment.interpolation === 'Discrete' ||
@@ -105,7 +124,7 @@ export const buildMovingPolygonSurfaces = (
   )
     return []
   return buildPolygonSweptQuads(
-    buildMovingPolygonTrail(segment, maximum),
+    buildMovingPolygonTrail(segment, options),
     false,
     POSITION_SURFACE_ADAPTER,
   )
@@ -114,7 +133,7 @@ export const buildMovingPolygonSurfaces = (
 /** Transposes evaluated Polygon slices into one path per boundary vertex. */
 export const buildMovingPolygonBoundaryPaths = (
   segment: MovingPolygon,
-  maximum = MAX_POLYGON_TRAIL_SNAPSHOTS,
+  options: MovingPolygonSelectionOptions = {},
 ): readonly MovingPolygonBoundaryPath[] => {
   if (
     segment.interpolation === 'Discrete' ||
@@ -122,7 +141,7 @@ export const buildMovingPolygonBoundaryPaths = (
     !movingPolygonTopologyCompatible(segment)
   )
     return []
-  const snapshots = buildMovingPolygonTrail(segment, maximum)
+  const snapshots = buildMovingPolygonTrail(segment, options)
   const first = snapshots[0]
   if (!first) return []
   return first.rings.flatMap((ring, ringIndex) =>

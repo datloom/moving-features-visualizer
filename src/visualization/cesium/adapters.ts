@@ -17,8 +17,8 @@ import {
   buildMovingLineStringSurfaces,
   buildMovingLineStringTrail,
   buildMovingPointPath,
-  geometryTrailSampleTimes,
   movingLineStringTopologyCompatible,
+  resolveGeometrySampleTimes,
 } from '../../mfjson/geometryTrail'
 import {
   buildMovingPolygonBoundaryPaths,
@@ -26,6 +26,7 @@ import {
   buildMovingPolygonTrail,
   movingPolygonTopologyCompatible,
 } from '../../mfjson/movingPolygonTrail'
+import type { TemporalWindow } from '../../mfjson/temporalWindow'
 import type {
   MovingFeature,
   PositionSample,
@@ -228,16 +229,19 @@ const ringsToPolygonHierarchy = (
 
 export const movingFeatureEntityIds = (
   feature: MovingFeature,
-  options: { readonly selected?: boolean } = {},
+  options: {
+    readonly selected?: boolean
+    readonly window?: TemporalWindow
+  } = {},
 ): readonly string[] => {
-  void options
+  const { window } = options
   return feature.temporalGeometry.segments.flatMap((segment, index) => {
     if (segment.type === 'MovingPoint') {
       return [
         geometrySegmentEntityId(feature.id, segment, index),
         ...(segment.interpolation === 'Discrete' ||
         segment.interpolation === 'Step'
-          ? geometryTrailSampleTimes(segment).map((time) =>
+          ? resolveGeometrySampleTimes(segment, window).map((time) =>
               geometrySegmentTrailEntityId(feature.id, segment, index, time),
             )
           : [geometrySegmentTrajectoryEntityId(feature.id, segment, index)]),
@@ -246,10 +250,10 @@ export const movingFeatureEntityIds = (
     if (segment.type === 'MovingLineString') {
       return [
         geometrySegmentEntityId(feature.id, segment, index),
-        ...geometryTrailSampleTimes(segment).map((time) =>
+        ...resolveGeometrySampleTimes(segment, window).map((time) =>
           geometrySegmentTrailEntityId(feature.id, segment, index, time),
         ),
-        ...buildMovingLineStringSurfaces(segment).map((quad) =>
+        ...buildMovingLineStringSurfaces(segment, window).map((quad) =>
           geometrySegmentSurfaceEntityId(
             feature.id,
             segment,
@@ -266,10 +270,10 @@ export const movingFeatureEntityIds = (
         ...segment.samples[0]!.rings.map((_, ringIndex) =>
           geometrySegmentOutlineEntityId(feature.id, segment, index, ringIndex),
         ),
-        ...buildMovingPolygonTrail(segment).map(({ time }) =>
+        ...buildMovingPolygonTrail(segment, { window }).map(({ time }) =>
           geometrySegmentTrailEntityId(feature.id, segment, index, time),
         ),
-        ...buildMovingPolygonBoundaryPaths(segment).map(
+        ...buildMovingPolygonBoundaryPaths(segment, { window }).map(
           ({ ringIndex, vertexIndex }) =>
             geometrySegmentBoundaryPathEntityId(
               feature.id,
@@ -279,7 +283,7 @@ export const movingFeatureEntityIds = (
               vertexIndex,
             ),
         ),
-        ...buildMovingPolygonSurfaces(segment).map((quad) =>
+        ...buildMovingPolygonSurfaces(segment, { window }).map((quad) =>
           geometrySegmentSurfaceEntityId(
             feature.id,
             segment,
@@ -300,6 +304,7 @@ export const movingFeatureToEntities = (
   options: {
     readonly selected?: boolean
     readonly getCurrentTime?: () => Timestamp
+    readonly window?: TemporalWindow
   } = {},
 ): readonly Entity[] =>
   feature.temporalGeometry.segments.flatMap(
@@ -312,6 +317,7 @@ export const movingFeatureToEntities = (
       }
       const startTime = first.time
       const endTime = last.time
+      const { window } = options
       const trailColor = featureColor(options.selected === true)
       const availability = new TimeIntervalCollection([
         new TimeInterval({
@@ -322,7 +328,7 @@ export const movingFeatureToEntities = (
 
       if (segment.type === 'MovingLineString') {
         const getCurrentTime = options.getCurrentTime ?? (() => startTime)
-        const trail = buildMovingLineStringTrail(segment)
+        const trail = buildMovingLineStringTrail(segment, window)
         const topologyCompatible = movingLineStringTopologyCompatible(segment)
         return [
           new Entity({
@@ -370,7 +376,7 @@ export const movingFeatureToEntities = (
                 },
               }),
           ),
-          ...buildMovingLineStringSurfaces(segment).map(
+          ...buildMovingLineStringSurfaces(segment, window).map(
             (quad) =>
               new Entity({
                 id: geometrySegmentSurfaceEntityId(
@@ -400,8 +406,10 @@ export const movingFeatureToEntities = (
 
       if (segment.type === 'MovingPolygon') {
         const getCurrentTime = options.getCurrentTime ?? (() => startTime)
-        const trail = buildMovingPolygonTrail(segment)
-        const boundaryPaths = buildMovingPolygonBoundaryPaths(segment)
+        const trail = buildMovingPolygonTrail(segment, { window })
+        const boundaryPaths = buildMovingPolygonBoundaryPaths(segment, {
+          window,
+        })
         const topologyCompatible = movingPolygonTopologyCompatible(segment)
         const polygonFirst = segment.samples[0]!
         return [
@@ -500,7 +508,7 @@ export const movingFeatureToEntities = (
                 },
               }),
           ),
-          ...buildMovingPolygonSurfaces(segment).map(
+          ...buildMovingPolygonSurfaces(segment, { window }).map(
             (quad) =>
               new Entity({
                 id: geometrySegmentSurfaceEntityId(
@@ -529,7 +537,6 @@ export const movingFeatureToEntities = (
         ]
       }
 
-      const pointSamples = segment.samples
       const motionCurvePosition = new CallbackPositionProperty((time) => {
         if (!time) return undefined
         const evaluated = geometryAtTime(
@@ -559,33 +566,34 @@ export const movingFeatureToEntities = (
         }),
         ...(segment.interpolation === 'Discrete' ||
         segment.interpolation === 'Step'
-          ? geometryTrailSampleTimes(segment).map((time) => {
-              const sample = pointSamples.find(
-                (candidate) => candidate.time === time,
-              )!
-              return new Entity({
-                id: geometrySegmentTrailEntityId(
-                  feature.id,
-                  segment,
-                  index,
-                  time,
-                ),
-                name: feature.id,
-                position: coordinateToCartesian3(sample),
-                point: {
-                  color: trailColor.withAlpha(
-                    options.selected
-                      ? temporalGeometryStyle.point.selectedSampleOpacity
-                      : temporalGeometryStyle.point.sampleOpacity,
+          ? resolveGeometrySampleTimes(segment, window).flatMap((time) => {
+              const evaluated = geometryAtTime(segment, time)
+              if (evaluated?.type !== 'MovingPoint') return []
+              return [
+                new Entity({
+                  id: geometrySegmentTrailEntityId(
+                    feature.id,
+                    segment,
+                    index,
+                    time,
                   ),
-                  outlineColor: Color.fromCssColorString('#071b1c'),
-                  outlineWidth: 2,
-                  pixelSize: options.selected
-                    ? temporalGeometryStyle.point.selectedSamplePixelSize
-                    : temporalGeometryStyle.point.samplePixelSize,
-                  disableDepthTestDistance: Number.POSITIVE_INFINITY,
-                },
-              })
+                  name: feature.id,
+                  position: coordinateToCartesian3(evaluated.position),
+                  point: {
+                    color: trailColor.withAlpha(
+                      options.selected
+                        ? temporalGeometryStyle.point.selectedSampleOpacity
+                        : temporalGeometryStyle.point.sampleOpacity,
+                    ),
+                    outlineColor: Color.fromCssColorString('#071b1c'),
+                    outlineWidth: 2,
+                    pixelSize: options.selected
+                      ? temporalGeometryStyle.point.selectedSamplePixelSize
+                      : temporalGeometryStyle.point.samplePixelSize,
+                    disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                  },
+                }),
+              ]
             })
           : [
               new Entity({
@@ -596,7 +604,7 @@ export const movingFeatureToEntities = (
                 ),
                 name: feature.id,
                 polyline: {
-                  positions: buildMovingPointPath(segment).map(
+                  positions: buildMovingPointPath(segment, window).map(
                     coordinateToCartesian3,
                   ),
                   material: trailColor.withAlpha(

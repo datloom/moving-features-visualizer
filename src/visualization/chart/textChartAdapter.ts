@@ -101,6 +101,8 @@ export const buildTextChartOption = (
   propertyName: string,
   properties: readonly TextTemporalProperty[],
   currentTime: number,
+  startTime?: number,
+  endTime?: number,
 ): EChartsOption => ({
   animation: false,
   backgroundColor: 'transparent',
@@ -115,6 +117,8 @@ export const buildTextChartOption = (
   },
   xAxis: {
     type: 'time',
+    min: startTime,
+    max: endTime,
     axisLabel: {
       color: '#91a0ab',
       formatter: (value: number) => new Date(value).toISOString().slice(11, 19),

@@ -577,4 +577,131 @@ describe('Space-Time transformation', () => {
       visualHeight: 250,
     })
   })
+
+  describe('Time Query window (extent narrower than a segment)', () => {
+    // extent doubles as the active Time Query window: a segment spanning
+    // [0, 20] displayed through a [5, 15] extent must clip to it.
+    const windowed = { minTime: 5, maxTime: 15 }
+
+    it('clips MovingPoint points/paths to the window with evaluated boundaries', () => {
+      const pointFeature = feature('clip-point', [[0, 10, 20]])
+      const [segment] = transformSpaceTimeFeatures(
+        [pointFeature],
+        windowed,
+      )[0]!.segments
+      if (segment?.type !== 'MovingPoint') throw new Error('expected MovingPoint')
+      expect(segment.points.map(({ time }) => time)).toEqual([10])
+      const [path] = segment.paths
+      expect(path![0]!.time).toBe(5)
+      expect(path!.at(-1)!.time).toBe(15)
+      expect(path!.every(({ time }) => time >= 5 && time <= 15)).toBe(true)
+    })
+
+    it('omits a segment entirely outside the window', () => {
+      const pointFeature = feature('outside-window', [[100, 110]])
+      const [segment] = transformSpaceTimeFeatures(
+        [pointFeature],
+        windowed,
+      )[0]!.segments
+      if (segment?.type !== 'MovingPoint') throw new Error('expected MovingPoint')
+      expect(segment.points).toEqual([])
+      expect(segment.paths).toEqual([[]])
+    })
+
+    it('clips MovingLineString slices/surfaces to the window', () => {
+      const lineFeature: MovingFeature = {
+        id: 'clip-line',
+        type: 'MovingFeature',
+        temporalGeometry: {
+          segments: [
+            {
+              type: 'MovingLineString',
+              interpolation: 'Linear',
+              samples: [0, 20].map((time) => ({
+                time,
+                positions: [
+                  { longitude: time, latitude: 0 },
+                  { longitude: time + 1, latitude: 1 },
+                ],
+              })),
+            },
+          ],
+        },
+        temporalProperties: [],
+        properties: {},
+      }
+      const [segment] = transformSpaceTimeFeatures(
+        [lineFeature],
+        windowed,
+      )[0]!.segments
+      if (segment?.type !== 'MovingLineString')
+        throw new Error('expected MovingLineString')
+      expect(segment.slices[0]!.time).toBe(5)
+      expect(segment.slices.at(-1)!.time).toBe(15)
+      expect(
+        segment.surfaces.every(
+          ({ startTime, endTime }) => startTime >= 5 && endTime <= 15,
+        ),
+      ).toBe(true)
+    })
+
+    it('clips MovingPolygon slices/surfaces to the window', () => {
+      const segment = polygonSegment('Linear', [
+        { longitude: 10, latitude: 0 },
+        { longitude: 11, latitude: 0 },
+        { longitude: 11, latitude: 1 },
+        { longitude: 10, latitude: 1 },
+        { longitude: 10, latitude: 0 },
+      ])
+      const wideSegment = { ...segment, samples: [
+        segment.samples[0]!,
+        { ...segment.samples[1]!, time: 20 },
+      ] }
+      const [transformed] = transformSpaceTimeFeatures(
+        [polygonFeature(wideSegment)],
+        windowed,
+      )[0]!.segments
+      if (transformed?.type !== 'MovingPolygon')
+        throw new Error('expected MovingPolygon')
+      expect(transformed.slices[0]!.time).toBe(5)
+      expect(transformed.slices.at(-1)!.time).toBe(15)
+      expect(
+        transformed.surfaces.every(
+          ({ startTime, endTime }) => startTime >= 5 && endTime <= 15,
+        ),
+      ).toBe(true)
+    })
+
+    it('computes an Auto Time Axis Scale without crashing for a narrowed window', () => {
+      const lineFeature: MovingFeature = {
+        id: 'auto-scale-window',
+        type: 'MovingFeature',
+        temporalGeometry: {
+          segments: [
+            {
+              type: 'MovingLineString',
+              interpolation: 'Linear',
+              samples: [0, 20].map((time) => ({
+                time,
+                positions: [
+                  { longitude: time, latitude: 0 },
+                  { longitude: time + 1, latitude: 1 },
+                ],
+              })),
+            },
+          ],
+        },
+        temporalProperties: [],
+        properties: {},
+      }
+      expect(() =>
+        calculateAutoTimeAxisScale([lineFeature], windowed, 100),
+      ).not.toThrow()
+      expect(
+        [1, 2, 4, 8, 16].includes(
+          calculateAutoTimeAxisScale([lineFeature], windowed, 100),
+        ),
+      ).toBe(true)
+    })
+  })
 })

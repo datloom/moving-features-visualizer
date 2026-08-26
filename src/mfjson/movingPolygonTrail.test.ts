@@ -235,3 +235,83 @@ describe('MovingPolygon trail', () => {
     expect(times.some((time) => time > 10 && time < 30)).toBe(false)
   })
 })
+
+describe('Time Query window integration', () => {
+  it('clips the Polygon trail to the window using evaluated boundaries', () => {
+    const segment = polygon('Linear', [0, 10, 20])
+    const trail = buildMovingPolygonTrail(segment, {
+      window: { start: 5, end: 15 },
+    })
+    expect(trail[0]!.time).toBe(5)
+    expect(trail.at(-1)!.time).toBe(15)
+    expect(trail.every(({ time }) => time >= 5 && time <= 15)).toBe(true)
+  })
+
+  it('omits the trail entirely when the window misses the segment', () => {
+    const segment = polygon('Linear', [0, 10])
+    expect(
+      buildMovingPolygonTrail(segment, {
+        window: { start: 100, end: 200 },
+      }),
+    ).toEqual([])
+  })
+
+  it('clips a topologically-incompatible Polygon trail by raw sample time', () => {
+    const segment = polygon('Linear', [0, 10])
+    const incompatible: MovingPolygon = {
+      ...segment,
+      samples: [
+        segment.samples[0]!,
+        {
+          ...segment.samples[1]!,
+          rings: [
+            [
+              ...segment.samples[1]!.rings[0]!.slice(0, -1),
+              { longitude: 11, latitude: 1 },
+              segment.samples[1]!.rings[0]![0]!,
+            ],
+          ],
+        },
+      ],
+    }
+    expect(
+      buildMovingPolygonTrail(incompatible, {
+        window: { start: 5, end: 20 },
+      }).map(({ time }) => time),
+    ).toEqual([10])
+  })
+
+  it('clips Polygon swept surfaces to the window', () => {
+    const segment = polygon('Linear', [0, 10, 20])
+    const surfaces = buildMovingPolygonSurfaces(segment, {
+      window: { start: 5, end: 15 },
+    })
+    expect(surfaces.length).toBeGreaterThan(0)
+    expect(
+      surfaces.every(
+        ({ startTime, endTime }) => startTime >= 5 && endTime <= 15,
+      ),
+    ).toBe(true)
+  })
+
+  it('clips Polygon boundary vertex paths to the window', () => {
+    const window = { start: 5, end: 15 }
+    const segment = polygon('Linear', [0, 10, 20])
+    const trail = buildMovingPolygonTrail(segment, { window })
+    const paths = buildMovingPolygonBoundaryPaths(segment, { window })
+    expect(paths.length).toBeGreaterThan(0)
+    // Each boundary vertex path has one position per windowed trail snapshot.
+    expect(
+      paths.every(({ positions }) => positions.length === trail.length),
+    ).toBe(true)
+  })
+
+  it('uses the shared nonlinear evaluator at a windowed Polygon boundary', () => {
+    const quadratic = polygon('Quadratic', [0, 10, 0])
+    const trail = buildMovingPolygonTrail(quadratic, {
+      window: { start: 15, end: 20 },
+    })
+    // The Quadratic evaluator at t=15 must differ from a naive Linear guess.
+    expect(trail[0]?.rings[0]?.[0]?.longitude).not.toBeCloseTo(5)
+  })
+})

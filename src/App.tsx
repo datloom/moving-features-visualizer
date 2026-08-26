@@ -7,6 +7,7 @@ import { AppHeader, type WorkspaceMode } from './components/layout/AppHeader'
 import { WorkspaceState } from './components/layout/WorkspaceState'
 import { MapWorkspace } from './components/map/MapWorkspace'
 import { PlaybackController } from './components/timeline/PlaybackController'
+import { TimeQueryControls } from './components/timeline/TimeQueryControls'
 import { TimelineControls } from './components/timeline/TimelineControls'
 import { useFeatureStore } from './store/featureStore'
 import {
@@ -71,6 +72,7 @@ export function App() {
           )}
         </div>
       </div>
+      <TimeQueryControls />
       <TimelineControls />
       <PlaybackController />
       <LocalFileLoader

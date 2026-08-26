@@ -849,6 +849,98 @@ select {
   font-family: ui-monospace, monospace;
   font-size: 0.62rem;
 }
+.time-query-panel {
+  z-index: 12;
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.time-query-heading {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.time-query-available-range {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 0.62rem;
+}
+.time-query-available-range span:first-child {
+  color: var(--muted-strong);
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.time-query-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.time-query-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+.time-query-field input {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--foreground);
+  background: var(--surface-elevated);
+  font-size: 0.72rem;
+  color-scheme: dark;
+}
+.time-query-field input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.time-query-error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 0.62rem;
+}
+.time-query-actions {
+  display: flex;
+  gap: 8px;
+}
+.time-query-actions button {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--surface-elevated);
+  color: var(--foreground);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.time-query-actions button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+.time-query-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.time-query-actions .time-query-apply {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+  font-weight: 700;
+}
+.time-query-actions .time-query-apply:hover:not(:disabled) {
+  background: var(--primary);
+}
 .workspace-state {
   display: grid;
   grid-row: 1 / -1;

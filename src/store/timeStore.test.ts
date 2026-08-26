@@ -130,3 +130,109 @@ describe('useTimeStore', () => {
     },
   )
 })
+
+describe('Time Query', () => {
+  beforeEach(() => {
+    useTimeStore.setState(initialTimeState)
+    state().setRange(0, 100)
+  })
+
+  it('narrows the active window without changing the full extent', () => {
+    state().applyTimeQuery(30, 60)
+
+    expect(state()).toMatchObject({
+      startTime: 30,
+      endTime: 60,
+      currentTime: 30,
+      fullStartTime: 0,
+      fullEndTime: 100,
+      queryActive: true,
+    })
+  })
+
+  it('clamps a query that extends past the full extent', () => {
+    state().applyTimeQuery(-50, 150)
+
+    expect(state()).toMatchObject({ startTime: 0, endTime: 100 })
+  })
+
+  it('accepts an equal-range query spanning the full extent', () => {
+    state().applyTimeQuery(0, 100)
+
+    expect(state()).toMatchObject({
+      startTime: 0,
+      endTime: 100,
+      queryActive: true,
+    })
+  })
+
+  it('accepts a single-instant query', () => {
+    state().applyTimeQuery(40, 40)
+
+    expect(state()).toMatchObject({ startTime: 40, endTime: 40, currentTime: 40 })
+  })
+
+  it('rejects a reversed query without changing state', () => {
+    const before = state()
+
+    expect(() => state().applyTimeQuery(60, 30)).toThrow(RangeError)
+    expect(state()).toEqual(before)
+  })
+
+  it('confines playback to the query window', () => {
+    state().applyTimeQuery(30, 60)
+    state().setCurrentTime(10)
+    expect(state().currentTime).toBe(30)
+
+    state().setCurrentTime(90)
+    expect(state().currentTime).toBe(60)
+  })
+
+  it('restores the full extent on reset', () => {
+    state().applyTimeQuery(30, 60)
+    state().setCurrentTime(45)
+    state().resetTimeQuery()
+
+    expect(state()).toMatchObject({
+      startTime: 0,
+      endTime: 100,
+      currentTime: 45,
+      queryActive: false,
+    })
+  })
+
+  it('preserves an active query when the dataset range is reloaded to an overlapping extent', () => {
+    state().applyTimeQuery(30, 60)
+    state().setRange(20, 120)
+
+    expect(state()).toMatchObject({
+      startTime: 30,
+      endTime: 60,
+      queryActive: true,
+      fullStartTime: 20,
+      fullEndTime: 120,
+    })
+  })
+
+  it('clears a query that no longer overlaps a reloaded dataset range', () => {
+    state().applyTimeQuery(30, 60)
+    state().setRange(200, 300)
+
+    expect(state()).toMatchObject({
+      startTime: 200,
+      endTime: 300,
+      queryActive: false,
+    })
+  })
+
+  it('clamps a preserved query into a shrunken dataset range', () => {
+    state().applyTimeQuery(30, 60)
+    state().setRange(0, 40)
+
+    expect(state()).toMatchObject({
+      startTime: 30,
+      endTime: 40,
+      queryActive: true,
+    })
+  })
+})

@@ -93,4 +93,19 @@ describe('Text chart adapter', () => {
     expect(resolveTextValue([property], 10)).toBe('moving')
     expect(resolveTextValue([property], 15)).toBeUndefined()
   })
+
+  it('clips the x-axis domain to a Time Query window when provided', () => {
+    const property = segment('Discrete', [
+      { time: 10, value: 'moving' },
+      { time: 20, value: 'idle' },
+    ])
+    const option = buildTextChartOption('mf-1', 'status', [property], 15, 12, 18)
+    expect(option.xAxis).toMatchObject({ min: 12, max: 18 })
+  })
+
+  it('leaves the x-axis domain unbounded without a window', () => {
+    const property = segment('Discrete', [{ time: 10, value: 'moving' }])
+    const option = buildTextChartOption('mf-1', 'status', [property], 10)
+    expect(option.xAxis).toMatchObject({ min: undefined, max: undefined })
+  })
 })
