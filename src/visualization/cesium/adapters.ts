@@ -30,6 +30,7 @@ import type {
   TemporalGeometry,
   Timestamp,
 } from '../../mfjson/types'
+import { CURRENT_OBJECT_COLOR, featureColor } from './style'
 
 export const temporalGeometryStyle = {
   point: {
@@ -275,9 +276,7 @@ export const movingFeatureToEntities = (
       }
       const startTime = first.time
       const endTime = last.time
-      const color = Color.fromCssColorString(
-        options.selected ? '#f3b85b' : '#35d4c7',
-      )
+      const trailColor = featureColor(options.selected === true)
       const availability = new TimeIntervalCollection([
         new TimeInterval({
           start: timestampToJulianDate(startTime),
@@ -302,7 +301,7 @@ export const movingFeatureToEntities = (
                   ? evaluated.positions.map(coordinateToCartesian3)
                   : undefined
               }, false),
-              material: color.withAlpha(
+              material: CURRENT_OBJECT_COLOR.withAlpha(
                 options.selected
                   ? temporalGeometryStyle.lineString.selectedCurrentOpacity
                   : temporalGeometryStyle.lineString.currentOpacity,
@@ -324,7 +323,7 @@ export const movingFeatureToEntities = (
                 name: feature.id,
                 polyline: {
                   positions: snapshot.positions.map(coordinateToCartesian3),
-                  material: color.withAlpha(
+                  material: trailColor.withAlpha(
                     options.selected
                       ? temporalGeometryStyle.lineString.selectedTrailOpacity
                       : temporalGeometryStyle.lineString.trailOpacity,
@@ -357,7 +356,7 @@ export const movingFeatureToEntities = (
                   ? ringsToPolygonHierarchy(evaluated.rings)
                   : undefined
               }, false),
-              material: color.withAlpha(
+              material: CURRENT_OBJECT_COLOR.withAlpha(
                 options.selected
                   ? temporalGeometryStyle.polygon.selectedCurrentFillOpacity
                   : temporalGeometryStyle.polygon.currentFillOpacity,
@@ -385,7 +384,7 @@ export const movingFeatureToEntities = (
                       ? evaluated.rings[ringIndex]?.map(coordinateToCartesian3)
                       : undefined
                   }, false),
-                  material: color.withAlpha(
+                  material: CURRENT_OBJECT_COLOR.withAlpha(
                     temporalGeometryStyle.polygon.currentOutlineOpacity,
                   ),
                   width: options.selected
@@ -406,13 +405,13 @@ export const movingFeatureToEntities = (
                 name: feature.id,
                 polygon: {
                   hierarchy: ringsToPolygonHierarchy(snapshot.rings),
-                  material: color.withAlpha(
+                  material: trailColor.withAlpha(
                     options.selected
                       ? temporalGeometryStyle.polygon.selectedTrailFillOpacity
                       : temporalGeometryStyle.polygon.trailFillOpacity,
                   ),
                   outline: true,
-                  outlineColor: color.withAlpha(
+                  outlineColor: trailColor.withAlpha(
                     options.selected
                       ? temporalGeometryStyle.polygon
                           .selectedTrailOutlineOpacity
@@ -435,7 +434,7 @@ export const movingFeatureToEntities = (
                 name: feature.id,
                 polyline: {
                   positions: path.positions.map(coordinateToCartesian3),
-                  material: color.withAlpha(
+                  material: trailColor.withAlpha(
                     options.selected
                       ? temporalGeometryStyle.polygon.selectedPathOpacity
                       : temporalGeometryStyle.polygon.pathOpacity,
@@ -468,7 +467,7 @@ export const movingFeatureToEntities = (
           availability,
           position: motionCurvePosition,
           point: {
-            color,
+            color: CURRENT_OBJECT_COLOR,
             outlineColor: Color.fromCssColorString('#071b1c'),
             outlineWidth: options.selected ? 4 : 3,
             pixelSize: options.selected
@@ -493,7 +492,7 @@ export const movingFeatureToEntities = (
                 name: feature.id,
                 position: coordinateToCartesian3(sample),
                 point: {
-                  color: color.withAlpha(
+                  color: trailColor.withAlpha(
                     options.selected
                       ? temporalGeometryStyle.point.selectedSampleOpacity
                       : temporalGeometryStyle.point.sampleOpacity,
@@ -519,7 +518,7 @@ export const movingFeatureToEntities = (
                   positions: buildMovingPointPath(segment).map(
                     coordinateToCartesian3,
                   ),
-                  material: color.withAlpha(
+                  material: trailColor.withAlpha(
                     options.selected
                       ? temporalGeometryStyle.point.selectedPathOpacity
                       : temporalGeometryStyle.point.pathOpacity,

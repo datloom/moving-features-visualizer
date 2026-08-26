@@ -1,7 +1,8 @@
-import { Cartesian3, JulianDate } from 'cesium'
+import { Cartesian3, Color, JulianDate } from 'cesium'
 import { describe, expect, it } from 'vitest'
 
 import type { MovingFeature } from '../../mfjson/types'
+import { CURRENT_OBJECT_COLOR } from '../cesium/style'
 import {
   buildSpaceTimeCesiumEntities,
   featureIdFromSpaceTimeEntityId,
@@ -30,6 +31,20 @@ const movingFeature: MovingFeature = {
   },
   temporalProperties: [],
   properties: {},
+}
+
+const expectColor = (actual: unknown, expected: Color): void => {
+  expect(actual).toBeInstanceOf(Color)
+  if (actual instanceof Color) expect(Color.equals(actual, expected)).toBe(true)
+}
+
+const materialColor = (
+  material: { readonly getValue: (time: JulianDate) => unknown } | undefined,
+): unknown => {
+  const value = material?.getValue(JulianDate.now())
+  return typeof value === 'object' && value !== null && 'color' in value
+    ? value.color
+    : undefined
 }
 
 describe('Space-Time Cesium adapter', () => {
@@ -121,6 +136,94 @@ describe('Space-Time Cesium adapter', () => {
         ({ polygon: surface }) =>
           surface?.perPositionHeight?.getValue(JulianDate.now()) === true &&
           surface.outline?.getValue(JulianDate.now()) === false,
+      ),
+    ).toBe(true)
+  })
+
+  it('uses red current geometry and feature-colored historical geometry for every type', () => {
+    const geometries: MovingFeature = {
+      id: 'all-types',
+      type: 'MovingFeature',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingPoint',
+            interpolation: 'Linear',
+            samples: [
+              { time: 0, longitude: 0, latitude: 0 },
+              { time: 10, longitude: 1, latitude: 1 },
+            ],
+          },
+          {
+            type: 'MovingLineString',
+            interpolation: 'Linear',
+            samples: [0, 10].map((time) => ({
+              time,
+              positions: [
+                { longitude: time, latitude: 0 },
+                { longitude: time + 1, latitude: 1 },
+              ],
+            })),
+          },
+          {
+            type: 'MovingPolygon',
+            interpolation: 'Linear',
+            samples: [0, 10].map((time) => ({
+              time,
+              rings: [
+                [
+                  { longitude: time, latitude: 0 },
+                  { longitude: time + 1, latitude: 0 },
+                  { longitude: time + 1, latitude: 1 },
+                  { longitude: time, latitude: 0 },
+                ],
+              ],
+            })),
+          },
+        ],
+      },
+      temporalProperties: [],
+      properties: {},
+    }
+    const result = buildSpaceTimeCesiumEntities(
+      [geometries],
+      { minTime: 0, maxTime: 10 },
+      { currentTime: 5, selectedFeatureId: geometries.id },
+    )
+    const [point, line, polygon] = result.currentGeometryEntities.map(
+      ({ entity }) => entity,
+    )
+    expectColor(
+      point?.point?.color?.getValue(JulianDate.now()),
+      CURRENT_OBJECT_COLOR,
+    )
+    expectColor(materialColor(line?.polyline?.material), CURRENT_OBJECT_COLOR)
+    expectColor(
+      materialColor(polygon?.polygon?.material),
+      CURRENT_OBJECT_COLOR.withAlpha(0.52),
+    )
+    expectColor(
+      polygon?.polygon?.outlineColor?.getValue(JulianDate.now()),
+      CURRENT_OBJECT_COLOR,
+    )
+
+    const historical = result.entities.filter(
+      ({ id }) => !id.endsWith(':current') && id.includes(':segment:'),
+    )
+    const historicalColors: Color[] = []
+    for (const entity of historical) {
+      const colors: unknown[] = [
+        entity.point?.color?.getValue(JulianDate.now()),
+        materialColor(entity.polyline?.material),
+        materialColor(entity.polygon?.material),
+      ]
+      for (const color of colors)
+        if (color instanceof Color) historicalColors.push(color)
+    }
+    expect(historicalColors.length).toBeGreaterThan(0)
+    expect(
+      historicalColors.every(
+        (color) => !Color.equals(color.withAlpha(1), CURRENT_OBJECT_COLOR),
       ),
     ).toBe(true)
   })

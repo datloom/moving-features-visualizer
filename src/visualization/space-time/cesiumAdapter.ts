@@ -16,6 +16,7 @@ import type {
   TemporalGeometry,
   Timestamp,
 } from '../../mfjson/types'
+import { CURRENT_OBJECT_COLOR } from '../cesium/style'
 import {
   DEFAULT_TIME_AXIS_HEIGHT,
   DEFAULT_TIME_TICK_COUNT,
@@ -100,7 +101,7 @@ const createCurrentEntity = (
       name: `${featureId} current position`,
       show: false,
       point: {
-        color: selected ? AXIS : PRIMARY,
+        color: CURRENT_OBJECT_COLOR,
         outlineColor: OUTLINE,
         outlineWidth: 2,
         pixelSize: selected ? 12 : 9,
@@ -114,7 +115,7 @@ const createCurrentEntity = (
       show: false,
       polyline: {
         positions: [],
-        material: selected ? AXIS : PRIMARY,
+        material: CURRENT_OBJECT_COLOR,
         width: selected ? 6 : 4,
       },
     })
@@ -124,9 +125,9 @@ const createCurrentEntity = (
     show: false,
     polygon: {
       hierarchy: new PolygonHierarchy([]),
-      material: (selected ? AXIS : PRIMARY).withAlpha(selected ? 0.52 : 0.4),
+      material: CURRENT_OBJECT_COLOR.withAlpha(selected ? 0.52 : 0.4),
       outline: true,
-      outlineColor: selected ? AXIS : PRIMARY,
+      outlineColor: CURRENT_OBJECT_COLOR,
       perPositionHeight: true,
     },
   })

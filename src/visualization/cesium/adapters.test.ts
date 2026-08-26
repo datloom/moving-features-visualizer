@@ -1,4 +1,4 @@
-import { Cartesian3, JulianDate, PolygonHierarchy } from 'cesium'
+import { Cartesian3, Color, JulianDate, PolygonHierarchy } from 'cesium'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -10,6 +10,21 @@ import {
   timestampToJulianDate,
 } from './adapters'
 import type { MovingFeature } from '../../mfjson/types'
+import { CURRENT_OBJECT_COLOR, featureColor } from './style'
+
+const expectColor = (actual: unknown, expected: Color): void => {
+  expect(actual).toBeInstanceOf(Color)
+  if (actual instanceof Color) expect(Color.equals(actual, expected)).toBe(true)
+}
+
+const materialColor = (
+  material: { readonly getValue: (time: JulianDate) => unknown } | undefined,
+): unknown => {
+  const value = material?.getValue(JulianDate.now())
+  return typeof value === 'object' && value !== null && 'color' in value
+    ? value.color
+    : undefined
+}
 
 const movingFeature: MovingFeature = {
   id: 'vehicle-1',
@@ -123,6 +138,18 @@ describe('Cesium adapters', () => {
           String(id).endsWith('--trajectory') && polyline !== undefined,
       ),
     ).toBe(true)
+    const current = movingFeatureToEntities(movingFeature)[0]!
+    const trajectory = movingFeatureToEntities(movingFeature).find(({ id }) =>
+      String(id).endsWith('--trajectory'),
+    )!
+    expectColor(
+      current.point?.color?.getValue(JulianDate.now()),
+      CURRENT_OBJECT_COLOR,
+    )
+    expectColor(
+      materialColor(trajectory.polyline?.material),
+      featureColor(false).withAlpha(0.5),
+    )
     expect(
       JulianDate.equals(
         interval.start,
@@ -232,6 +259,14 @@ describe('Cesium adapters', () => {
     expect(
       Number(selectedTrajectory.polyline?.width?.getValue()),
     ).toBeGreaterThan(Number(normal.path?.width?.getValue() ?? 0))
+    expectColor(
+      selectedPosition.point?.color?.getValue(JulianDate.now()),
+      CURRENT_OBJECT_COLOR,
+    )
+    expectColor(
+      materialColor(selectedTrajectory.polyline?.material),
+      featureColor(true).withAlpha(0.75),
+    )
   })
 
   it('renders Step MovingPoint previews as sample markers without a path line', () => {
@@ -297,6 +332,17 @@ describe('Cesium adapters', () => {
       timestampToJulianDate(currentTime),
     )
     expect(Array.isArray(positions)).toBe(true)
+    expectColor(
+      materialColor(entity.polyline?.material),
+      CURRENT_OBJECT_COLOR.withAlpha(0.85),
+    )
+    const trail = movingFeatureToEntities(lineFeature).find(({ id }) =>
+      String(id).includes('--trail--'),
+    )!
+    expectColor(
+      materialColor(trail.polyline?.material),
+      featureColor(false).withAlpha(0.18),
+    )
     if (!Array.isArray(positions)) return
     expect(positions).toHaveLength(2)
     expect(
@@ -389,11 +435,26 @@ describe('Cesium adapters', () => {
     if (!(hierarchy instanceof PolygonHierarchy)) return
     expect(hierarchy.holes).toHaveLength(1)
     expect(hierarchy.positions).toHaveLength(4)
+    expectColor(
+      materialColor(current.polygon?.material),
+      CURRENT_OBJECT_COLOR.withAlpha(0.34),
+    )
+    const currentOutline = entities.find(({ id }) =>
+      String(id).includes('--outline--'),
+    )!
+    expectColor(
+      materialColor(currentOutline.polyline?.material),
+      CURRENT_OBJECT_COLOR.withAlpha(0.9),
+    )
 
     const future = entities.find(({ id }) =>
       String(id).endsWith('--trail--10'),
     )!
     expect(future.polygon?.show?.getValue()).not.toBe(false)
+    expectColor(
+      materialColor(future.polygon?.material),
+      featureColor(false).withAlpha(0.045),
+    )
     const boundaryPaths = entities.filter(({ id }) =>
       String(id).includes('--boundary-path--'),
     )
