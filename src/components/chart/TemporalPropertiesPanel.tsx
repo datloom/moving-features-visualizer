@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import type { MovingFeature, TextTemporalProperty } from '../../mfjson/types'
+import type {
+  ImageTemporalProperty,
+  MovingFeature,
+  TextTemporalProperty,
+} from '../../mfjson/types'
 import { useFeatureStore } from '../../store/featureStore'
 import {
   createFeatureComparisonSeries,
@@ -12,6 +16,7 @@ import {
   reconcileSelection,
   type MeasureComparisonMode,
 } from '../../visualization/chart/measureComparison'
+import { ImagePropertyTimeline } from './ImagePropertyTimeline'
 import { MeasureComparisonChart } from './MeasureComparisonChart'
 import { TextPropertyChart } from './TextPropertyChart'
 
@@ -46,6 +51,14 @@ export function TemporalPropertiesPanel({
       selectedFeature.temporalProperties.filter(
         (property): property is TextTemporalProperty =>
           property.type === 'Text',
+      ),
+    [selectedFeature],
+  )
+  const imageProperties = useMemo(
+    () =>
+      selectedFeature.temporalProperties.filter(
+        (property): property is ImageTemporalProperty =>
+          property.type === 'IMAGE',
       ),
     [selectedFeature],
   )
@@ -101,8 +114,11 @@ export function TemporalPropertiesPanel({
       ...[...new Set(textProperties.map((property) => property.name))].map(
         (name) => ({ key: `Text:${name}`, name, type: 'Text' as const }),
       ),
+      ...[...new Set(imageProperties.map((property) => property.name))].map(
+        (name) => ({ key: `IMAGE:${name}`, name, type: 'IMAGE' as const }),
+      ),
     ],
-    [logicalMeasureProperties, textProperties],
+    [imageProperties, logicalMeasureProperties, textProperties],
   )
   useEffect(() => {
     setSelectedPropertyKeys((current) =>
@@ -128,6 +144,15 @@ export function TemporalPropertiesPanel({
         [...selectedPropertyKeys]
           .filter((key) => key.startsWith('Text:'))
           .map((key) => key.slice('Text:'.length)),
+      ),
+    [selectedPropertyKeys],
+  )
+  const selectedImageNames = useMemo(
+    () =>
+      new Set(
+        [...selectedPropertyKeys]
+          .filter((key) => key.startsWith('IMAGE:'))
+          .map((key) => key.slice('IMAGE:'.length)),
       ),
     [selectedPropertyKeys],
   )
@@ -157,6 +182,14 @@ export function TemporalPropertiesPanel({
       })),
     [selectedTextNames, textProperties],
   )
+  const selectedImageProperties = useMemo(
+    () =>
+      [...selectedImageNames].map((name) => ({
+        name,
+        segments: imageProperties.filter((property) => property.name === name),
+      })),
+    [imageProperties, selectedImageNames],
+  )
   const groups = useMemo(
     () =>
       mode === 'features'
@@ -185,11 +218,19 @@ export function TemporalPropertiesPanel({
       ...selectedTextProperties.map(({ name, segments }) => ({
         key: `text:${name}`,
         propertyKeys: [`Text:${name}`],
+        kind: 'text' as const,
+        name,
+        segments,
+      })),
+      ...selectedImageProperties.map(({ name, segments }) => ({
+        key: `image:${name}`,
+        propertyKeys: [`IMAGE:${name}`],
+        kind: 'image' as const,
         name,
         segments,
       })),
     ],
-    [groups, selectedTextProperties],
+    [groups, selectedImageProperties, selectedTextProperties],
   )
 
   useEffect(() => {
@@ -232,7 +273,7 @@ export function TemporalPropertiesPanel({
       <header className="temporal-panel-heading">
         <div>
           <h2>Temporal Properties</h2>
-          <span>Measure and Text comparison</span>
+          <span>Measure, Text, and Image comparison</span>
         </div>
         <span>{features.length} features</span>
       </header>
@@ -361,6 +402,11 @@ export function TemporalPropertiesPanel({
                 >
                   {'group' in entry ? (
                     <MeasureComparisonChart group={entry.group} />
+                  ) : entry.kind === 'image' ? (
+                    <ImagePropertyTimeline
+                      propertyName={entry.name}
+                      properties={entry.segments}
+                    />
                   ) : (
                     <TextPropertyChart
                       featureId={selectedFeature.id}

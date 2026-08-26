@@ -421,6 +421,62 @@ describe('validateMfJson', () => {
     })
   })
 
+  it.each(['Linear', 'Regression', 'Quadratic', 'Cubic'])(
+    'rejects IMAGE + %s interpolation',
+    (interpolation) => {
+      const result = validateMfJson({
+        ...validFeature,
+        temporalProperties: [
+          {
+            datetimes: ['2024-01-01T00:00:00Z'],
+            camera: {
+              type: 'IMAGE',
+              interpolation,
+              values: ['https://example.test/frame.png'],
+            },
+          },
+        ],
+      })
+      expect(result).toMatchObject({
+        valid: false,
+        issues: [
+          expect.objectContaining({
+            path: '$.temporalProperties[0].camera.interpolation',
+            code: 'unsupported_value',
+            expected: ['Discrete', 'Step'],
+          }),
+        ],
+      })
+    },
+  )
+
+  it.each([
+    ['a plain string with no scheme', 'not-a-url'],
+    ['a bare base64 payload', 'iVBORw0KGgoAAAANSUhEUg=='],
+    ['an unsupported scheme', 'ftp://example.test/frame.png'],
+  ])('rejects an IMAGE value that is %s', (_description, value) => {
+    const result = validateMfJson({
+      ...validFeature,
+      temporalProperties: [
+        {
+          datetimes: ['2024-01-01T00:00:00Z'],
+          camera: { type: 'IMAGE', interpolation: 'Discrete', values: [value] },
+        },
+      ],
+    })
+
+    expect(result).toMatchObject({
+      valid: false,
+      issues: [
+        expect.objectContaining({
+          path: '$.temporalProperties[0].camera.values[0]',
+          code: 'invalid_value',
+          expected: 'http(s) URL or data:image/... URL',
+        }),
+      ],
+    })
+  })
+
   it('rejects unordered temporal-property datetimes independently of geometry', () => {
     const result = validateMfJson({
       ...validFeature,

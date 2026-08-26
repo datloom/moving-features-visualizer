@@ -29,8 +29,7 @@ export interface TextRendererStrategy extends StrategyBase {
 export interface ImageRendererStrategy extends StrategyBase {
   readonly renderer: 'image-viewer'
   readonly property: ImageTemporalProperty
-  readonly renderable: false
-  readonly unavailableReason: 'IMAGE rendering is not implemented yet.'
+  readonly renderable: true
 }
 
 export type PropertyRendererStrategy =
@@ -79,8 +78,7 @@ export const getPropertyRendererStrategy = (
         renderer: 'image-viewer',
         property,
         interpolationBehavior: imageBehavior(property),
-        renderable: false,
-        unavailableReason: 'IMAGE rendering is not implemented yet.',
+        renderable: true,
       }
   }
 }

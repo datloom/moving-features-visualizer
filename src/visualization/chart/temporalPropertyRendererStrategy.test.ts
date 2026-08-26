@@ -64,8 +64,7 @@ describe('temporal property renderer strategy', () => {
     ).toMatchObject({
       renderer: 'image-viewer',
       interpolationBehavior: behavior,
-      renderable: false,
-      unavailableReason: 'IMAGE rendering is not implemented yet.',
+      renderable: true,
     })
   })
 })

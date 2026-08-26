@@ -30,6 +30,20 @@ vi.mock('./TextPropertyChart', () => ({
   ),
 }))
 
+vi.mock('./ImagePropertyTimeline', () => ({
+  ImagePropertyTimeline: ({
+    propertyName,
+    properties,
+  }: {
+    propertyName: string
+    properties: { samples: unknown[] }[]
+  }) => (
+    <div data-testid="image-timeline">
+      {propertyName}:{properties.length}
+    </div>
+  ),
+}))
+
 import { TemporalPropertiesPanel } from './TemporalPropertiesPanel'
 
 const featureWith = (
@@ -127,6 +141,23 @@ describe('TemporalPropertiesPanel', () => {
     expect(screen.getByTestId('comparison-chart')).toHaveTextContent('speed')
     expect(screen.getByTestId('text-chart')).toHaveTextContent('status:1')
     expect(screen.queryByRole('button', { name: 'Text Timeline' })).toBeNull()
+  })
+
+  it('renders a selected Image property via the Image renderer', () => {
+    const withCamera = featureWith('camera-feature', [
+      {
+        type: 'IMAGE',
+        name: 'camera',
+        interpolation: 'Step',
+        samples: [{ time: 1_000, value: 'https://example.test/frame.png' }],
+      },
+    ])
+    useFeatureStore.getState().replaceFeatures([withCamera])
+    render(<TemporalPropertiesPanel feature={withCamera} />)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'camera · IMAGE' }))
+    expect(screen.getByTestId('image-timeline')).toHaveTextContent('camera:1')
+    expect(screen.queryByTestId('comparison-chart')).not.toBeInTheDocument()
   })
 
   it('renders and removes a Text chart immediately from its checkbox', () => {

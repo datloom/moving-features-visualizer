@@ -4,6 +4,7 @@ import {
   GEOMETRY_INTERPOLATIONS,
   normalizeGeometryInterpolation,
 } from './geometryInterpolation'
+import { normalizeImageSource } from './imageSource'
 
 const recordSchema = z.record(z.string(), z.unknown())
 
@@ -594,6 +595,22 @@ const validatePropertyDefinition = (
         code: 'invalid_value',
         message: `A ${propertyType} value has the wrong type.`,
         expected: propertyType === 'Measure' ? 'finite number' : 'string',
+        actual: propertyValue,
+      })
+      return
+    }
+
+    if (
+      propertyType === 'IMAGE' &&
+      typeof propertyValue === 'string' &&
+      normalizeImageSource(propertyValue) === undefined
+    ) {
+      addIssue(context, {
+        path: `${path}.values[${index}]`,
+        code: 'invalid_value',
+        message:
+          'An IMAGE value must be an http(s) URL or a data:image/... URL.',
+        expected: 'http(s) URL or data:image/... URL',
         actual: propertyValue,
       })
     }
