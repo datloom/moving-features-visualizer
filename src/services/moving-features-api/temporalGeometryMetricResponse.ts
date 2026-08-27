@@ -10,8 +10,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /** Value types recognized for a numeric TemporalGeometryQuery metric (velocity/acceleration/distance). */
 const RECOGNIZED_VALUE_TYPES = ['TReal', 'TInteger'] as const
 
-/** Interpolation modes recognized in a TemporalGeometryMetric value sequence. */
-const RECOGNIZED_INTERPOLATIONS = ['Discrete', 'Step', 'Linear'] as const
+/**
+ * Interpolation modes recognized in a TemporalGeometryMetric value sequence.
+ * Exported so the Measure adapter (`derivedMeasureProperty.ts`) can map
+ * these onto `MeasureInterpolation` without re-declaring the same list.
+ */
+export const RECOGNIZED_INTERPOLATIONS = ['Discrete', 'Step', 'Linear'] as const
 
 const invalid = (message: string): never => {
   throw new MovingFeaturesApiError(
