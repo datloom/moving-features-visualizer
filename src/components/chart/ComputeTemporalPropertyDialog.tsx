@@ -11,23 +11,16 @@ import {
   type ComputeMetric,
 } from '../../mfjson/computeQuery'
 import type { MovingFeature } from '../../mfjson/types'
+import {
+  formatUtcDateTimeLocal,
+  parseUtcDateTimeLocal,
+} from '../../mfjson/utcDateTimeLocal'
 import { MovingFeaturesApiClient } from '../../services/moving-features-api/MovingFeaturesApiClient'
 import { adaptTemporalGeometryQueryOutcome } from '../../services/moving-features-api/derivedMeasureProperty'
 import { runTemporalGeometryQuery } from '../../services/moving-features-api/temporalGeometryQueryOrchestrator'
 import { useFeatureStore } from '../../store/featureStore'
 import { useServerCollectionStore } from '../../store/serverCollectionStore'
 import { Icon } from '../ui/Icon'
-
-const pad = (value: number): string => String(value).padStart(2, '0')
-
-/** `datetime-local` inputs need local wall-clock time with no timezone suffix. */
-const toLocalInputValue = (timestamp: number): string => {
-  const date = new Date(timestamp)
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-const parseLocalInputValue = (value: string): number =>
-  new Date(value).getTime()
 
 const defaultGeometrySelection = (
   feature: MovingFeature,
@@ -87,10 +80,10 @@ export function ComputeTemporalPropertyDialog({
     [feature, geometrySelection],
   )
   const [startInput, setStartInput] = useState(() =>
-    timeRange ? toLocalInputValue(timeRange.start) : '',
+    timeRange ? formatUtcDateTimeLocal(timeRange.start) : '',
   )
   const [endInput, setEndInput] = useState(() =>
-    timeRange ? toLocalInputValue(timeRange.end) : '',
+    timeRange ? formatUtcDateTimeLocal(timeRange.end) : '',
   )
   const [runState, setRunState] = useState<ComputeRunState>({ kind: 'idle' })
 
@@ -110,15 +103,15 @@ export function ComputeTemporalPropertyDialog({
     setGeometrySelection(selection)
     setRunState({ kind: 'idle' })
     const range = getComputeTimeRange(feature, selection)
-    setStartInput(range ? toLocalInputValue(range.start) : '')
-    setEndInput(range ? toLocalInputValue(range.end) : '')
+    setStartInput(range ? formatUtcDateTimeLocal(range.start) : '')
+    setEndInput(range ? formatUtcDateTimeLocal(range.end) : '')
   }
 
   const selectedOption = geometryOptions.find(
     (option) => option.value === geometrySelection,
   )
-  const parsedStart = startInput ? parseLocalInputValue(startInput) : NaN
-  const parsedEnd = endInput ? parseLocalInputValue(endInput) : NaN
+  const parsedStart = startInput ? parseUtcDateTimeLocal(startInput) : NaN
+  const parsedEnd = endInput ? parseUtcDateTimeLocal(endInput) : NaN
   const rangeIsValid =
     Number.isFinite(parsedStart) &&
     Number.isFinite(parsedEnd) &&
@@ -298,7 +291,7 @@ export function ComputeTemporalPropertyDialog({
               </label>
               <div className="compute-time-range">
                 <label className="comparison-field">
-                  Start
+                  Start (UTC)
                   <input
                     disabled={isRunning}
                     onChange={(event) => {
@@ -310,7 +303,7 @@ export function ComputeTemporalPropertyDialog({
                   />
                 </label>
                 <label className="comparison-field">
-                  End
+                  End (UTC)
                   <input
                     disabled={isRunning}
                     onChange={(event) => {

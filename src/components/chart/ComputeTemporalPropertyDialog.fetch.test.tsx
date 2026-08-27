@@ -124,10 +124,10 @@ describe('ComputeTemporalPropertyDialog — real fetch (one TemporalGeometry)', 
     expect(
       screen.getByLabelText<HTMLSelectElement>('Temporal Geometry').value,
     ).toBe('de95d397-ffc7-4ae9-a730-4211757add8c')
-    fireEvent.change(screen.getByLabelText('Start'), {
+    fireEvent.change(screen.getByLabelText('Start (UTC)'), {
       target: { value: '2023-11-20T13:30' },
     })
-    fireEvent.change(screen.getByLabelText('End'), {
+    fireEvent.change(screen.getByLabelText('End (UTC)'), {
       target: { value: '2023-11-20T13:33' },
     })
 

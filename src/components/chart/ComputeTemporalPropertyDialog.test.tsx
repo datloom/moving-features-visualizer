@@ -9,6 +9,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { parseUtcDateTimeLocal } from '../../mfjson/utcDateTimeLocal'
 import type { MovingFeature } from '../../mfjson/types'
 import { initialFeatureState, useFeatureStore } from '../../store/featureStore'
 import { useServerCollectionStore } from '../../store/serverCollectionStore'
@@ -203,22 +204,22 @@ describe('ComputeTemporalPropertyDialog', () => {
         onComputed={vi.fn()}
       />,
     )
-    const start = screen.getByLabelText<HTMLInputElement>('Start')
-    const end = screen.getByLabelText<HTMLInputElement>('End')
-    expect(new Date(start.value).getTime()).toBe(
+    const start = screen.getByLabelText<HTMLInputElement>('Start (UTC)')
+    const end = screen.getByLabelText<HTMLInputElement>('End (UTC)')
+    expect(parseUtcDateTimeLocal(start.value)).toBe(
       Date.parse('2026-01-01T00:00:00Z'),
     )
-    expect(new Date(end.value).getTime()).toBe(
+    expect(parseUtcDateTimeLocal(end.value)).toBe(
       Date.parse('2026-01-01T00:20:00Z'),
     )
 
     fireEvent.change(screen.getByLabelText('Temporal Geometry'), {
       target: { value: 'tg-1' },
     })
-    expect(new Date(start.value).getTime()).toBe(
+    expect(parseUtcDateTimeLocal(start.value)).toBe(
       Date.parse('2026-01-01T00:00:00Z'),
     )
-    expect(new Date(end.value).getTime()).toBe(
+    expect(parseUtcDateTimeLocal(end.value)).toBe(
       Date.parse('2026-01-01T00:10:00Z'),
     )
 
@@ -226,10 +227,10 @@ describe('ComputeTemporalPropertyDialog', () => {
     fireEvent.change(screen.getByLabelText('Temporal Geometry'), {
       target: { value: 'all' },
     })
-    expect(new Date(start.value).getTime()).toBe(
+    expect(parseUtcDateTimeLocal(start.value)).toBe(
       Date.parse('2026-01-01T00:00:00Z'),
     )
-    expect(new Date(end.value).getTime()).toBe(
+    expect(parseUtcDateTimeLocal(end.value)).toBe(
       Date.parse('2026-01-01T00:20:00Z'),
     )
   })
