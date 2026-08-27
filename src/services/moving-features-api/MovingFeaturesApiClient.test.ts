@@ -310,6 +310,44 @@ describe('MovingFeaturesApiClient', () => {
       ).resolves.toEqual(validMetricResponse('acceleration'))
     })
 
+    it('builds the exact request URL/method/headers for a real-world example', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(response(validMetricResponse('velocity')))
+      const client = new MovingFeaturesApiClient(
+        'http://localhost:5050',
+        fetchMock,
+      )
+      await client.getTemporalGeometryMetric({
+        collectionId: 'b71a9504-8872-4c47-a387-907feaa9d738',
+        mFeatureId: '0e21f2eb-7bd6-4731-a0ed-ad07fff66561',
+        tGeometryId: 'de95d397-ffc7-4ae9-a730-4211757add8c',
+        metric: 'velocity',
+        startTime: Date.parse('2023-11-20T13:30:00Z'),
+        endTime: Date.parse('2023-11-20T13:33:00Z'),
+      })
+
+      const [url, init] = fetchMock.mock.calls[0]! as [URL, RequestInit]
+      expect(url.toString()).toBe(
+        'http://localhost:5050/collections/b71a9504-8872-4c47-a387-907feaa9d738' +
+          '/items/0e21f2eb-7bd6-4731-a0ed-ad07fff66561' +
+          '/tgsequence/de95d397-ffc7-4ae9-a730-4211757add8c/velocity' +
+          // `.toISOString()` includes milliseconds — still valid ISO-8601,
+          // and URLSearchParams encodes the value exactly once (`:` -> %3A,
+          // `/` -> %2F), never double-encoded and never quoted.
+          '?datetime=2023-11-20T13%3A30%3A00.000Z%2F2023-11-20T13%3A33%3A00.000Z',
+      )
+      expect(init.method).toBeUndefined() // GET is the implicit default.
+      expect(init.headers).toEqual({ Accept: 'application/json' })
+      const datetimeValue = url.searchParams.get('datetime')!
+      expect(datetimeValue).toBe(
+        '2023-11-20T13:30:00.000Z/2023-11-20T13:33:00.000Z',
+      )
+      expect(datetimeValue).not.toContain('"')
+      expect(url.toString()).not.toContain('%22')
+      expect(url.toString()).not.toContain('%25') // no double-encoding
+    })
+
     it.each([
       ['missing name', { ...validMetricResponse('velocity'), name: undefined }],
       [
