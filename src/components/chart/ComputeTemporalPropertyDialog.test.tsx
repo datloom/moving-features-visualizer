@@ -221,6 +221,17 @@ describe('ComputeTemporalPropertyDialog', () => {
     expect(new Date(end.value).getTime()).toBe(
       Date.parse('2026-01-01T00:10:00Z'),
     )
+
+    // Switching back to "All" widens the range back to the merged extent.
+    fireEvent.change(screen.getByLabelText('Temporal Geometry'), {
+      target: { value: 'all' },
+    })
+    expect(new Date(start.value).getTime()).toBe(
+      Date.parse('2026-01-01T00:00:00Z'),
+    )
+    expect(new Date(end.value).getTime()).toBe(
+      Date.parse('2026-01-01T00:20:00Z'),
+    )
   })
 
   it('auto-selects the single geometry when the feature has exactly one with a retained id', () => {
@@ -427,6 +438,73 @@ describe('ComputeTemporalPropertyDialog', () => {
         ?.temporalProperties,
     ).toEqual([])
   })
+
+  it('does not silently close when every selected geometry is skipped for having no overlap with the chosen range', async () => {
+    // The orchestrator itself skips non-overlapping geometries rather than
+    // failing them, so this outcome has zero results AND zero failures —
+    // "0 failures" must not be misread as "fully succeeded".
+    installServerSession()
+    useFeatureStore.getState().replaceFeatures([threeSegmentFeature])
+    runTemporalGeometryQuery.mockResolvedValue(outcomeFor([]))
+    const onClose = vi.fn()
+    const onComputed = vi.fn()
+    render(
+      <ComputeTemporalPropertyDialog
+        feature={threeSegmentFeature}
+        onClose={onClose}
+        onComputed={onComputed}
+      />,
+    )
+    chooseMetric('velocity')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
+
+    await waitFor(() =>
+      expect(screen.getByText(/nothing was computed/i)).toBeInTheDocument(),
+    )
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onComputed).not.toHaveBeenCalled()
+    expect(
+      useFeatureStore.getState().features.find((item) => item.id === 'mf-1')
+        ?.temporalProperties,
+    ).toEqual([])
+  })
+
+  it.each(['velocity', 'acceleration', 'distance'] as const)(
+    'computes %s the same way as any other metric',
+    async (metric) => {
+      installServerSession()
+      useFeatureStore.getState().replaceFeatures([threeSegmentFeature])
+      runTemporalGeometryQuery.mockResolvedValue(
+        outcomeFor(['tg-1'], { metric }),
+      )
+      const onClose = vi.fn()
+      const onComputed = vi.fn()
+      render(
+        <ComputeTemporalPropertyDialog
+          feature={threeSegmentFeature}
+          onClose={onClose}
+          onComputed={onComputed}
+        />,
+      )
+      chooseMetric(metric)
+      fireEvent.change(screen.getByLabelText('Temporal Geometry'), {
+        target: { value: 'tg-1' },
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
+
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+      expect(runTemporalGeometryQuery.mock.calls[0]?.[1]).toMatchObject({
+        metric,
+      })
+      expect(onComputed).toHaveBeenCalledWith(`Measure:${metric}`)
+      const properties = useFeatureStore
+        .getState()
+        .features.find((item) => item.id === 'mf-1')?.temporalProperties
+      expect(properties?.map((property) => property.name)).toEqual([metric])
+    },
+  )
 
   it('shows a live "Computing N / M" indicator for multi-geometry runs', async () => {
     installServerSession()

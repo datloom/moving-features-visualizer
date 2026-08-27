@@ -182,6 +182,19 @@ export function ComputeTemporalPropertyDialog({
       )
       if (!activeRef.current || outcome.stale) return
 
+      const attempted = outcome.results.length + outcome.failures.length
+      if (attempted === 0) {
+        // Every selected geometry was skipped — none overlapped the
+        // requested time range. Nothing to add/replace; say so rather than
+        // silently closing as if the (nonexistent) computation succeeded.
+        setRunState({
+          kind: 'error',
+          message:
+            'No TemporalGeometry overlaps the selected time range — nothing was computed.',
+        })
+        return
+      }
+
       const adapted = adaptTemporalGeometryQueryOutcome(outcome)
       if (adapted.segments.length > 0) {
         useFeatureStore
@@ -309,7 +322,7 @@ export function ComputeTemporalPropertyDialog({
                   />
                 </label>
               </div>
-              {disabledReason ? (
+              {disabledReason && !isRunning ? (
                 <p className="compute-reason" role="status">
                   {disabledReason}
                 </p>

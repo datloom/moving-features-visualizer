@@ -240,4 +240,25 @@ describe('adaptTemporalGeometryQueryOutcome', () => {
       { tGeometryId: 'tg-2', form: 'MPH' },
     ])
   })
+
+  it('preserves both segments when source TemporalGeometries overlap in time — never silently discards one', () => {
+    // tg-1 and tg-2 cover the exact same time window.
+    const overlapping = [
+      sequence(['2026-01-01T10:00:00Z', '2026-01-01T10:05:00Z'], [1, 2]),
+    ]
+    const adapted = adaptTemporalGeometryQueryOutcome(
+      outcome([
+        result('tg-1', response('velocity', overlapping)),
+        result('tg-2', response('velocity', overlapping)),
+      ]),
+    )
+
+    expect(adapted.segments).toHaveLength(2)
+    expect(
+      adapted.segments.map((segment) => segment.sourceTemporalGeometryId),
+    ).toEqual(['tg-1', 'tg-2'])
+    expect(adapted.incompatibleForms).toEqual([])
+    // Both segments keep their own full, unmodified sample set.
+    expect(adapted.segments[0]?.samples).toEqual(adapted.segments[1]?.samples)
+  })
 })
