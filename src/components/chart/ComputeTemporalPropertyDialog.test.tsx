@@ -13,6 +13,7 @@ import { parseUtcDateTimeLocal } from '../../mfjson/utcDateTimeLocal'
 import type { MovingFeature } from '../../mfjson/types'
 import { initialFeatureState, useFeatureStore } from '../../store/featureStore'
 import { useServerCollectionStore } from '../../store/serverCollectionStore'
+import { initialTimeState, useTimeStore } from '../../store/timeStore'
 import type { TemporalGeometryQueryOutcome } from '../../services/moving-features-api/temporalGeometryQueryOrchestrator'
 
 const { runTemporalGeometryQuery } = vi.hoisted(() => ({
@@ -146,6 +147,7 @@ describe('ComputeTemporalPropertyDialog', () => {
       error: undefined,
     })
     useFeatureStore.setState(initialFeatureState)
+    useTimeStore.setState(initialTimeState)
     runTemporalGeometryQuery.mockReset()
   })
 
@@ -232,6 +234,68 @@ describe('ComputeTemporalPropertyDialog', () => {
     )
     expect(parseUtcDateTimeLocal(end.value)).toBe(
       Date.parse('2026-01-01T00:20:00Z'),
+    )
+  })
+
+  it('preserves sub-minute precision in the default Start/End instead of truncating to :00', () => {
+    const start = Date.parse('2023-11-20T04:30:10Z')
+    const end = Date.parse('2023-11-20T04:51:36Z')
+    const feature = featureWithSegments([
+      {
+        id: 'tg-1',
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: start, longitude: 0, latitude: 0 },
+          { time: end, longitude: 1, latitude: 1 },
+        ],
+      },
+    ])
+    installServerSession()
+    render(
+      <ComputeTemporalPropertyDialog
+        feature={feature}
+        onClose={vi.fn()}
+        onComputed={vi.fn()}
+      />,
+    )
+    const startInput = screen.getByLabelText<HTMLInputElement>('Start (UTC)')
+    const endInput = screen.getByLabelText<HTMLInputElement>('End (UTC)')
+    // Assert via round-trip rather than exact string equality: the DOM
+    // `.value` getter for a seconds-precision `datetime-local` value may
+    // reflect a trailing `.000` in some environments (see
+    // `utcDateTimeLocal.ts`) even though the underlying value is exact —
+    // what must hold is that the seconds survive, not the exact string shape.
+    expect(startInput.value).toMatch(/^2023-11-20T04:30:10(\.0+)?$/)
+    expect(endInput.value).toMatch(/^2023-11-20T04:51:36(\.0+)?$/)
+    expect(parseUtcDateTimeLocal(startInput.value)).toBe(start)
+    expect(parseUtcDateTimeLocal(endInput.value)).toBe(end)
+  })
+
+  it('narrows the default range to an applied Time Query instead of the geometry’s full extent', () => {
+    useTimeStore.setState({
+      ...initialTimeState,
+      fullStartTime: Date.parse('2026-01-01T00:00:00Z'),
+      fullEndTime: Date.parse('2026-01-01T00:20:00Z'),
+      queryActive: true,
+      startTime: Date.parse('2026-01-01T00:05:00Z'),
+      endTime: Date.parse('2026-01-01T00:15:00Z'),
+    })
+    installServerSession()
+    render(
+      <ComputeTemporalPropertyDialog
+        feature={twoSegmentFeature}
+        onClose={vi.fn()}
+        onComputed={vi.fn()}
+      />,
+    )
+    const start = screen.getByLabelText<HTMLInputElement>('Start (UTC)')
+    const end = screen.getByLabelText<HTMLInputElement>('End (UTC)')
+    expect(parseUtcDateTimeLocal(start.value)).toBe(
+      Date.parse('2026-01-01T00:05:00Z'),
+    )
+    expect(parseUtcDateTimeLocal(end.value)).toBe(
+      Date.parse('2026-01-01T00:15:00Z'),
     )
   })
 

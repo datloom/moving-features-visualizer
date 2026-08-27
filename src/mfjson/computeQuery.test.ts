@@ -148,6 +148,86 @@ describe('getComputeTimeRange', () => {
       getComputeTimeRange(feature, ALL_TEMPORAL_GEOMETRIES),
     ).toBeUndefined()
   })
+
+  it('preserves sub-minute precision in the derived range', () => {
+    const start = Date.parse('2023-11-20T04:30:10Z')
+    const end = Date.parse('2023-11-20T04:51:36Z')
+    const feature = featureWithSegments([
+      {
+        id: 'tg-1',
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: start, longitude: 0, latitude: 0 },
+          { time: end, longitude: 1, latitude: 1 },
+        ],
+      },
+    ])
+    expect(getComputeTimeRange(feature, 'tg-1')).toEqual({ start, end })
+  })
+
+  it('intersects with an authoritative narrower visible range, for one geometry', () => {
+    const feature = featureWithSegments([
+      {
+        id: 'tg-1',
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: 1_000, longitude: 0, latitude: 0 },
+          { time: 9_000, longitude: 1, latitude: 1 },
+        ],
+      },
+    ])
+    expect(
+      getComputeTimeRange(feature, 'tg-1', { start: 2_000, end: 5_000 }),
+    ).toEqual({ start: 2_000, end: 5_000 })
+  })
+
+  it('intersects with an authoritative narrower visible range, for "all"', () => {
+    const feature = featureWithSegments([
+      {
+        id: 'tg-1',
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: 5_000, longitude: 0, latitude: 0 },
+          { time: 9_000, longitude: 1, latitude: 1 },
+        ],
+      },
+      {
+        id: 'tg-2',
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: 1_000, longitude: 0, latitude: 0 },
+          { time: 20_000, longitude: 1, latitude: 1 },
+        ],
+      },
+    ])
+    expect(
+      getComputeTimeRange(feature, ALL_TEMPORAL_GEOMETRIES, {
+        start: 4_000,
+        end: 10_000,
+      }),
+    ).toEqual({ start: 4_000, end: 10_000 })
+  })
+
+  it('ignores a visible range that does not overlap the geometry extent at all, rather than returning an inverted range', () => {
+    const feature = featureWithSegments([
+      {
+        id: 'tg-1',
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: 1_000, longitude: 0, latitude: 0 },
+          { time: 9_000, longitude: 1, latitude: 1 },
+        ],
+      },
+    ])
+    expect(
+      getComputeTimeRange(feature, 'tg-1', { start: 0, end: 0 }),
+    ).toEqual({ start: 1_000, end: 9_000 })
+  })
 })
 
 describe('getQueryableGeometries', () => {

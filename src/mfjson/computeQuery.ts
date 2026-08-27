@@ -89,10 +89,20 @@ export const getComputeGeometryOptions = (
  * Default Start/End for the selected geometry: the earliest/latest sample
  * timestamp across the relevant segment(s). Returns undefined only when
  * there is no usable sample data to derive a range from.
+ *
+ * `visibleRange`, when given, is an authoritative narrower window the
+ * application is already restricting playback/display to (e.g. an applied
+ * Time Query) — the default is intersected with it so Compute never
+ * defaults to a span wider than what's actually being visualized. If that
+ * intersection is empty (the visible window doesn't overlap this geometry's
+ * own extent at all — e.g. `visibleRange` is unset/uninitialized), it's
+ * ignored and the geometry's own extent is returned unnarrowed rather than
+ * producing an unusable inverted range.
  */
 export const getComputeTimeRange = (
   feature: MovingFeature,
   selection: ComputeGeometrySelection,
+  visibleRange?: ComputeTimeRange,
 ): ComputeTimeRange | undefined => {
   const segments =
     selection === ALL_TEMPORAL_GEOMETRIES
@@ -104,10 +114,16 @@ export const getComputeTimeRange = (
     .map(segmentTimeRange)
     .filter((range): range is ComputeTimeRange => range !== undefined)
   if (ranges.length === 0) return undefined
-  return {
-    start: Math.min(...ranges.map((range) => range.start)),
-    end: Math.max(...ranges.map((range) => range.end)),
+  const range = {
+    start: Math.min(...ranges.map((r) => r.start)),
+    end: Math.max(...ranges.map((r) => r.end)),
   }
+  if (!visibleRange) return range
+  const narrowed = {
+    start: Math.max(range.start, visibleRange.start),
+    end: Math.min(range.end, visibleRange.end),
+  }
+  return narrowed.start <= narrowed.end ? narrowed : range
 }
 
 /** One queryable TemporalGeometry: a segment that has a server-assigned `id`. */

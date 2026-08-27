@@ -30,6 +30,23 @@ describe('formatUtcDateTimeLocal / parseUtcDateTimeLocal', () => {
     )
   })
 
+  it('preserves sub-minute precision instead of truncating seconds to :00', () => {
+    const start = Date.parse('2023-11-20T04:30:10Z')
+    const end = Date.parse('2023-11-20T04:51:36Z')
+
+    expect(formatUtcDateTimeLocal(start)).toBe('2023-11-20T04:30:10')
+    expect(formatUtcDateTimeLocal(end)).toBe('2023-11-20T04:51:36')
+
+    expect(parseUtcDateTimeLocal('2023-11-20T04:30:10')).toBe(start)
+    expect(parseUtcDateTimeLocal('2023-11-20T04:51:36')).toBe(end)
+  })
+
+  it('accepts a value with no seconds as :00, matching the browser-submitted shape when step is unset', () => {
+    expect(parseUtcDateTimeLocal('2023-11-20T04:30')).toBe(
+      Date.parse('2023-11-20T04:30:00Z'),
+    )
+  })
+
   it('returns NaN for a malformed value instead of guessing', () => {
     expect(Number.isNaN(parseUtcDateTimeLocal(''))).toBe(true)
     expect(Number.isNaN(parseUtcDateTimeLocal('not-a-date'))).toBe(true)

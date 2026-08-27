@@ -20,6 +20,7 @@ import { adaptTemporalGeometryQueryOutcome } from '../../services/moving-feature
 import { runTemporalGeometryQuery } from '../../services/moving-features-api/temporalGeometryQueryOrchestrator'
 import { useFeatureStore } from '../../store/featureStore'
 import { useServerCollectionStore } from '../../store/serverCollectionStore'
+import { useTimeStore } from '../../store/timeStore'
 import { Icon } from '../ui/Icon'
 
 const defaultGeometrySelection = (
@@ -75,9 +76,19 @@ export function ComputeTemporalPropertyDialog({
   const [metric, setMetric] = useState<ComputeMetric | ''>('')
   const [geometrySelection, setGeometrySelection] =
     useState<ComputeGeometrySelection>(() => defaultGeometrySelection(feature))
+  // The active playback/display window — the full dataset extent, or a
+  // narrower Time Query if one is applied (see `timeStore`). An authoritative
+  // narrower window like this should win over a geometry's own (possibly
+  // wider) sample extent when deriving Compute's default Start/End.
+  const visibleStartTime = useTimeStore((state) => state.startTime)
+  const visibleEndTime = useTimeStore((state) => state.endTime)
+  const visibleRange = useMemo(
+    () => ({ start: visibleStartTime, end: visibleEndTime }),
+    [visibleStartTime, visibleEndTime],
+  )
   const timeRange = useMemo(
-    () => getComputeTimeRange(feature, geometrySelection),
-    [feature, geometrySelection],
+    () => getComputeTimeRange(feature, geometrySelection, visibleRange),
+    [feature, geometrySelection, visibleRange],
   )
   const [startInput, setStartInput] = useState(() =>
     timeRange ? formatUtcDateTimeLocal(timeRange.start) : '',
@@ -106,7 +117,7 @@ export function ComputeTemporalPropertyDialog({
   const selectGeometry = (selection: ComputeGeometrySelection) => {
     setGeometrySelection(selection)
     setRunState({ kind: 'idle' })
-    const range = getComputeTimeRange(feature, selection)
+    const range = getComputeTimeRange(feature, selection, visibleRange)
     setStartInput(range ? formatUtcDateTimeLocal(range.start) : '')
     setEndInput(range ? formatUtcDateTimeLocal(range.end) : '')
   }
@@ -302,6 +313,7 @@ export function ComputeTemporalPropertyDialog({
                       setStartInput(event.target.value)
                       setRunState({ kind: 'idle' })
                     }}
+                    step="1"
                     type="datetime-local"
                     value={startInput}
                   />
@@ -314,6 +326,7 @@ export function ComputeTemporalPropertyDialog({
                       setEndInput(event.target.value)
                       setRunState({ kind: 'idle' })
                     }}
+                    step="1"
                     type="datetime-local"
                     value={endInput}
                   />
