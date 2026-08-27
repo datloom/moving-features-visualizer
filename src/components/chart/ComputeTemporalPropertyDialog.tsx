@@ -90,14 +90,18 @@ export function ComputeTemporalPropertyDialog({
   // Stale-request protection (see `temporalGeometryQueryOrchestrator`'s
   // `isStale`): once this dialog instance is closed/unmounted mid-request —
   // the user cancelled, or reopened Compute for a different feature — its
-  // in-flight result must never be applied.
+  // in-flight result must never be applied. The setup itself must restore
+  // `true`, not just the cleanup set `false` — React.StrictMode (see
+  // `main.tsx`) runs setup → cleanup → setup on mount, and a setup that only
+  // returns a cleanup closure leaves `activeRef.current` permanently `false`
+  // after that replay, silently marking every future request stale.
   const activeRef = useRef(true)
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    activeRef.current = true
+    return () => {
       activeRef.current = false
-    },
-    [],
-  )
+    }
+  }, [])
 
   const selectGeometry = (selection: ComputeGeometrySelection) => {
     setGeometrySelection(selection)

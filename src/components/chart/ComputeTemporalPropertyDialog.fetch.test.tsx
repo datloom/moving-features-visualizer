@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MovingFeature } from '../../mfjson/types'
@@ -141,6 +142,38 @@ describe('ComputeTemporalPropertyDialog — real fetch (one TemporalGeometry)', 
         '/tgsequence/de95d397-ffc7-4ae9-a730-4211757add8c/velocity' +
         '?datetime=2023-11-20T13%3A30%3A00.000Z%2F2023-11-20T13%3A33%3A00.000Z',
     )
+  })
+
+  it('reaches fetch() under React.StrictMode (setup → cleanup → setup must not leave the dialog permanently stale)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(validVelocityResponse))
+    vi.stubGlobal('fetch', fetchMock)
+    installServerSession()
+
+    render(
+      <StrictMode>
+        <ComputeTemporalPropertyDialog
+          feature={feature}
+          onClose={vi.fn()}
+          onComputed={vi.fn()}
+        />
+      </StrictMode>,
+    )
+
+    fireEvent.change(screen.getByLabelText('Metric'), {
+      target: { value: 'velocity' },
+    })
+    fireEvent.change(screen.getByLabelText('Start (UTC)'), {
+      target: { value: '2023-11-20T13:30' },
+    })
+    fireEvent.change(screen.getByLabelText('End (UTC)'), {
+      target: { value: '2023-11-20T13:33' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
   })
 })
 
