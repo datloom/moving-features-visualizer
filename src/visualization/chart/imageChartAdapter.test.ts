@@ -162,6 +162,19 @@ describe('getVisibleImageSamples', () => {
       { time: t2, value: 'C' },
     ])
   })
+
+  it('is interpolation-independent: the same source samples produce the same thumbnails for Discrete and Step', () => {
+    const samples = [
+      { time: t0, value: 'A' },
+      { time: t1, value: 'B' },
+      { time: t2, value: 'C' },
+    ]
+    const domain = { start: t0, end: t2 }
+    expect(getVisibleImageSamples([property('Discrete', samples)], domain)).toEqual(
+      getVisibleImageSamples([property('Step', samples)], domain),
+    )
+    expect(getVisibleImageSamples([property('Step', samples)], domain)).toHaveLength(3)
+  })
 })
 
 describe('timeToDomainRatio', () => {

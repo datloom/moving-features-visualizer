@@ -53,7 +53,7 @@ describe('ImagePropertyTimeline', () => {
     )
   })
 
-  it('shows "No image at current time" for Discrete between samples', () => {
+  it('shows "No image at current time" for Discrete between samples, without suppressing the thumbnail track', () => {
     const discreteCamera: ImageTemporalProperty = {
       ...camera,
       interpolation: 'Discrete',
@@ -66,6 +66,40 @@ describe('ImagePropertyTimeline', () => {
       />,
     )
     expect(screen.getByText('No image at current time')).toBeInTheDocument()
+    // The current-frame empty state must not gate the thumbnail timeline: all
+    // three source samples stay visible even though none is the current one.
+    expect(
+      screen.getAllByRole('button', { name: /^Jump to camera at/ }),
+    ).toHaveLength(3)
+  })
+
+  it('Discrete: clicking a thumbnail lands exactly on that sample so Current Frame shows it immediately', () => {
+    const discreteCamera: ImageTemporalProperty = {
+      ...camera,
+      interpolation: 'Discrete',
+    }
+    useTimeStore.getState().setCurrentTime(t0 + 500)
+    render(
+      <ImagePropertyTimeline
+        propertyName="camera"
+        properties={[discreteCamera]}
+      />,
+    )
+    expect(screen.getByText('No image at current time')).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: thumbnailName('1970-01-01 00:00:02 UTC'),
+      }),
+    )
+
+    expect(useTimeStore.getState().currentTime).toBe(t1)
+    expect(
+      screen.getByRole('button', {
+        name: currentFrameName('1970-01-01 00:00:02 UTC'),
+      }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No image at current time')).not.toBeInTheDocument()
   })
 
   it('shows a held Step value at a time between samples', () => {
