@@ -16,9 +16,11 @@ import {
   reconcileSelection,
   type MeasureComparisonMode,
 } from '../../visualization/chart/measureComparison'
+import { ComputeTemporalPropertyDialog } from './ComputeTemporalPropertyDialog'
 import { ImagePropertyTimeline } from './ImagePropertyTimeline'
 import { MeasureComparisonChart } from './MeasureComparisonChart'
 import { TextPropertyChart } from './TextPropertyChart'
+import { Icon } from '../ui/Icon'
 
 const MAX_FEATURE_SERIES = 12
 
@@ -32,6 +34,7 @@ export function TemporalPropertiesPanel({
   const selectedFeature =
     features.find((item) => item.id === selectedFeatureId) ?? feature
   const [mode, setMode] = useState<MeasureComparisonMode>('properties')
+  const [computeOpen, setComputeOpen] = useState(false)
   const availablePropertyNames = useMemo(
     () => getAvailableMeasurePropertyNames(features),
     [features],
@@ -275,8 +278,24 @@ export function TemporalPropertiesPanel({
           <h2>Temporal Properties</h2>
           <span>Measure, Text, and Image comparison</span>
         </div>
-        <span>{features.length} features</span>
+        <div className="temporal-panel-heading-actions">
+          <span>{features.length} features</span>
+          <button
+            className="compute-trigger"
+            onClick={() => setComputeOpen(true)}
+            type="button"
+          >
+            <Icon name="plus" size={13} />
+            Compute
+          </button>
+        </div>
       </header>
+      {computeOpen ? (
+        <ComputeTemporalPropertyDialog
+          feature={selectedFeature}
+          onClose={() => setComputeOpen(false)}
+        />
+      ) : null}
       <div className="comparison-workspace">
         <aside
           className="comparison-controls"

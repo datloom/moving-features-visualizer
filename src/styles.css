@@ -595,6 +595,29 @@ select {
   align-items: baseline;
   gap: 8px;
 }
+.temporal-panel-heading .temporal-panel-heading-actions {
+  align-items: center;
+  gap: 12px;
+}
+.compute-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--muted-strong);
+  background: var(--surface-elevated);
+  font-size: 0.66rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.compute-trigger:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
 .measure-chart-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -899,6 +922,122 @@ select {
   max-width: 100%;
   max-height: calc(100vh - 160px);
   object-fit: contain;
+}
+.compute-backdrop {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  padding: min(12vh, 96px) 16px 16px;
+  background: rgb(2 5 7 / 62%);
+}
+.compute-dialog {
+  width: min(420px, 100%);
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 48%);
+}
+.compute-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.compute-dialog-header h2 {
+  margin: 0;
+  font-size: 0.82rem;
+}
+.compute-dialog-body {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+.compute-time-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.compute-dialog-body input {
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--foreground);
+  background: var(--surface-elevated);
+  font-size: 0.68rem;
+  color-scheme: dark;
+}
+.compute-reason {
+  margin: 0;
+  color: var(--warning);
+  font-size: 0.64rem;
+}
+.compute-debug {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+}
+.compute-debug p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+.compute-debug dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 0;
+  font-size: 0.66rem;
+}
+.compute-debug dt {
+  color: var(--muted);
+}
+.compute-debug dd {
+  margin: 0;
+  color: var(--foreground);
+  font-family: ui-monospace, monospace;
+  overflow-wrap: anywhere;
+}
+.compute-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+.compute-dialog-actions button {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--foreground);
+  background: var(--surface-elevated);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.compute-dialog-actions button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+.compute-dialog-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.compute-dialog-actions .compute-submit {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+  font-weight: 700;
+}
+.compute-dialog-actions .compute-submit:hover:not(:disabled) {
+  background: var(--primary);
 }
 @media (max-width: 760px) {
   .comparison-workspace {

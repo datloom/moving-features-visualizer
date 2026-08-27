@@ -9,6 +9,7 @@ export type IconName =
   | 'menu'
   | 'pause'
   | 'play'
+  | 'plus'
   | 'search'
   | 'upload'
   | 'x'
@@ -50,6 +51,7 @@ export function Icon({ name, size = 16 }: IconProps) {
     menu: <path d="M4 7h16M4 12h16M4 17h16" />,
     pause: <path d="M9 5v14M15 5v14" />,
     play: <path d="m8 5 11 7-11 7V5Z" />,
+    plus: <path d="M12 5v14M5 12h14" />,
     search: (
       <>
         <circle cx="11" cy="11" r="7" />

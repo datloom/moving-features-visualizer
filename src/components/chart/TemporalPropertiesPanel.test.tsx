@@ -69,6 +69,20 @@ describe('TemporalPropertiesPanel', () => {
   beforeEach(() => useFeatureStore.setState(initialFeatureState))
   afterEach(cleanup)
 
+  it('opens the Compute dialog from the header action', () => {
+    const one = featureWith('one', [speed('speed')])
+    useFeatureStore.getState().replaceFeatures([one])
+    render(<TemporalPropertiesPanel feature={one} />)
+    expect(
+      screen.queryByRole('dialog', { name: /compute temporal property/i }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /compute/i }))
+    expect(
+      screen.getByRole('dialog', { name: /compute temporal property/i }),
+    ).toBeInTheDocument()
+  })
+
   it('defaults to selected-feature Property Comparison and updates with Feature Store selection', () => {
     const one = featureWith('one', [speed('speed')])
     const two = featureWith('two', [speed('velocity')])
