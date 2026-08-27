@@ -77,6 +77,26 @@ describe('intersectDatetimeRange', () => {
       end: 3_000,
     })
   })
+
+  it('is queryable when the user window is fully nested inside the geometry extent, even with no sample at those exact instants', () => {
+    const tgStart = Date.parse('2023-11-20T13:00:00Z')
+    const tgEnd = Date.parse('2023-11-20T14:00:00Z')
+    const userStart = Date.parse('2023-11-20T13:30:00Z')
+    const userEnd = Date.parse('2023-11-20T13:33:00Z')
+    expect(
+      intersectDatetimeRange(userStart, userEnd, tgStart, tgEnd),
+    ).toEqual({ start: userStart, end: userEnd })
+  })
+
+  it('is not queryable when the user window falls entirely outside the geometry extent', () => {
+    const tgStart = Date.parse('2023-11-20T13:00:00Z')
+    const tgEnd = Date.parse('2023-11-20T14:00:00Z')
+    const userStart = Date.parse('2023-11-20T15:00:00Z')
+    const userEnd = Date.parse('2023-11-20T15:10:00Z')
+    expect(
+      intersectDatetimeRange(userStart, userEnd, tgStart, tgEnd),
+    ).toBeUndefined()
+  })
 })
 
 describe('runTemporalGeometryQuery', () => {
