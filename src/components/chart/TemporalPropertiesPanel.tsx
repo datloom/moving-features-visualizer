@@ -5,6 +5,7 @@ import type {
   MovingFeature,
   TextTemporalProperty,
 } from '../../mfjson/types'
+import { isDerivedMeasureSegment } from '../../services/moving-features-api/derivedMeasureProperty'
 import { useFeatureStore } from '../../store/featureStore'
 import {
   createFeatureComparisonSeries,
@@ -108,12 +109,30 @@ export function TemporalPropertiesPanel({
 
   const logicalProperties = useMemo(
     () => [
-      ...logicalMeasureProperties.map((property) => ({
-        key: `Measure:${property.name}`,
-        name: property.name,
-        type: 'Measure' as const,
-        detail: property.unit ?? property.form,
-      })),
+      ...logicalMeasureProperties.map((property) => {
+        const segmentsForName = measureProperties.filter(
+          (candidate) => candidate.name === property.name,
+        )
+        const derivedCount = segmentsForName.filter(
+          isDerivedMeasureSegment,
+        ).length
+        return {
+          key: `Measure:${property.name}`,
+          name: property.name,
+          type: 'Measure' as const,
+          detail: property.unit ?? property.form,
+          // "Derived" when every segment is server-computed; a qualifier
+          // when the name is shared with an untouched source property —
+          // see "SOURCE PROPERTY COLLISION": the source segments are never
+          // removed, so both can coexist under one logical name.
+          badge:
+            derivedCount === 0
+              ? undefined
+              : derivedCount === segmentsForName.length
+                ? 'Derived'
+                : 'Source + Derived',
+        }
+      }),
       ...[...new Set(textProperties.map((property) => property.name))].map(
         (name) => ({ key: `Text:${name}`, name, type: 'Text' as const }),
       ),
@@ -121,7 +140,12 @@ export function TemporalPropertiesPanel({
         (name) => ({ key: `Image:${name}`, name, type: 'Image' as const }),
       ),
     ],
-    [imageProperties, logicalMeasureProperties, textProperties],
+    [
+      imageProperties,
+      logicalMeasureProperties,
+      measureProperties,
+      textProperties,
+    ],
   )
   useEffect(() => {
     setSelectedPropertyKeys((current) =>
@@ -294,6 +318,14 @@ export function TemporalPropertiesPanel({
         <ComputeTemporalPropertyDialog
           feature={selectedFeature}
           onClose={() => setComputeOpen(false)}
+          onComputed={(key) => {
+            // Automatically select the (possibly newly created) derived
+            // property and scroll its graph into view — the existing
+            // navigation mechanism already used for checklist clicks.
+            setMode('properties')
+            setSelectedPropertyKeys((current) => new Set(current).add(key))
+            setPendingNavigationKey(key)
+          }}
         />
       ) : null}
       <div className="comparison-workspace">
@@ -396,6 +428,9 @@ export function TemporalPropertiesPanel({
                         : ''}
                       {` · ${property.type}`}
                     </span>
+                    {property.type === 'Measure' && property.badge ? (
+                      <span className="derived-badge">{property.badge}</span>
+                    ) : null}
                   </label>
                 ))}
               </fieldset>

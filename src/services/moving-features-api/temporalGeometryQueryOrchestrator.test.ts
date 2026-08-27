@@ -273,4 +273,26 @@ describe('runTemporalGeometryQuery', () => {
     expect(outcome.results).toEqual([])
     expect(outcome.stale).toBe(true)
   })
+
+  it('reports progress after each request settles, for a compact "Computing N / M" indicator', async () => {
+    const { client } = fakeClient(() =>
+      Promise.resolve(metricResponse('velocity')),
+    )
+    const geometries = [
+      geometry('tg-1', 0, 1_000),
+      geometry('tg-2', 1_000, 2_000),
+      geometry('tg-3', 2_000, 3_000),
+    ]
+    const onProgress = vi.fn()
+    await runTemporalGeometryQuery(
+      client,
+      { ...baseRequest, geometries, userStart: 0, userEnd: 3_000 },
+      { concurrency: 1, onProgress },
+    )
+
+    expect(onProgress).toHaveBeenCalledTimes(3)
+    expect(onProgress).toHaveBeenNthCalledWith(1, 1, 3)
+    expect(onProgress).toHaveBeenNthCalledWith(2, 2, 3)
+    expect(onProgress).toHaveBeenNthCalledWith(3, 3, 3)
+  })
 })

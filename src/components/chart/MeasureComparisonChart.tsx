@@ -42,12 +42,30 @@ export function MeasureComparisonChart({
   const startTime = useTimeStore((state) => state.startTime)
   const endTime = useTimeStore((state) => state.endTime)
   const playbackRate = useTimeStore((state) => state.playbackRate)
+  // Two segments of the same logical property (e.g. overlapping
+  // TemporalGeometries) can both be simultaneously valid at `currentTime`.
+  // Rather than silently pick one, report the ambiguity — see "OVERLAPPING
+  // TEMPORAL GEOMETRIES" in the derived-property integration.
   const currentValues = useMemo(() => {
-    const byName = new Map<string, number | undefined>()
+    const byName = new Map<
+      string,
+      { readonly value: number | undefined; readonly ambiguous: boolean }
+    >()
     for (const item of group.series) {
-      const value = resolveMeasureValue(item.property, currentTime, playbackRate)
-      if (value !== undefined || !byName.has(item.propertyName))
-        byName.set(item.propertyName, value)
+      const value = resolveMeasureValue(
+        item.property,
+        currentTime,
+        playbackRate,
+      )
+      const existing = byName.get(item.propertyName)
+      if (!existing) {
+        byName.set(item.propertyName, { value, ambiguous: false })
+      } else if (value !== undefined) {
+        byName.set(item.propertyName, {
+          value: existing.value ?? value,
+          ambiguous: existing.ambiguous || existing.value !== undefined,
+        })
+      }
     }
     return [...byName]
   }, [currentTime, group.series, playbackRate])
@@ -91,26 +109,52 @@ export function MeasureComparisonChart({
     )
   }, [group, startTime, endTime])
 
+  // One header entry per distinct logical property name, not per segment —
+  // a derived property (or any multi-segment source property) commonly has
+  // several series sharing the same name, and the header/aria-label should
+  // describe the logical property once, not repeat it per segment.
+  const distinctProperties = useMemo(() => {
+    const seen = new Set<string>()
+    return group.series.filter((item) => {
+      if (seen.has(item.propertyName)) return false
+      seen.add(item.propertyName)
+      return true
+    })
+  }, [group.series])
+
   return (
     <section
       className="comparison-chart"
-      aria-label={`${group.series.map((item) => item.label).join(', ')} comparison`}
+      aria-label={`${distinctProperties.map((item) => item.label).join(', ')} comparison`}
     >
       <PropertyChartHeader
-        properties={group.series.map((item) => ({
+        properties={distinctProperties.map((item) => ({
           name: item.propertyName,
           type: 'Measure',
           interpolation: item.property.interpolation,
         }))}
         trailing={
           <div>
-            {currentValues.map(([name, value]) => (
+            {currentValues.map(([name, state]) => (
               <output
                 aria-label={`Current ${name}`}
-                className="measure-current-value"
+                className={
+                  state.ambiguous
+                    ? 'measure-current-value measure-current-value-ambiguous'
+                    : 'measure-current-value'
+                }
                 key={name}
+                title={
+                  state.ambiguous
+                    ? 'Multiple TemporalGeometry segments are simultaneously valid at this time.'
+                    : undefined
+                }
               >
-                {value === undefined ? 'No data' : value.toLocaleString()}
+                {state.ambiguous
+                  ? 'Ambiguous'
+                  : state.value === undefined
+                    ? 'No data'
+                    : state.value.toLocaleString()}
               </output>
             ))}
           </div>

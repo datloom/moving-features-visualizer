@@ -5,6 +5,10 @@ import type {
   TemporalGeometry,
   TemporalProperty,
 } from '../mfjson/types'
+import {
+  isDerivedMeasureSegment,
+  type DerivedMeasureSegment,
+} from '../services/moving-features-api/derivedMeasureProperty'
 
 export interface FeatureState {
   readonly features: readonly MovingFeature[]
@@ -18,6 +22,18 @@ export interface FeatureActions {
     featureId: string,
     geometry: readonly TemporalGeometry[],
     properties: readonly TemporalProperty[],
+  ) => void
+  /**
+   * Session-only: replaces any previously derived Measure segments for
+   * `metric` on this feature with `segments` (recompute), leaving every
+   * other TemporalProperty — including a source property that happens to
+   * share the same name — completely untouched. Never mutates the original
+   * MF-JSON, never touches the server or any other feature.
+   */
+  setDerivedMeasureSegments: (
+    featureId: string,
+    metric: string,
+    segments: readonly DerivedMeasureSegment[],
   ) => void
   selectFeature: (featureId: string | undefined) => void
 }
@@ -106,6 +122,21 @@ export const useFeatureStore = create<FeatureStore>((set) => ({
             segments: [...feature.temporalGeometry.segments, ...newGeometry],
           },
           temporalProperties: [...feature.temporalProperties, ...newProperties],
+        }
+      }),
+    })),
+  setDerivedMeasureSegments: (featureId, metric, segments) =>
+    set((state) => ({
+      ...state,
+      features: state.features.map((feature) => {
+        if (feature.id !== featureId) return feature
+        const retained = feature.temporalProperties.filter(
+          (property) =>
+            !(isDerivedMeasureSegment(property) && property.metric === metric),
+        )
+        return {
+          ...feature,
+          temporalProperties: [...retained, ...segments],
         }
       }),
     })),

@@ -1,6 +1,7 @@
 import type {
   MeasureInterpolation,
   MeasureTemporalProperty,
+  TemporalProperty,
 } from '../../mfjson/types'
 import { RECOGNIZED_INTERPOLATIONS } from './temporalGeometryMetricResponse'
 import type { TemporalGeometryQueryOutcome } from './temporalGeometryQueryOrchestrator'
@@ -27,6 +28,19 @@ export interface DerivedMeasureSegment extends MeasureTemporalProperty {
   readonly sourceTemporalGeometryId: string
   readonly metric: TemporalGeometryMetric
 }
+
+/**
+ * Distinguishes a derived (server-computed) Measure segment from a source
+ * one already present in the loaded MF-JSON — the identity check that lets
+ * `featureStore`/the UI replace only prior derived results for a metric
+ * without ever touching a same-named source property.
+ */
+export const isDerivedMeasureSegment = (
+  property: TemporalProperty,
+): property is DerivedMeasureSegment =>
+  property.type === 'Measure' &&
+  'source' in property &&
+  property.source === 'derived-server'
 
 export interface IncompatibleFormSegment {
   readonly tGeometryId: string

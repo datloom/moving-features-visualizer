@@ -44,6 +44,20 @@ vi.mock('./ImagePropertyTimeline', () => ({
   ),
 }))
 
+vi.mock('./ComputeTemporalPropertyDialog', () => ({
+  ComputeTemporalPropertyDialog: ({
+    onComputed,
+  }: {
+    onComputed: (key: string) => void
+  }) => (
+    <div aria-label="Compute Temporal Property" role="dialog">
+      <button onClick={() => onComputed('Measure:velocity')} type="button">
+        simulate successful compute
+      </button>
+    </div>
+  ),
+}))
+
 import { TemporalPropertiesPanel } from './TemporalPropertiesPanel'
 
 const featureWith = (
@@ -65,6 +79,21 @@ const speed = (name = 'speed'): TemporalProperty => ({
   samples: [{ time: 1_000, value: 10 }],
 })
 
+const derivedVelocity: TemporalProperty = {
+  type: 'Measure',
+  name: 'velocity',
+  interpolation: 'Linear',
+  form: 'KMH',
+  samples: [{ time: 1_000, value: 10 }],
+  // Extra provenance fields beyond the base TemporalProperty shape — see
+  // `DerivedMeasureSegment` in services/moving-features-api.
+  ...({
+    source: 'derived-server',
+    sourceTemporalGeometryId: 'tg-1',
+    metric: 'velocity',
+  } as Record<string, unknown>),
+}
+
 describe('TemporalPropertiesPanel', () => {
   beforeEach(() => useFeatureStore.setState(initialFeatureState))
   afterEach(cleanup)
@@ -81,6 +110,40 @@ describe('TemporalPropertiesPanel', () => {
     expect(
       screen.getByRole('dialog', { name: /compute temporal property/i }),
     ).toBeInTheDocument()
+  })
+
+  it('auto-selects the derived property and shows its graph once Compute reports success', () => {
+    const one = featureWith('one', [speed('speed'), derivedVelocity])
+    useFeatureStore.getState().replaceFeatures([one])
+    render(<TemporalPropertiesPanel feature={one} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /compute/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'simulate successful compute' }),
+    )
+
+    // Property Comparison mode, "velocity" checked, its chart rendered.
+    expect(
+      screen.getByRole('button', { name: 'Property Comparison' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('checkbox', { name: /^velocity/ })).toBeChecked()
+    expect(screen.getByTestId('comparison-chart')).toHaveTextContent('velocity')
+  })
+
+  it('shows a "Derived" badge for a fully server-derived Measure property', () => {
+    const one = featureWith('one', [derivedVelocity])
+    useFeatureStore.getState().replaceFeatures([one])
+    render(<TemporalPropertiesPanel feature={one} />)
+
+    expect(screen.getByText('Derived')).toBeInTheDocument()
+  })
+
+  it('shows a "Source + Derived" badge when a source property shares the derived metric name', () => {
+    const one = featureWith('one', [speed('velocity'), derivedVelocity])
+    useFeatureStore.getState().replaceFeatures([one])
+    render(<TemporalPropertiesPanel feature={one} />)
+
+    expect(screen.getByText('Source + Derived')).toBeInTheDocument()
   })
 
   it('defaults to selected-feature Property Comparison and updates with Feature Store selection', () => {

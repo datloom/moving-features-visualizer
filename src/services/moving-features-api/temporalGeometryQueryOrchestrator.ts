@@ -89,6 +89,8 @@ export interface TemporalGeometryQueryOrchestrationOptions {
    * Defaults to never-stale.
    */
   readonly isStale?: () => boolean
+  /** Called after each eligible request settles (success or failure), with the count completed so far and the total eligible. For a compact "Computing N / M" indicator — not a job-progress system. */
+  readonly onProgress?: (completed: number, total: number) => void
 }
 
 const eligibleRequests = (
@@ -122,6 +124,7 @@ export const runTemporalGeometryQuery = async (
     )
   }
   const isStale = options.isStale ?? (() => false)
+  const onProgress = options.onProgress
 
   const eligible = eligibleRequests(
     request.geometries,
@@ -138,6 +141,7 @@ export const runTemporalGeometryQuery = async (
     length: eligible.length,
   })
   let cursor = 0
+  let completed = 0
 
   const loadNext = async (): Promise<void> => {
     while (cursor < eligible.length) {
@@ -170,6 +174,8 @@ export const runTemporalGeometryQuery = async (
               : 'Temporal geometry metric query failed.',
         }
       }
+      completed += 1
+      onProgress?.(completed, eligible.length)
     }
   }
 

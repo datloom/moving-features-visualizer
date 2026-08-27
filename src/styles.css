@@ -652,6 +652,11 @@ select {
   font-size: 0.66rem;
   font-weight: 500;
 }
+.measure-current-value-ambiguous {
+  color: var(--warning);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
 .measure-chart-canvas {
   width: 100%;
   min-height: 0;
@@ -741,6 +746,17 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.derived-badge {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  color: var(--primary);
+  font-size: 0.56rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .comparison-warning {
   margin: 0;

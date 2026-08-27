@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   ALL_TEMPORAL_GEOMETRIES,
@@ -11,6 +11,10 @@ import {
   type ComputeMetric,
 } from '../../mfjson/computeQuery'
 import type { MovingFeature } from '../../mfjson/types'
+import { MovingFeaturesApiClient } from '../../services/moving-features-api/MovingFeaturesApiClient'
+import { adaptTemporalGeometryQueryOutcome } from '../../services/moving-features-api/derivedMeasureProperty'
+import { runTemporalGeometryQuery } from '../../services/moving-features-api/temporalGeometryQueryOrchestrator'
+import { useFeatureStore } from '../../store/featureStore'
 import { useServerCollectionStore } from '../../store/serverCollectionStore'
 import { Icon } from '../ui/Icon'
 
@@ -34,22 +38,42 @@ const defaultGeometrySelection = (
     : ALL_TEMPORAL_GEOMETRIES
 }
 
+type ComputeRunState =
+  | { readonly kind: 'idle' }
+  | {
+      readonly kind: 'running'
+      readonly completed: number
+      readonly total: number
+    }
+  | {
+      readonly kind: 'done-with-warnings'
+      readonly metric: ComputeMetric
+      readonly attempted: number
+      readonly succeeded: number
+      readonly incompatibleForms: readonly {
+        readonly tGeometryId: string
+        readonly form: string | undefined
+      }[]
+    }
+  | { readonly kind: 'error'; readonly message: string }
+
 export function ComputeTemporalPropertyDialog({
   feature,
   onClose,
+  onComputed,
 }: {
   readonly feature: MovingFeature
   readonly onClose: () => void
+  /** Called with the logical property key (e.g. "Measure:velocity") once a compute run adds/updates at least one segment. */
+  readonly onComputed: (propertyKey: string) => void
 }) {
   // TemporalGeometryQuery is server-only: the active server session (if any)
-  // is the sole source of `collectionId` — never derived from UI labels or
-  // guessed for local-file features.
-  const serverCollectionId = useServerCollectionStore(
-    (state) => state.session?.collectionId,
-  )
+  // is the sole source of `collectionId`/`baseUrl` — never derived from UI
+  // labels or guessed for local-file features.
+  const session = useServerCollectionStore((state) => state.session)
   const queryContext = useMemo(
-    () => resolveTemporalGeometryQueryContext(feature, serverCollectionId),
-    [feature, serverCollectionId],
+    () => resolveTemporalGeometryQueryContext(feature, session?.collectionId),
+    [feature, session?.collectionId],
   )
   const geometryOptions = useMemo(
     () => getComputeGeometryOptions(feature),
@@ -68,16 +92,23 @@ export function ComputeTemporalPropertyDialog({
   const [endInput, setEndInput] = useState(() =>
     timeRange ? toLocalInputValue(timeRange.end) : '',
   )
-  const [submittedQuery, setSubmittedQuery] = useState<{
-    readonly metric: ComputeMetric
-    readonly geometry: ComputeGeometrySelection
-    readonly start: number
-    readonly end: number
-  } | null>(null)
+  const [runState, setRunState] = useState<ComputeRunState>({ kind: 'idle' })
+
+  // Stale-request protection (see `temporalGeometryQueryOrchestrator`'s
+  // `isStale`): once this dialog instance is closed/unmounted mid-request —
+  // the user cancelled, or reopened Compute for a different feature — its
+  // in-flight result must never be applied.
+  const activeRef = useRef(true)
+  useEffect(
+    () => () => {
+      activeRef.current = false
+    },
+    [],
+  )
 
   const selectGeometry = (selection: ComputeGeometrySelection) => {
     setGeometrySelection(selection)
-    setSubmittedQuery(null)
+    setRunState({ kind: 'idle' })
     const range = getComputeTimeRange(feature, selection)
     setStartInput(range ? toLocalInputValue(range.start) : '')
     setEndInput(range ? toLocalInputValue(range.end) : '')
@@ -92,6 +123,7 @@ export function ComputeTemporalPropertyDialog({
     Number.isFinite(parsedStart) &&
     Number.isFinite(parsedEnd) &&
     parsedStart < parsedEnd
+  const isRunning = runState.kind === 'running'
 
   const disabledReason =
     queryContext.source === 'local'
@@ -104,9 +136,86 @@ export function ComputeTemporalPropertyDialog({
             ? (selectedOption.diagnostic ?? 'This geometry is unavailable.')
             : !rangeIsValid
               ? 'Start must be before End.'
-              : undefined
+              : isRunning
+                ? 'A compute request is already running.'
+                : undefined
 
   const canCompute = disabledReason === undefined
+
+  const handleCompute = async () => {
+    if (!canCompute || !metric || queryContext.source !== 'server' || !session)
+      return
+    const geometries =
+      geometrySelection === ALL_TEMPORAL_GEOMETRIES
+        ? queryContext.geometries
+        : queryContext.geometries.filter(
+            (candidate) => candidate.tGeometryId === geometrySelection,
+          )
+    if (geometries.length === 0) {
+      setRunState({
+        kind: 'error',
+        message: 'No queryable TemporalGeometry is selected.',
+      })
+      return
+    }
+
+    setRunState({ kind: 'running', completed: 0, total: geometries.length })
+    try {
+      const client = new MovingFeaturesApiClient(session.baseUrl)
+      const outcome = await runTemporalGeometryQuery(
+        client,
+        {
+          collectionId: queryContext.collectionId,
+          mFeatureId: queryContext.mFeatureId,
+          metric,
+          geometries,
+          userStart: parsedStart,
+          userEnd: parsedEnd,
+        },
+        {
+          isStale: () => !activeRef.current,
+          onProgress: (completed, total) => {
+            if (!activeRef.current) return
+            setRunState({ kind: 'running', completed, total })
+          },
+        },
+      )
+      if (!activeRef.current || outcome.stale) return
+
+      const adapted = adaptTemporalGeometryQueryOutcome(outcome)
+      if (adapted.segments.length > 0) {
+        useFeatureStore
+          .getState()
+          .setDerivedMeasureSegments(feature.id, metric, adapted.segments)
+        onComputed(`Measure:${metric}`)
+      }
+
+      const fullySucceeded =
+        outcome.failures.length === 0 && adapted.incompatibleForms.length === 0
+      if (fullySucceeded) {
+        onClose()
+        return
+      }
+      setRunState({
+        kind: 'done-with-warnings',
+        metric,
+        attempted: outcome.results.length + outcome.failures.length,
+        succeeded: new Set(
+          adapted.segments.map((segment) => segment.sourceTemporalGeometryId),
+        ).size,
+        incompatibleForms: adapted.incompatibleForms,
+      })
+    } catch (error) {
+      if (!activeRef.current) return
+      setRunState({
+        kind: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Temporal geometry metric query failed.',
+      })
+    }
+  }
 
   return (
     <div className="compute-backdrop" onClick={onClose} role="presentation">
@@ -138,9 +247,10 @@ export function ComputeTemporalPropertyDialog({
               <label className="comparison-field">
                 Metric
                 <select
+                  disabled={isRunning}
                   onChange={(event) => {
                     setMetric(event.target.value as ComputeMetric)
-                    setSubmittedQuery(null)
+                    setRunState({ kind: 'idle' })
                   }}
                   value={metric}
                 >
@@ -157,6 +267,7 @@ export function ComputeTemporalPropertyDialog({
               <label className="comparison-field">
                 Temporal Geometry
                 <select
+                  disabled={isRunning}
                   onChange={(event) => selectGeometry(event.target.value)}
                   value={geometrySelection}
                 >
@@ -176,9 +287,10 @@ export function ComputeTemporalPropertyDialog({
                 <label className="comparison-field">
                   Start
                   <input
+                    disabled={isRunning}
                     onChange={(event) => {
                       setStartInput(event.target.value)
-                      setSubmittedQuery(null)
+                      setRunState({ kind: 'idle' })
                     }}
                     type="datetime-local"
                     value={startInput}
@@ -187,9 +299,10 @@ export function ComputeTemporalPropertyDialog({
                 <label className="comparison-field">
                   End
                   <input
+                    disabled={isRunning}
                     onChange={(event) => {
                       setEndInput(event.target.value)
-                      setSubmittedQuery(null)
+                      setRunState({ kind: 'idle' })
                     }}
                     type="datetime-local"
                     value={endInput}
@@ -201,30 +314,42 @@ export function ComputeTemporalPropertyDialog({
                   {disabledReason}
                 </p>
               ) : null}
-              {submittedQuery ? (
+              {runState.kind === 'running' ? (
+                <p className="compute-reason" role="status">
+                  {runState.total > 1
+                    ? `Computing ${runState.completed} / ${runState.total}…`
+                    : 'Computing…'}
+                </p>
+              ) : null}
+              {runState.kind === 'error' ? (
+                <p className="compute-reason" role="alert">
+                  {runState.message}
+                </p>
+              ) : null}
+              {runState.kind === 'done-with-warnings' ? (
                 <div className="compute-debug" role="status">
-                  <p>
-                    Query built locally — server integration is not implemented
-                    yet.
-                  </p>
-                  <dl>
-                    <dt>Collection</dt>
-                    <dd>{queryContext.collectionId}</dd>
-                    <dt>MovingFeature</dt>
-                    <dd>{queryContext.mFeatureId}</dd>
-                    <dt>Metric</dt>
-                    <dd>{COMPUTE_METRIC_LABELS[submittedQuery.metric]}</dd>
-                    <dt>Temporal Geometry</dt>
-                    <dd>
-                      {submittedQuery.geometry === ALL_TEMPORAL_GEOMETRIES
-                        ? 'All Temporal Geometries'
-                        : submittedQuery.geometry}
-                    </dd>
-                    <dt>Start</dt>
-                    <dd>{new Date(submittedQuery.start).toISOString()}</dd>
-                    <dt>End</dt>
-                    <dd>{new Date(submittedQuery.end).toISOString()}</dd>
-                  </dl>
+                  {runState.succeeded < runState.attempted ? (
+                    <p>
+                      {COMPUTE_METRIC_LABELS[runState.metric]} computed for{' '}
+                      {runState.succeeded} of {runState.attempted}{' '}
+                      TemporalGeometry segments. You can retry later — a
+                      recompute replaces this result.
+                    </p>
+                  ) : null}
+                  {runState.incompatibleForms.length > 0 ? (
+                    <p>
+                      {runState.incompatibleForms.length} segment
+                      {runState.incompatibleForms.length === 1 ? '' : 's'}{' '}
+                      excluded: incompatible form (
+                      {runState.incompatibleForms
+                        .map(
+                          (entry) =>
+                            `${entry.tGeometryId}: ${entry.form ?? 'none'}`,
+                        )
+                        .join(', ')}
+                      ).
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </>
@@ -238,18 +363,10 @@ export function ComputeTemporalPropertyDialog({
             <button
               className="compute-submit"
               disabled={!canCompute}
-              onClick={() => {
-                if (!canCompute || !metric) return
-                setSubmittedQuery({
-                  metric,
-                  geometry: geometrySelection,
-                  start: parsedStart,
-                  end: parsedEnd,
-                })
-              }}
+              onClick={() => void handleCompute()}
               type="button"
             >
-              Compute
+              {isRunning ? 'Computing…' : 'Compute'}
             </button>
           )}
         </footer>

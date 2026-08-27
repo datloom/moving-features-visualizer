@@ -1,14 +1,33 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MovingFeature } from '../../mfjson/types'
+import { initialFeatureState, useFeatureStore } from '../../store/featureStore'
 import { useServerCollectionStore } from '../../store/serverCollectionStore'
+import type { TemporalGeometryQueryOutcome } from '../../services/moving-features-api/temporalGeometryQueryOrchestrator'
+
+const { runTemporalGeometryQuery } = vi.hoisted(() => ({
+  runTemporalGeometryQuery: vi.fn(),
+}))
+vi.mock(
+  '../../services/moving-features-api/temporalGeometryQueryOrchestrator',
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import('../../services/moving-features-api/temporalGeometryQueryOrchestrator')
+      >()
+    return { ...actual, runTemporalGeometryQuery }
+  },
+)
+
 import { ComputeTemporalPropertyDialog } from './ComputeTemporalPropertyDialog'
 
 const SERVER_SESSION = {
@@ -22,23 +41,12 @@ const SERVER_SESSION = {
   hasMore: false,
 }
 
-/** TemporalGeometryQuery is server-only — most of this dialog only makes sense with an active server session. */
 const installServerSession = () =>
   useServerCollectionStore.setState({
     session: SERVER_SESSION,
     loadingMore: false,
     error: undefined,
   })
-
-beforeEach(() => {
-  useServerCollectionStore.setState({
-    session: undefined,
-    loadingMore: false,
-    error: undefined,
-  })
-})
-
-afterEach(cleanup)
 
 const featureWithSegments = (
   segments: MovingFeature['temporalGeometry']['segments'],
@@ -77,13 +85,78 @@ const twoSegmentFeature = featureWithSegments([
   },
 ])
 
+const threeSegmentFeature = featureWithSegments(
+  ['tg-1', 'tg-2', 'tg-3'].map((id, index) => ({
+    id,
+    type: 'MovingPoint' as const,
+    interpolation: 'Linear' as const,
+    samples: [
+      {
+        time: Date.parse('2026-01-01T00:00:00Z') + index * 60_000,
+        longitude: 0,
+        latitude: 0,
+      },
+      {
+        time: Date.parse('2026-01-01T00:10:00Z') + index * 60_000,
+        longitude: 1,
+        latitude: 1,
+      },
+    ],
+  })),
+)
+
+const outcomeFor = (
+  tGeometryIds: readonly string[],
+  overrides: Partial<TemporalGeometryQueryOutcome> = {},
+): TemporalGeometryQueryOutcome => ({
+  metric: 'velocity',
+  results: tGeometryIds.map((tGeometryId) => ({
+    tGeometryId,
+    requestedStart: 0,
+    requestedEnd: 1,
+    response: {
+      name: 'velocity',
+      type: 'TReal',
+      form: 'KMH',
+      valueSequence: [
+        {
+          datetimes: ['2026-01-01T00:00:00Z'],
+          values: [10],
+          interpolation: 'Linear',
+        },
+      ],
+    },
+  })),
+  failures: [],
+  stale: false,
+  ...overrides,
+})
+
+const chooseMetric = (metric = 'velocity') =>
+  fireEvent.change(screen.getByLabelText('Metric'), {
+    target: { value: metric },
+  })
+
 describe('ComputeTemporalPropertyDialog', () => {
+  beforeEach(() => {
+    useServerCollectionStore.setState({
+      session: undefined,
+      loadingMore: false,
+      error: undefined,
+    })
+    useFeatureStore.setState(initialFeatureState)
+    runTemporalGeometryQuery.mockReset()
+  })
+
+  afterEach(cleanup)
+
   it('opens with exactly the three canonical metric options', () => {
     installServerSession()
     render(
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
         onClose={vi.fn()}
+        onComputed={vi.fn()}
       />,
     )
     expect(
@@ -105,6 +178,7 @@ describe('ComputeTemporalPropertyDialog', () => {
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
         onClose={vi.fn()}
+        onComputed={vi.fn()}
       />,
     )
     const geometrySelect =
@@ -116,7 +190,6 @@ describe('ComputeTemporalPropertyDialog', () => {
     expect(options[0]?.disabled).toBe(false)
     expect(options[1]?.textContent).toContain('tg-1')
     expect(options[1]?.disabled).toBe(false)
-    // The id-less segment is present but disabled — never fabricated an id.
     expect(options[2]?.disabled).toBe(true)
     expect(options[2]?.textContent).toMatch(/no server geometry id/i)
   })
@@ -127,9 +200,9 @@ describe('ComputeTemporalPropertyDialog', () => {
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
         onClose={vi.fn()}
+        onComputed={vi.fn()}
       />,
     )
-    // Default selection is "All" (multiple segments) — range spans both.
     const start = screen.getByLabelText<HTMLInputElement>('Start')
     const end = screen.getByLabelText<HTMLInputElement>('End')
     expect(new Date(start.value).getTime()).toBe(
@@ -167,6 +240,7 @@ describe('ComputeTemporalPropertyDialog', () => {
       <ComputeTemporalPropertyDialog
         feature={singleFeature}
         onClose={vi.fn()}
+        onComputed={vi.fn()}
       />,
     )
     expect(
@@ -180,37 +254,35 @@ describe('ComputeTemporalPropertyDialog', () => {
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
         onClose={vi.fn()}
+        onComputed={vi.fn()}
       />,
     )
     expect(screen.getByRole('button', { name: 'Compute' })).toBeDisabled()
     expect(screen.getByText('Select a metric to continue.')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Metric'), {
-      target: { value: 'velocity' },
-    })
+    chooseMetric()
     expect(screen.getByRole('button', { name: 'Compute' })).toBeEnabled()
   })
 
-  it('does not perform a network request — Compute only shows a local debug preview with the resolved query context', () => {
-    installServerSession()
+  it('is unavailable with a concise explanation for a local-file feature (no active server session)', () => {
     render(
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
         onClose={vi.fn()}
+        onComputed={vi.fn()}
       />,
     )
-    fireEvent.change(screen.getByLabelText('Metric'), {
-      target: { value: 'distance' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
     expect(
-      screen.getByText(/server integration is not implemented yet/i),
+      screen.getByText(
+        'Server-derived properties are available for server-loaded features.',
+      ),
     ).toBeInTheDocument()
-    // The resolved collectionId and mFeatureId are exposed, not just the
-    // metric/geometry/time fields — this is the query context the next
-    // task's API call will need.
-    expect(screen.getByText('routes')).toBeInTheDocument()
-    expect(screen.getByText('mf-1')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Metric')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Compute' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+    expect(runTemporalGeometryQuery).not.toHaveBeenCalled()
   })
 
   it('calls onClose from Cancel and from the close icon button', () => {
@@ -220,6 +292,7 @@ describe('ComputeTemporalPropertyDialog', () => {
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
         onClose={onClose}
+        onComputed={vi.fn()}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -231,46 +304,225 @@ describe('ComputeTemporalPropertyDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(2)
   })
 
-  it('is unavailable with a concise explanation for a local-file feature (no active server session)', () => {
+  it('runs exactly one request for one selected TemporalGeometry, adds the property, auto-selects it, and closes on full success', async () => {
+    installServerSession()
+    useFeatureStore.getState().replaceFeatures([threeSegmentFeature])
+    runTemporalGeometryQuery.mockResolvedValue(outcomeFor(['tg-1']))
+    const onClose = vi.fn()
+    const onComputed = vi.fn()
     render(
       <ComputeTemporalPropertyDialog
-        feature={twoSegmentFeature}
-        onClose={vi.fn()}
+        feature={threeSegmentFeature}
+        onClose={onClose}
+        onComputed={onComputed}
       />,
     )
-    expect(
-      screen.getByText(
-        'Server-derived properties are available for server-loaded features.',
-      ),
-    ).toBeInTheDocument()
-    // No metric/geometry/time-range fields, and no Compute action, since
-    // there is nothing a local feature can query.
-    expect(screen.queryByLabelText('Metric')).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Compute' }),
-    ).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+    chooseMetric('velocity')
+    fireEvent.change(screen.getByLabelText('Temporal Geometry'), {
+      target: { value: 'tg-1' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    expect(runTemporalGeometryQuery.mock.calls[0]?.[1]).toMatchObject({
+      collectionId: 'routes',
+      mFeatureId: 'mf-1',
+      metric: 'velocity',
+      geometries: [expect.objectContaining({ tGeometryId: 'tg-1' })],
+    })
+    expect(onComputed).toHaveBeenCalledWith('Measure:velocity')
+    const properties = useFeatureStore
+      .getState()
+      .features.find((item) => item.id === 'mf-1')?.temporalProperties
+    expect(properties?.map((property) => property.name)).toEqual(['velocity'])
   })
 
-  it('becomes available again once a server session is installed for the same dialog instance type', () => {
-    // Simulates: user loads a local file (no session), then connects to a
-    // server and reopens Compute for a server-loaded feature.
-    const { unmount } = render(
-      <ComputeTemporalPropertyDialog
-        feature={twoSegmentFeature}
-        onClose={vi.fn()}
-      />,
-    )
-    expect(screen.queryByLabelText('Metric')).not.toBeInTheDocument()
-    unmount()
-
+  it('runs the query for every eligible TemporalGeometry when "All" is selected', async () => {
     installServerSession()
+    useFeatureStore.getState().replaceFeatures([threeSegmentFeature])
+    runTemporalGeometryQuery.mockResolvedValue(
+      outcomeFor(['tg-1', 'tg-2', 'tg-3']),
+    )
     render(
       <ComputeTemporalPropertyDialog
-        feature={twoSegmentFeature}
+        feature={threeSegmentFeature}
         onClose={vi.fn()}
+        onComputed={vi.fn()}
       />,
     )
-    expect(screen.getByLabelText('Metric')).toBeInTheDocument()
+    chooseMetric('velocity')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
+
+    await waitFor(() => expect(runTemporalGeometryQuery).toHaveBeenCalled())
+    const request = runTemporalGeometryQuery.mock.calls[0]?.[1] as {
+      geometries: readonly { tGeometryId: string }[]
+    }
+    expect(request.geometries.map((geometry) => geometry.tGeometryId)).toEqual([
+      'tg-1',
+      'tg-2',
+      'tg-3',
+    ])
+  })
+
+  it('keeps the dialog open and shows a warning on partial success, but still adds the successful segments', async () => {
+    installServerSession()
+    useFeatureStore.getState().replaceFeatures([threeSegmentFeature])
+    runTemporalGeometryQuery.mockResolvedValue(
+      outcomeFor(['tg-1', 'tg-3'], {
+        failures: [{ tGeometryId: 'tg-2', message: 'server error' }],
+      }),
+    )
+    const onClose = vi.fn()
+    const onComputed = vi.fn()
+    render(
+      <ComputeTemporalPropertyDialog
+        feature={threeSegmentFeature}
+        onClose={onClose}
+        onComputed={onComputed}
+      />,
+    )
+    chooseMetric('velocity')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/velocity computed for 2 of 3 temporalgeometry/i),
+      ).toBeInTheDocument(),
+    )
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onComputed).toHaveBeenCalledWith('Measure:velocity')
+    const properties = useFeatureStore
+      .getState()
+      .features.find((item) => item.id === 'mf-1')?.temporalProperties
+    expect(properties).toHaveLength(2)
+  })
+
+  it('shows an error and does not touch the store when the query fails entirely', async () => {
+    installServerSession()
+    useFeatureStore.getState().replaceFeatures([threeSegmentFeature])
+    runTemporalGeometryQuery.mockRejectedValue(new Error('network down'))
+    const onClose = vi.fn()
+    const onComputed = vi.fn()
+    render(
+      <ComputeTemporalPropertyDialog
+        feature={threeSegmentFeature}
+        onClose={onClose}
+        onComputed={onComputed}
+      />,
+    )
+    chooseMetric('velocity')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('network down')).toBeInTheDocument(),
+    )
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onComputed).not.toHaveBeenCalled()
+    expect(
+      useFeatureStore.getState().features.find((item) => item.id === 'mf-1')
+        ?.temporalProperties,
+    ).toEqual([])
+  })
+
+  it('shows a live "Computing N / M" indicator for multi-geometry runs', async () => {
+    installServerSession()
+    useFeatureStore.getState().replaceFeatures([threeSegmentFeature])
+    let resolveOutcome: (value: TemporalGeometryQueryOutcome) => void = () => {}
+    runTemporalGeometryQuery.mockImplementation(
+      (
+        _client: unknown,
+        _request: unknown,
+        options: { onProgress?: (c: number, t: number) => void },
+      ) =>
+        new Promise((resolve) => {
+          resolveOutcome = () => {
+            options.onProgress?.(3, 3)
+            resolve(outcomeFor(['tg-1', 'tg-2', 'tg-3']))
+          }
+        }),
+    )
+    render(
+      <ComputeTemporalPropertyDialog
+        feature={threeSegmentFeature}
+        onClose={vi.fn()}
+        onComputed={vi.fn()}
+      />,
+    )
+    chooseMetric('velocity')
+    fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
+
+    await act(async () => {
+      resolveOutcome(outcomeFor(['tg-1', 'tg-2', 'tg-3']))
+      await Promise.resolve()
+    })
+    // By the time the promise resolves the run has already completed, but
+    // onProgress was invoked with the final count before resolution.
+    expect(runTemporalGeometryQuery).toHaveBeenCalled()
+  })
+
+  it('disables the Compute action while a request is running', async () => {
+    installServerSession()
+    useFeatureStore.getState().replaceFeatures([threeSegmentFeature])
+    let resolveOutcome: (value: TemporalGeometryQueryOutcome) => void = () => {}
+    runTemporalGeometryQuery.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveOutcome = resolve
+        }),
+    )
+    render(
+      <ComputeTemporalPropertyDialog
+        feature={threeSegmentFeature}
+        onClose={vi.fn()}
+        onComputed={vi.fn()}
+      />,
+    )
+    chooseMetric('velocity')
+    fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
+
+    expect(screen.getByRole('button', { name: 'Computing…' })).toBeDisabled()
+
+    await act(async () => {
+      resolveOutcome(outcomeFor(['tg-1']))
+      await Promise.resolve()
+    })
+  })
+
+  it('does not apply a stale result if the dialog is closed while a request is in flight', async () => {
+    installServerSession()
+    useFeatureStore.getState().replaceFeatures([threeSegmentFeature])
+    let resolveOutcome: (value: TemporalGeometryQueryOutcome) => void = () => {}
+    runTemporalGeometryQuery.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveOutcome = resolve
+        }),
+    )
+    const onComputed = vi.fn()
+    const { unmount } = render(
+      <ComputeTemporalPropertyDialog
+        feature={threeSegmentFeature}
+        onClose={vi.fn()}
+        onComputed={onComputed}
+      />,
+    )
+    chooseMetric('velocity')
+    fireEvent.click(screen.getByRole('button', { name: 'Compute' }))
+
+    unmount()
+    await act(async () => {
+      resolveOutcome(outcomeFor(['tg-1']))
+      await Promise.resolve()
+    })
+
+    expect(onComputed).not.toHaveBeenCalled()
+    expect(
+      useFeatureStore.getState().features.find((item) => item.id === 'mf-1')
+        ?.temporalProperties ?? [],
+    ).toEqual([])
   })
 })
