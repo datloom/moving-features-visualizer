@@ -182,45 +182,47 @@ export function ImagePropertyTimeline({
             <p className="image-empty-state">No image at current time</p>
           )}
         </div>
-        <div
-          aria-label={`${propertyName} thumbnail timeline`}
-          className="image-thumbnail-track"
-        >
-          {visibleSamples.length === 0 ? (
-            <p className="image-empty-state image-empty-state-compact">
-              No image samples in the selected range
-            </p>
-          ) : (
-            <div className="image-thumbnail-rail">
-              {visibleSamples.map((sample) => (
+        <div className="image-thumbnail-section">
+          <div
+            aria-label={`${propertyName} thumbnail timeline`}
+            className="image-thumbnail-track"
+          >
+            {visibleSamples.length === 0 ? (
+              <p className="image-empty-state image-empty-state-compact">
+                No image samples in the selected range
+              </p>
+            ) : (
+              <div className="image-thumbnail-rail">
+                {visibleSamples.map((sample) => (
+                  <div
+                    className="image-thumbnail-slot"
+                    key={sample.time}
+                    style={{
+                      left: `${timeToDomainRatio(sample.time, domain) * 100}%`,
+                    }}
+                  >
+                    <ImageFrame
+                      className={`image-frame image-thumbnail ${
+                        currentSample?.time === sample.time ? 'is-current' : ''
+                      }`}
+                      label={`Jump to ${propertyName} at ${formatTimestamp(sample.time)}`}
+                      onActivate={() =>
+                        useTimeStore.getState().setCurrentTime(sample.time)
+                      }
+                      src={sample.value}
+                    />
+                  </div>
+                ))}
                 <div
-                  className="image-thumbnail-slot"
-                  key={sample.time}
+                  aria-hidden="true"
+                  className="image-current-cursor"
                   style={{
-                    left: `${timeToDomainRatio(sample.time, domain) * 100}%`,
+                    left: `${timeToDomainRatio(currentTime, domain) * 100}%`,
                   }}
-                >
-                  <ImageFrame
-                    className={`image-frame image-thumbnail ${
-                      currentSample?.time === sample.time ? 'is-current' : ''
-                    }`}
-                    label={`Jump to ${propertyName} at ${formatTimestamp(sample.time)}`}
-                    onActivate={() =>
-                      useTimeStore.getState().setCurrentTime(sample.time)
-                    }
-                    src={sample.value}
-                  />
-                </div>
-              ))}
-              <div
-                aria-hidden="true"
-                className="image-current-cursor"
-                style={{
-                  left: `${timeToDomainRatio(currentTime, domain) * 100}%`,
-                }}
-              />
-            </div>
-          )}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {previewOpen && currentSample ? (

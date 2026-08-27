@@ -758,24 +758,29 @@ select {
   white-space: nowrap;
 }
 .image-timeline-body {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   min-height: 0;
 }
 .image-current-frame-wrapper {
   display: grid;
+  flex: 1 1 auto;
   min-height: 0;
   place-items: center;
+  overflow: hidden;
   background: var(--surface-elevated);
 }
 .image-frame {
   display: grid;
   place-items: center;
+  min-width: 0;
+  min-height: 0;
   padding: 0;
   border: 0;
   background: none;
   cursor: pointer;
+  overflow: hidden;
 }
 .image-current-frame {
   width: 100%;
@@ -812,6 +817,11 @@ select {
 .image-empty-state-compact {
   padding: 4px 2px;
   font-size: 0.6rem;
+}
+.image-thumbnail-section {
+  flex: 0 0 auto;
+  min-height: 48px;
+  position: relative;
 }
 .image-thumbnail-track {
   min-height: 48px;
