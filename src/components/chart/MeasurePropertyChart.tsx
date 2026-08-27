@@ -36,7 +36,8 @@ export function MeasurePropertyChart({ property }: MeasurePropertyChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<ECharts | null>(null)
   const currentTime = useTimeStore((state) => state.currentTime)
-  const currentValue = resolveMeasureValue(property, currentTime)
+  const playbackRate = useTimeStore((state) => state.playbackRate)
+  const currentValue = resolveMeasureValue(property, currentTime, playbackRate)
 
   useEffect(() => {
     const container = containerRef.current

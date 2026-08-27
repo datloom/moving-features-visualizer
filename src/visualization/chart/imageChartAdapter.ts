@@ -1,5 +1,6 @@
-import type { ImageTemporalProperty, Timestamp } from '../../mfjson/types'
+import { resolveDiscreteVisualIndex } from '../../mfjson/discreteVisualWindow'
 import type { TemporalWindow } from '../../mfjson/temporalWindow'
+import type { ImageTemporalProperty, Timestamp } from '../../mfjson/types'
 
 export interface ImageSample {
   readonly time: Timestamp
@@ -8,9 +9,11 @@ export interface ImageSample {
 
 /**
  * Resolves the current Image sample across independent segments, mirroring
- * `resolveTextValue`: Discrete only matches an exact sample time; Step holds
- * the previous sample's value but never crosses a segment gap. The returned
- * sample carries its own source `time`, which for a held Step value may
+ * `resolveTextValue`: Discrete shows the most recently reached sample only
+ * for its short visual-visibility window (see `discreteVisualWindow.ts` —
+ * a presentation widening, never Step); Step holds the previous sample's
+ * value but never crosses a segment gap. The returned sample carries its
+ * own source `time`, which for a held Step (or widened Discrete) value may
  * differ from `currentTime` (e.g. an expanded preview should show when the
  * image actually originated, not the live playback time).
  *
@@ -20,17 +23,30 @@ export interface ImageSample {
  * *before* the window start (e.g. right at queryStart) still resolves
  * correctly without pre-filtering samples by the window first — doing that
  * would incorrectly lose a value like this.
+ *
+ * This does NOT affect thumbnails: `getVisibleImageSamples` below is
+ * unrelated and always lists every real source sample regardless of
+ * interpolation or this visual window.
  */
 export const resolveImageSample = (
   properties: readonly ImageTemporalProperty[],
   currentTime: Timestamp,
+  playbackRate = 1,
 ): ImageSample | undefined => {
   for (const property of properties) {
+    if (property.interpolation === 'Discrete') {
+      const index = resolveDiscreteVisualIndex(
+        property.samples.map((sample) => sample.time),
+        currentTime,
+        playbackRate,
+      )
+      if (index !== undefined) return property.samples[index]
+      continue
+    }
     const exact = property.samples.find(
       (sample) => sample.time === currentTime,
     )
     if (exact) return exact
-    if (property.interpolation === 'Discrete') continue
     const first = property.samples[0]
     const last = property.samples.at(-1)
     if (!first || !last || currentTime < first.time || currentTime > last.time)
@@ -47,7 +63,9 @@ export const resolveImageSample = (
 export const resolveImageValue = (
   properties: readonly ImageTemporalProperty[],
   currentTime: Timestamp,
-): string | undefined => resolveImageSample(properties, currentTime)?.value
+  playbackRate = 1,
+): string | undefined =>
+  resolveImageSample(properties, currentTime, playbackRate)?.value
 
 /**
  * Actual source samples across every segment, clipped to the active

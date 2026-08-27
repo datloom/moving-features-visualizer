@@ -1,10 +1,11 @@
 import type { EChartsOption, SeriesOption } from 'echarts'
 
-import type { MeasureTemporalProperty } from '../../mfjson/types'
+import { resolveDiscreteVisualIndex } from '../../mfjson/discreteVisualWindow'
 import {
   evaluateMeasureRegression,
   getMeasureRegressionModel,
 } from '../../mfjson/measureRegression'
+import type { MeasureTemporalProperty } from '../../mfjson/types'
 
 const SERIES_ID = 'measure-property-series'
 const REGRESSION_SERIES_ID = `${SERIES_ID}-regression`
@@ -143,9 +144,16 @@ export const buildMeasureChartOption = (
   }
 }
 
+/**
+ * Resolves the current Measure value for display. Discrete uses the shared
+ * visual-visibility window (see `discreteVisualWindow.ts`) — a presentation
+ * widening only, so the sample stays perceptible during playback without
+ * holding until the next sample (that would be Step).
+ */
 export const resolveMeasureValue = (
   property: MeasureTemporalProperty,
   currentTime: number,
+  playbackRate = 1,
 ): number | undefined => {
   const samples = property.samples
   if (property.interpolation === 'Regression') {
@@ -154,9 +162,16 @@ export const resolveMeasureValue = (
       currentTime,
     )
   }
+  if (property.interpolation === 'Discrete') {
+    const index = resolveDiscreteVisualIndex(
+      samples.map((sample) => sample.time),
+      currentTime,
+      playbackRate,
+    )
+    return index === undefined ? undefined : samples[index]!.value
+  }
   const exact = samples.find((sample) => sample.time === currentTime)
   if (exact) return exact.value
-  if (property.interpolation === 'Discrete') return undefined
 
   const nextIndex = samples.findIndex((sample) => sample.time > currentTime)
   if (nextIndex <= 0) return undefined

@@ -1,5 +1,6 @@
 import type { EChartsOption, SeriesOption } from 'echarts'
 
+import { resolveDiscreteVisualIndex } from '../../mfjson/discreteVisualWindow'
 import type { TextTemporalProperty } from '../../mfjson/types'
 import {
   PROPERTY_COMPARISON_CATEGORY_LABEL,
@@ -37,14 +38,30 @@ export const getTextCategories = (
   return categories
 }
 
+/**
+ * Resolves the current Text value for display. Discrete uses the shared
+ * visual-visibility window (see `discreteVisualWindow.ts`) — a presentation
+ * widening only, so the sample stays perceptible during playback without
+ * holding until the next sample (that would be Step). `playbackRate` widens
+ * that window further at fast playback, never past its safety caps.
+ */
 export const resolveTextValue = (
   properties: readonly TextTemporalProperty[],
   currentTime: number,
+  playbackRate = 1,
 ): string | undefined => {
   for (const property of properties) {
+    if (property.interpolation === 'Discrete') {
+      const index = resolveDiscreteVisualIndex(
+        property.samples.map((sample) => sample.time),
+        currentTime,
+        playbackRate,
+      )
+      if (index !== undefined) return property.samples[index]!.value
+      continue
+    }
     const exact = property.samples.find((sample) => sample.time === currentTime)
     if (exact) return exact.value
-    if (property.interpolation === 'Discrete') continue
     const first = property.samples[0]
     const last = property.samples.at(-1)
     if (!first || !last || currentTime < first.time || currentTime > last.time)

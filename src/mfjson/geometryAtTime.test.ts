@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { geometryAtTime, geometryAtVisualTime } from './geometryAtTime'
 import type { MovingLineString, MovingPoint, MovingPolygon } from './types'
-import { geometryAtTime } from './geometryAtTime'
 
 const line: MovingLineString = {
   type: 'MovingLineString',
@@ -144,5 +144,47 @@ describe('geometryAtTime', () => {
         5,
       ),
     ).toThrow(/matching structure/)
+  })
+})
+
+describe('geometryAtVisualTime', () => {
+  // One representative Discrete geometry: MovingLineString/MovingPolygon
+  // dispatch through the same `geometryAtTime` call as MovingPoint, so this
+  // exercises the shared visual-window wrapper without duplicating per type.
+  const point: MovingPoint = {
+    type: 'MovingPoint',
+    interpolation: 'Discrete',
+    samples: [
+      { time: 0, longitude: 0, latitude: 0 },
+      { time: 10_000, longitude: 10, latitude: 10 },
+      { time: 30_000, longitude: 30, latitude: 30 },
+    ],
+  }
+
+  it('shows the exact source sample at its timestamp and through its short visual window, then hides it', () => {
+    const exactSample = point.samples[1]!
+    expect(geometryAtVisualTime(point, 10_000)).toEqual({
+      type: 'MovingPoint',
+      position: exactSample,
+    })
+    // Inside the window: same exact source geometry, never interpolated —
+    // note the source `time` stays 10_000, not the query time.
+    expect(geometryAtVisualTime(point, 10_000 + 1)).toEqual({
+      type: 'MovingPoint',
+      position: exactSample,
+    })
+    // After the window (well before the next sample at 30s): hidden.
+    expect(geometryAtVisualTime(point, 20_000)).toBeUndefined()
+  })
+
+  it('never reveals the sample before its own timestamp', () => {
+    expect(geometryAtVisualTime(point, 10_000 - 1)).toBeUndefined()
+  })
+
+  it('leaves non-Discrete segments unaffected, passing time straight through', () => {
+    const linear: MovingPoint = { ...point, interpolation: 'Linear' }
+    expect(geometryAtVisualTime(linear, 5_000)).toEqual(
+      geometryAtTime(linear, 5_000),
+    )
   })
 })

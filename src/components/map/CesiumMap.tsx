@@ -125,6 +125,7 @@ export function CesiumMap({
       for (const entity of movingFeatureToEntities(feature, {
         selected,
         getCurrentTime: () => useTimeStore.getState().currentTime,
+        getPlaybackRate: () => useTimeStore.getState().playbackRate,
         window,
       })) {
         const id = String(entity.id)

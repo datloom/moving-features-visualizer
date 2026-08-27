@@ -94,6 +94,26 @@ describe('Text chart adapter', () => {
     expect(resolveTextValue([property], 15)).toBeUndefined()
   })
 
+  it('stays perceptible during playback via the shared Discrete visual window, without becoming Step', () => {
+    // Irregular spacing: 10s, 20s, 5s, 5s gaps.
+    const property = segment('Discrete', [
+      { time: 0, value: 'human' },
+      { time: 10_000, value: 'car' },
+      { time: 30_000, value: 'human' },
+      { time: 35_000, value: 'car' },
+      { time: 40_000, value: 'car' },
+    ])
+    // Exactly at t1.
+    expect(resolveTextValue([property], 10_000)).toBe('car')
+    // Shortly after t1, inside its visual window.
+    expect(resolveTextValue([property], 10_000 + 1)).toBe('car')
+    // After the window closes but well before t2 (30s later): "No Data",
+    // not held — this is what distinguishes it from Step.
+    expect(resolveTextValue([property], 20_000)).toBeUndefined()
+    // The next sample only becomes visible at its own timestamp.
+    expect(resolveTextValue([property], 30_000)).toBe('human')
+  })
+
   it('clips the x-axis domain to a Time Query window when provided', () => {
     const property = segment('Discrete', [
       { time: 10, value: 'moving' },

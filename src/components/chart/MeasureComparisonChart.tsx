@@ -41,15 +41,16 @@ export function MeasureComparisonChart({
   const currentTime = useTimeStore((state) => state.currentTime)
   const startTime = useTimeStore((state) => state.startTime)
   const endTime = useTimeStore((state) => state.endTime)
+  const playbackRate = useTimeStore((state) => state.playbackRate)
   const currentValues = useMemo(() => {
     const byName = new Map<string, number | undefined>()
     for (const item of group.series) {
-      const value = resolveMeasureValue(item.property, currentTime)
+      const value = resolveMeasureValue(item.property, currentTime, playbackRate)
       if (value !== undefined || !byName.has(item.propertyName))
         byName.set(item.propertyName, value)
     }
     return [...byName]
-  }, [currentTime, group.series])
+  }, [currentTime, group.series, playbackRate])
 
   useEffect(() => {
     const container = containerRef.current

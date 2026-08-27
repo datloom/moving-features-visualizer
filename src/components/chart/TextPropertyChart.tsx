@@ -40,7 +40,8 @@ export function TextPropertyChart({
   const currentTime = useTimeStore((state) => state.currentTime)
   const startTime = useTimeStore((state) => state.startTime)
   const endTime = useTimeStore((state) => state.endTime)
-  const currentValue = resolveTextValue(properties, currentTime)
+  const playbackRate = useTimeStore((state) => state.playbackRate)
+  const currentValue = resolveTextValue(properties, currentTime, playbackRate)
 
   useEffect(() => {
     const container = containerRef.current

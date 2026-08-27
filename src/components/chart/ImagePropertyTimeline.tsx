@@ -134,10 +134,13 @@ export function ImagePropertyTimeline({
   const currentTime = useTimeStore((state) => state.currentTime)
   const domainStart = useTimeStore((state) => state.startTime)
   const domainEnd = useTimeStore((state) => state.endTime)
+  const playbackRate = useTimeStore((state) => state.playbackRate)
   const [previewOpen, setPreviewOpen] = useState(false)
 
   // Recomputed only when the property data or active window changes — not on
   // every currentTime tick, which only needs to resolve the current sample.
+  // Thumbnails are unaffected by the Discrete visual window: they always
+  // list every real source sample, independent of the current value.
   const domain = useMemo(
     () => ({ start: domainStart, end: domainEnd }),
     [domainStart, domainEnd],
@@ -146,7 +149,7 @@ export function ImagePropertyTimeline({
     () => getVisibleImageSamples(properties, domain),
     [properties, domain],
   )
-  const currentSample = resolveImageSample(properties, currentTime)
+  const currentSample = resolveImageSample(properties, currentTime, playbackRate)
   const interpolation = properties[0]?.interpolation ?? 'Discrete'
 
   useEffect(() => {

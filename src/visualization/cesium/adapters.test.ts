@@ -302,6 +302,83 @@ describe('Cesium adapters', () => {
     expect(entities.every(({ polyline }) => polyline === undefined)).toBe(true)
   })
 
+  it('keeps a Discrete current MovingPoint visible for a short window after its sample, then hides it — never Step', () => {
+    const discreteFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'discrete-point',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingPoint',
+            interpolation: 'Discrete',
+            samples: [
+              { time: 0, longitude: 0, latitude: 0 },
+              { time: 10_000, longitude: 10, latitude: 10 },
+              { time: 30_000, longitude: 30, latitude: 30 },
+            ],
+          },
+        ],
+      },
+    }
+    const entity = movingFeatureToEntities(discreteFeature)[0]!
+    const at = (time: number): unknown =>
+      entity.position?.getValue(timestampToJulianDate(time))
+
+    expect(
+      Cartesian3.equals(
+        at(10_000) as Cartesian3,
+        Cartesian3.fromDegrees(10, 10, 0),
+      ),
+    ).toBe(true)
+    // Shortly after the sample, still visible (the short visual window).
+    expect(
+      Cartesian3.equals(
+        at(10_000 + 1) as Cartesian3,
+        Cartesian3.fromDegrees(10, 10, 0),
+      ),
+    ).toBe(true)
+    // Well before the next sample (20s later, next sample is 20s away):
+    // hidden — if this were Step it would still show (10, 10).
+    expect(at(20_000)).toBeUndefined()
+  })
+
+  it('widens the Discrete current-position window via getPlaybackRate, capped by the next sample gap', () => {
+    const discreteFeature: MovingFeature = {
+      ...movingFeature,
+      id: 'discrete-point-fast',
+      temporalGeometry: {
+        segments: [
+          {
+            type: 'MovingPoint',
+            interpolation: 'Discrete',
+            samples: [
+              { time: 0, longitude: 0, latitude: 0 },
+              { time: 100, longitude: 10, latitude: 10 },
+              { time: 1_100, longitude: 30, latitude: 30 },
+            ],
+          },
+        ],
+      },
+    }
+    const entity = movingFeatureToEntities(discreteFeature, {
+      getCurrentTime: () => 100,
+      getPlaybackRate: () => 50,
+    })[0]!
+    // 400ms perceptual minimum * 50x rate would be 20s, but the next gap
+    // (1000ms) caps it at 40% => 400ms — well short of the next sample.
+    const justInsideCap = entity.position?.getValue(
+      timestampToJulianDate(100 + 399),
+    )
+    const pastCap = entity.position?.getValue(timestampToJulianDate(100 + 401))
+    expect(
+      Cartesian3.equals(
+        justInsideCap as Cartesian3,
+        Cartesian3.fromDegrees(10, 10, 0),
+      ),
+    ).toBe(true)
+    expect(pastCap).toBeUndefined()
+  })
+
   it('renders the current MovingLineString as one stable dynamic polyline', () => {
     let currentTime = 5
     const lineFeature: MovingFeature = {

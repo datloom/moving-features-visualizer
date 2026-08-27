@@ -23,14 +23,19 @@ const property = (
 })
 
 describe('resolveImageValue', () => {
-  it('Discrete: matches only exact sample times, never nearest/previous/next', () => {
+  it('Discrete: stays visible for a short perceptual window after its own timestamp, then goes back to "no data" well before the next sample', () => {
     const camera = property('Discrete', [
       { time: t0, value: 'A' },
       { time: t1, value: 'B' },
     ])
     expect(resolveImageValue([camera], t0)).toBe('A')
     expect(resolveImageValue([camera], t1)).toBe('B')
-    expect(resolveImageValue([camera], t0 + 1)).toBeUndefined()
+    // Shortly after t0, the visual window keeps A perceptible...
+    expect(resolveImageValue([camera], t0 + 1)).toBe('A')
+    // ...but it is NOT Step: well before t1 the window has already closed.
+    expect(resolveImageValue([camera], t1 - 1)).toBeUndefined()
+    // Never shows a sample before its own timestamp.
+    expect(resolveImageValue([camera], t0 - 1)).toBeUndefined()
   })
 
   it('Step: holds the previous sample between timestamps, exact match at the next', () => {

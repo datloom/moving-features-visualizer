@@ -1,3 +1,4 @@
+import { resolveDiscreteVisualTime } from './discreteVisualWindow'
 import {
   evaluatePositionMotionCurve,
   resolveMotionCurveInterval,
@@ -26,14 +27,17 @@ const evaluatePositionLeaves = (
   if (!first) return undefined
   const positionCount = first.length
   if (samples.some((sample) => sample.length !== positionCount)) {
-    throw new RangeError('Temporal geometry samples require matching structure.')
+    throw new RangeError(
+      'Temporal geometry samples require matching structure.',
+    )
   }
   const evaluated: Position[] = []
-  const trajectory = Array.from(
-    { length: samples.length },
-    () => first[0]!,
-  )
-  for (let positionIndex = 0; positionIndex < positionCount; positionIndex += 1) {
+  const trajectory = Array.from({ length: samples.length }, () => first[0]!)
+  for (
+    let positionIndex = 0;
+    positionIndex < positionCount;
+    positionIndex += 1
+  ) {
     for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex += 1) {
       trajectory[sampleIndex] = samples[sampleIndex]![positionIndex]!
     }
@@ -83,7 +87,9 @@ export const geometryAtTime = (
   }
   const rings: Position[][] = []
   for (let ringIndex = 0; ringIndex < ringCount; ringIndex += 1) {
-    const sourceRings = segment.samples.map((sample) => sample.rings[ringIndex]!)
+    const sourceRings = segment.samples.map(
+      (sample) => sample.rings[ringIndex]!,
+    )
     const evaluatedRing = evaluatePositionLeaves(
       timestamps,
       sourceRings,
@@ -107,4 +113,33 @@ export const geometryAtTime = (
     rings.push(ring)
   }
   return { type: 'MovingPolygon', rings }
+}
+
+/**
+ * Evaluates a segment for CURRENT-geometry display, applying the shared
+ * Discrete visual-visibility window (see `discreteVisualWindow.ts`) on top
+ * of the strict domain evaluator above. `geometryAtTime` itself is left
+ * untouched — Discrete domain semantics (exists only at its exact
+ * timestamp) are unchanged; this only widens the presentation window for
+ * the most recently reached sample, snapping `time` to that sample's own
+ * timestamp so the strict evaluator still returns its exact, unmodified
+ * geometry (never interpolated, never moved).
+ *
+ * Non-Discrete segments pass `time` straight through to `geometryAtTime`.
+ */
+export const geometryAtVisualTime = (
+  segment: TemporalGeometry,
+  time: Timestamp,
+  playbackRate = 1,
+): EvaluatedTemporalGeometry | undefined => {
+  if (segment.interpolation !== 'Discrete') return geometryAtTime(segment, time)
+
+  const visualTime = resolveDiscreteVisualTime(
+    segment.samples.map((sample) => sample.time),
+    time,
+    playbackRate,
+  )
+  return visualTime === undefined
+    ? undefined
+    : geometryAtTime(segment, visualTime)
 }

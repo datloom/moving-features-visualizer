@@ -12,7 +12,10 @@ import {
   TimeIntervalCollection,
 } from 'cesium'
 
-import { geometryAtTime } from '../../mfjson/geometryAtTime'
+import {
+  geometryAtTime,
+  geometryAtVisualTime,
+} from '../../mfjson/geometryAtTime'
 import {
   buildMovingLineStringSurfaces,
   buildMovingLineStringTrail,
@@ -304,6 +307,8 @@ export const movingFeatureToEntities = (
   options: {
     readonly selected?: boolean
     readonly getCurrentTime?: () => Timestamp
+    /** Current playback rate, used only to widen the Discrete visual-visibility window (see `discreteVisualWindow.ts`). */
+    readonly getPlaybackRate?: () => number
     readonly window?: TemporalWindow
   } = {},
 ): readonly Entity[] =>
@@ -328,6 +333,7 @@ export const movingFeatureToEntities = (
 
       if (segment.type === 'MovingLineString') {
         const getCurrentTime = options.getCurrentTime ?? (() => startTime)
+        const getPlaybackRate = options.getPlaybackRate ?? (() => 1)
         const trail = buildMovingLineStringTrail(segment, window)
         const topologyCompatible = movingLineStringTopologyCompatible(segment)
         return [
@@ -338,7 +344,11 @@ export const movingFeatureToEntities = (
             polyline: {
               positions: new CallbackProperty(() => {
                 if (!topologyCompatible) return undefined
-                const evaluated = geometryAtTime(segment, getCurrentTime())
+                const evaluated = geometryAtVisualTime(
+                  segment,
+                  getCurrentTime(),
+                  getPlaybackRate(),
+                )
                 return evaluated?.type === 'MovingLineString'
                   ? evaluated.positions.map(coordinateToCartesian3)
                   : undefined
@@ -406,6 +416,7 @@ export const movingFeatureToEntities = (
 
       if (segment.type === 'MovingPolygon') {
         const getCurrentTime = options.getCurrentTime ?? (() => startTime)
+        const getPlaybackRate = options.getPlaybackRate ?? (() => 1)
         const trail = buildMovingPolygonTrail(segment, { window })
         const boundaryPaths = buildMovingPolygonBoundaryPaths(segment, {
           window,
@@ -420,7 +431,11 @@ export const movingFeatureToEntities = (
             polygon: {
               hierarchy: new CallbackProperty(() => {
                 if (!topologyCompatible) return undefined
-                const evaluated = geometryAtTime(segment, getCurrentTime())
+                const evaluated = geometryAtVisualTime(
+                  segment,
+                  getCurrentTime(),
+                  getPlaybackRate(),
+                )
                 return evaluated?.type === 'MovingPolygon'
                   ? ringsToPolygonHierarchy(evaluated.rings)
                   : undefined
@@ -448,7 +463,11 @@ export const movingFeatureToEntities = (
                 polyline: {
                   positions: new CallbackProperty(() => {
                     if (!topologyCompatible) return undefined
-                    const evaluated = geometryAtTime(segment, getCurrentTime())
+                    const evaluated = geometryAtVisualTime(
+                      segment,
+                      getCurrentTime(),
+                      getPlaybackRate(),
+                    )
                     return evaluated?.type === 'MovingPolygon'
                       ? evaluated.rings[ringIndex]?.map(coordinateToCartesian3)
                       : undefined
@@ -539,9 +558,10 @@ export const movingFeatureToEntities = (
 
       const motionCurvePosition = new CallbackPositionProperty((time) => {
         if (!time) return undefined
-        const evaluated = geometryAtTime(
+        const evaluated = geometryAtVisualTime(
           segment,
           JulianDate.toDate(time).getTime(),
+          options.getPlaybackRate?.() ?? 1,
         )
         return evaluated?.type === 'MovingPoint'
           ? coordinateToCartesian3(evaluated.position)
