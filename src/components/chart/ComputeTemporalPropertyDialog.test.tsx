@@ -5,10 +5,38 @@ import {
   screen,
   within,
 } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MovingFeature } from '../../mfjson/types'
+import { useServerCollectionStore } from '../../store/serverCollectionStore'
 import { ComputeTemporalPropertyDialog } from './ComputeTemporalPropertyDialog'
+
+const SERVER_SESSION = {
+  baseUrl: 'http://localhost:5050',
+  collectionId: 'routes',
+  collectionTitle: 'Routes',
+  limit: 100,
+  serverPosition: 1,
+  numberLoaded: 1,
+  failureCount: 0,
+  hasMore: false,
+}
+
+/** TemporalGeometryQuery is server-only — most of this dialog only makes sense with an active server session. */
+const installServerSession = () =>
+  useServerCollectionStore.setState({
+    session: SERVER_SESSION,
+    loadingMore: false,
+    error: undefined,
+  })
+
+beforeEach(() => {
+  useServerCollectionStore.setState({
+    session: undefined,
+    loadingMore: false,
+    error: undefined,
+  })
+})
 
 afterEach(cleanup)
 
@@ -51,6 +79,7 @@ const twoSegmentFeature = featureWithSegments([
 
 describe('ComputeTemporalPropertyDialog', () => {
   it('opens with exactly the three canonical metric options', () => {
+    installServerSession()
     render(
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
@@ -71,6 +100,7 @@ describe('ComputeTemporalPropertyDialog', () => {
   })
 
   it('lists "All Temporal Geometries" plus one entry per segment, disabling one with no retained id', () => {
+    installServerSession()
     render(
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
@@ -92,6 +122,7 @@ describe('ComputeTemporalPropertyDialog', () => {
   })
 
   it('derives the default Start/End range from the selected geometry', () => {
+    installServerSession()
     render(
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
@@ -131,6 +162,7 @@ describe('ComputeTemporalPropertyDialog', () => {
         ],
       },
     ])
+    installServerSession()
     render(
       <ComputeTemporalPropertyDialog
         feature={singleFeature}
@@ -143,6 +175,7 @@ describe('ComputeTemporalPropertyDialog', () => {
   })
 
   it('disables Compute until a metric is chosen, with a concise reason shown', () => {
+    installServerSession()
     render(
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
@@ -158,7 +191,8 @@ describe('ComputeTemporalPropertyDialog', () => {
     expect(screen.getByRole('button', { name: 'Compute' })).toBeEnabled()
   })
 
-  it('does not perform a network request — Compute only shows a local debug preview', () => {
+  it('does not perform a network request — Compute only shows a local debug preview with the resolved query context', () => {
+    installServerSession()
     render(
       <ComputeTemporalPropertyDialog
         feature={twoSegmentFeature}
@@ -172,9 +206,15 @@ describe('ComputeTemporalPropertyDialog', () => {
     expect(
       screen.getByText(/server integration is not implemented yet/i),
     ).toBeInTheDocument()
+    // The resolved collectionId and mFeatureId are exposed, not just the
+    // metric/geometry/time fields — this is the query context the next
+    // task's API call will need.
+    expect(screen.getByText('routes')).toBeInTheDocument()
+    expect(screen.getByText('mf-1')).toBeInTheDocument()
   })
 
   it('calls onClose from Cancel and from the close icon button', () => {
+    installServerSession()
     const onClose = vi.fn()
     render(
       <ComputeTemporalPropertyDialog
@@ -189,5 +229,48 @@ describe('ComputeTemporalPropertyDialog', () => {
       screen.getByRole('button', { name: 'Close compute dialog' }),
     )
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('is unavailable with a concise explanation for a local-file feature (no active server session)', () => {
+    render(
+      <ComputeTemporalPropertyDialog
+        feature={twoSegmentFeature}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(
+      screen.getByText(
+        'Server-derived properties are available for server-loaded features.',
+      ),
+    ).toBeInTheDocument()
+    // No metric/geometry/time-range fields, and no Compute action, since
+    // there is nothing a local feature can query.
+    expect(screen.queryByLabelText('Metric')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Compute' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+  })
+
+  it('becomes available again once a server session is installed for the same dialog instance type', () => {
+    // Simulates: user loads a local file (no session), then connects to a
+    // server and reopens Compute for a server-loaded feature.
+    const { unmount } = render(
+      <ComputeTemporalPropertyDialog
+        feature={twoSegmentFeature}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.queryByLabelText('Metric')).not.toBeInTheDocument()
+    unmount()
+
+    installServerSession()
+    render(
+      <ComputeTemporalPropertyDialog
+        feature={twoSegmentFeature}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByLabelText('Metric')).toBeInTheDocument()
   })
 })

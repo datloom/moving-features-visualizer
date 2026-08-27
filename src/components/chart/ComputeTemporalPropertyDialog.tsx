@@ -6,10 +6,12 @@ import {
   COMPUTE_METRICS,
   getComputeGeometryOptions,
   getComputeTimeRange,
+  resolveTemporalGeometryQueryContext,
   type ComputeGeometrySelection,
   type ComputeMetric,
 } from '../../mfjson/computeQuery'
 import type { MovingFeature } from '../../mfjson/types'
+import { useServerCollectionStore } from '../../store/serverCollectionStore'
 import { Icon } from '../ui/Icon'
 
 const pad = (value: number): string => String(value).padStart(2, '0')
@@ -39,6 +41,16 @@ export function ComputeTemporalPropertyDialog({
   readonly feature: MovingFeature
   readonly onClose: () => void
 }) {
+  // TemporalGeometryQuery is server-only: the active server session (if any)
+  // is the sole source of `collectionId` — never derived from UI labels or
+  // guessed for local-file features.
+  const serverCollectionId = useServerCollectionStore(
+    (state) => state.session?.collectionId,
+  )
+  const queryContext = useMemo(
+    () => resolveTemporalGeometryQueryContext(feature, serverCollectionId),
+    [feature, serverCollectionId],
+  )
   const geometryOptions = useMemo(
     () => getComputeGeometryOptions(feature),
     [feature],
@@ -82,15 +94,17 @@ export function ComputeTemporalPropertyDialog({
     parsedStart < parsedEnd
 
   const disabledReason =
-    feature.temporalGeometry.segments.length === 0
-      ? 'This Feature has no TemporalGeometry to compute from.'
-      : !metric
-        ? 'Select a metric to continue.'
-        : selectedOption?.disabled
-          ? (selectedOption.diagnostic ?? 'This geometry is unavailable.')
-          : !rangeIsValid
-            ? 'Start must be before End.'
-            : undefined
+    queryContext.source === 'local'
+      ? queryContext.reason
+      : feature.temporalGeometry.segments.length === 0
+        ? 'This Feature has no TemporalGeometry to compute from.'
+        : !metric
+          ? 'Select a metric to continue.'
+          : selectedOption?.disabled
+            ? (selectedOption.diagnostic ?? 'This geometry is unavailable.')
+            : !rangeIsValid
+              ? 'Start must be before End.'
+              : undefined
 
   const canCompute = disabledReason === undefined
 
@@ -115,114 +129,129 @@ export function ComputeTemporalPropertyDialog({
           </button>
         </header>
         <div className="compute-dialog-body">
-          <label className="comparison-field">
-            Metric
-            <select
-              onChange={(event) => {
-                setMetric(event.target.value as ComputeMetric)
-                setSubmittedQuery(null)
-              }}
-              value={metric}
-            >
-              <option disabled value="">
-                Select a metric…
-              </option>
-              {COMPUTE_METRICS.map((option) => (
-                <option key={option} value={option}>
-                  {COMPUTE_METRIC_LABELS[option]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="comparison-field">
-            Temporal Geometry
-            <select
-              onChange={(event) => selectGeometry(event.target.value)}
-              value={geometrySelection}
-            >
-              {geometryOptions.map((option) => (
-                <option
-                  disabled={option.disabled}
-                  key={option.value}
-                  value={option.value}
-                >
-                  {option.label}
-                  {option.diagnostic ? ` (${option.diagnostic})` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="compute-time-range">
-            <label className="comparison-field">
-              Start
-              <input
-                onChange={(event) => {
-                  setStartInput(event.target.value)
-                  setSubmittedQuery(null)
-                }}
-                type="datetime-local"
-                value={startInput}
-              />
-            </label>
-            <label className="comparison-field">
-              End
-              <input
-                onChange={(event) => {
-                  setEndInput(event.target.value)
-                  setSubmittedQuery(null)
-                }}
-                type="datetime-local"
-                value={endInput}
-              />
-            </label>
-          </div>
-          {disabledReason ? (
+          {queryContext.source === 'local' ? (
             <p className="compute-reason" role="status">
-              {disabledReason}
+              {queryContext.reason}
             </p>
-          ) : null}
-          {submittedQuery ? (
-            <div className="compute-debug" role="status">
-              <p>
-                Query built locally — server integration is not implemented yet.
-              </p>
-              <dl>
-                <dt>Metric</dt>
-                <dd>{COMPUTE_METRIC_LABELS[submittedQuery.metric]}</dd>
-                <dt>Temporal Geometry</dt>
-                <dd>
-                  {submittedQuery.geometry === ALL_TEMPORAL_GEOMETRIES
-                    ? 'All Temporal Geometries'
-                    : submittedQuery.geometry}
-                </dd>
-                <dt>Start</dt>
-                <dd>{new Date(submittedQuery.start).toISOString()}</dd>
-                <dt>End</dt>
-                <dd>{new Date(submittedQuery.end).toISOString()}</dd>
-              </dl>
-            </div>
-          ) : null}
+          ) : (
+            <>
+              <label className="comparison-field">
+                Metric
+                <select
+                  onChange={(event) => {
+                    setMetric(event.target.value as ComputeMetric)
+                    setSubmittedQuery(null)
+                  }}
+                  value={metric}
+                >
+                  <option disabled value="">
+                    Select a metric…
+                  </option>
+                  {COMPUTE_METRICS.map((option) => (
+                    <option key={option} value={option}>
+                      {COMPUTE_METRIC_LABELS[option]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="comparison-field">
+                Temporal Geometry
+                <select
+                  onChange={(event) => selectGeometry(event.target.value)}
+                  value={geometrySelection}
+                >
+                  {geometryOptions.map((option) => (
+                    <option
+                      disabled={option.disabled}
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                      {option.diagnostic ? ` (${option.diagnostic})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="compute-time-range">
+                <label className="comparison-field">
+                  Start
+                  <input
+                    onChange={(event) => {
+                      setStartInput(event.target.value)
+                      setSubmittedQuery(null)
+                    }}
+                    type="datetime-local"
+                    value={startInput}
+                  />
+                </label>
+                <label className="comparison-field">
+                  End
+                  <input
+                    onChange={(event) => {
+                      setEndInput(event.target.value)
+                      setSubmittedQuery(null)
+                    }}
+                    type="datetime-local"
+                    value={endInput}
+                  />
+                </label>
+              </div>
+              {disabledReason ? (
+                <p className="compute-reason" role="status">
+                  {disabledReason}
+                </p>
+              ) : null}
+              {submittedQuery ? (
+                <div className="compute-debug" role="status">
+                  <p>
+                    Query built locally — server integration is not implemented
+                    yet.
+                  </p>
+                  <dl>
+                    <dt>Collection</dt>
+                    <dd>{queryContext.collectionId}</dd>
+                    <dt>MovingFeature</dt>
+                    <dd>{queryContext.mFeatureId}</dd>
+                    <dt>Metric</dt>
+                    <dd>{COMPUTE_METRIC_LABELS[submittedQuery.metric]}</dd>
+                    <dt>Temporal Geometry</dt>
+                    <dd>
+                      {submittedQuery.geometry === ALL_TEMPORAL_GEOMETRIES
+                        ? 'All Temporal Geometries'
+                        : submittedQuery.geometry}
+                    </dd>
+                    <dt>Start</dt>
+                    <dd>{new Date(submittedQuery.start).toISOString()}</dd>
+                    <dt>End</dt>
+                    <dd>{new Date(submittedQuery.end).toISOString()}</dd>
+                  </dl>
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
         <footer className="compute-dialog-actions">
           <button onClick={onClose} type="button">
-            Cancel
+            {queryContext.source === 'local' ? 'Close' : 'Cancel'}
           </button>
-          <button
-            className="compute-submit"
-            disabled={!canCompute}
-            onClick={() => {
-              if (!canCompute || !metric) return
-              setSubmittedQuery({
-                metric,
-                geometry: geometrySelection,
-                start: parsedStart,
-                end: parsedEnd,
-              })
-            }}
-            type="button"
-          >
-            Compute
-          </button>
+          {queryContext.source === 'local' ? null : (
+            <button
+              className="compute-submit"
+              disabled={!canCompute}
+              onClick={() => {
+                if (!canCompute || !metric) return
+                setSubmittedQuery({
+                  metric,
+                  geometry: geometrySelection,
+                  start: parsedStart,
+                  end: parsedEnd,
+                })
+              }}
+              type="button"
+            >
+              Compute
+            </button>
+          )}
         </footer>
       </section>
     </div>

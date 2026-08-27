@@ -5,6 +5,9 @@ import {
   COMPUTE_METRICS,
   getComputeGeometryOptions,
   getComputeTimeRange,
+  getQueryableGeometries,
+  LOCAL_FEATURE_COMPUTE_REASON,
+  resolveTemporalGeometryQueryContext,
 } from './computeQuery'
 import type { MovingFeature } from './types'
 
@@ -144,5 +147,95 @@ describe('getComputeTimeRange', () => {
     expect(
       getComputeTimeRange(feature, ALL_TEMPORAL_GEOMETRIES),
     ).toBeUndefined()
+  })
+})
+
+describe('getQueryableGeometries', () => {
+  it('includes only segments with a retained id, with type/time range/sample count', () => {
+    const feature = featureWithSegments([
+      {
+        id: 'tg-1',
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: 1_000, longitude: 0, latitude: 0 },
+          { time: 5_000, longitude: 1, latitude: 1 },
+          { time: 9_000, longitude: 2, latitude: 2 },
+        ],
+      },
+      {
+        // No id — must not appear as a queryable geometry.
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: 0, longitude: 0, latitude: 0 },
+          { time: 10, longitude: 1, latitude: 1 },
+        ],
+      },
+    ])
+    expect(getQueryableGeometries(feature)).toEqual([
+      {
+        tGeometryId: 'tg-1',
+        type: 'MovingPoint',
+        startTime: 1_000,
+        endTime: 9_000,
+        sampleCount: 3,
+      },
+    ])
+  })
+
+  it('returns an empty list when no segment has a retained id', () => {
+    const feature = featureWithSegments([
+      {
+        type: 'MovingPoint',
+        interpolation: 'Linear',
+        samples: [
+          { time: 0, longitude: 0, latitude: 0 },
+          { time: 10, longitude: 1, latitude: 1 },
+        ],
+      },
+    ])
+    expect(getQueryableGeometries(feature)).toEqual([])
+  })
+})
+
+describe('resolveTemporalGeometryQueryContext', () => {
+  const feature = featureWithSegments([
+    {
+      id: 'tg-1',
+      type: 'MovingPoint',
+      interpolation: 'Linear',
+      samples: [
+        { time: 1_000, longitude: 0, latitude: 0 },
+        { time: 9_000, longitude: 1, latitude: 1 },
+      ],
+    },
+  ])
+
+  it('resolves a server context with collectionId, mFeatureId, and queryable geometries', () => {
+    const context = resolveTemporalGeometryQueryContext(feature, 'routes')
+    expect(context).toEqual({
+      source: 'server',
+      collectionId: 'routes',
+      mFeatureId: 'mf-1',
+      geometries: [
+        {
+          tGeometryId: 'tg-1',
+          type: 'MovingPoint',
+          startTime: 1_000,
+          endTime: 9_000,
+          sampleCount: 2,
+        },
+      ],
+    })
+  })
+
+  it('resolves a local context with a concise explanation when there is no server collection', () => {
+    const context = resolveTemporalGeometryQueryContext(feature, undefined)
+    expect(context).toEqual({
+      source: 'local',
+      mFeatureId: 'mf-1',
+      reason: LOCAL_FEATURE_COMPUTE_REASON,
+    })
   })
 })

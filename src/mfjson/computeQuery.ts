@@ -109,3 +109,87 @@ export const getComputeTimeRange = (
     end: Math.max(...ranges.map((range) => range.end)),
   }
 }
+
+/** One queryable TemporalGeometry: a segment that has a server-assigned `id`. */
+export interface TemporalGeometryQueryDescriptor {
+  readonly tGeometryId: string
+  readonly type: TemporalGeometry['type']
+  readonly startTime: Timestamp
+  readonly endTime: Timestamp
+  readonly sampleCount: number
+}
+
+/**
+ * The TemporalGeometry segments of `feature` that a TemporalGeometryQuery
+ * can actually target — i.e. those with a retained `id`. Segments without
+ * one are simply omitted here (never fabricated); `getComputeGeometryOptions`
+ * above is the place that still surfaces them, disabled, for UI visibility.
+ */
+export const getQueryableGeometries = (
+  feature: MovingFeature,
+): readonly TemporalGeometryQueryDescriptor[] =>
+  feature.temporalGeometry.segments.flatMap((segment) => {
+    const { id } = segment
+    const range = id ? segmentTimeRange(segment) : undefined
+    if (!id || !range) return []
+    return [
+      {
+        tGeometryId: id,
+        type: segment.type,
+        startTime: range.start,
+        endTime: range.end,
+        sampleCount: sampleCount(segment),
+      },
+    ]
+  })
+
+export const LOCAL_FEATURE_COMPUTE_REASON =
+  'Server-derived properties are available for server-loaded features.'
+
+export interface ServerTemporalGeometryQueryContext {
+  readonly source: 'server'
+  readonly collectionId: string
+  readonly mFeatureId: string
+  readonly geometries: readonly TemporalGeometryQueryDescriptor[]
+}
+
+export interface LocalFeatureQueryContext {
+  readonly source: 'local'
+  readonly mFeatureId: string
+  readonly reason: string
+}
+
+export type TemporalGeometryQueryContext =
+  ServerTemporalGeometryQueryContext | LocalFeatureQueryContext
+
+/**
+ * Resolves the full context a TemporalGeometryQuery needs: `collectionId`,
+ * `mFeatureId` (the same id used for feature selection/visibility
+ * elsewhere), and the queryable geometries with their `tGeometryId`s and
+ * time ranges.
+ *
+ * `serverCollectionId` is supplied by the caller rather than looked up
+ * here — `mfjson/*` stays free of any store/React dependency (see the
+ * project's architecture rules); the active server collection, if any,
+ * lives in `useServerCollectionStore`. `undefined` means the currently
+ * loaded features did not come from a server collection (a local file, or
+ * nothing loaded yet) — TemporalGeometryQuery is server-only, so that
+ * yields a `'local'` context explaining why Compute is unavailable rather
+ * than a guessed/derived collection id.
+ */
+export const resolveTemporalGeometryQueryContext = (
+  feature: MovingFeature,
+  serverCollectionId: string | undefined,
+): TemporalGeometryQueryContext =>
+  serverCollectionId === undefined
+    ? {
+        source: 'local',
+        mFeatureId: feature.id,
+        reason: LOCAL_FEATURE_COMPUTE_REASON,
+      }
+    : {
+        source: 'server',
+        collectionId: serverCollectionId,
+        mFeatureId: feature.id,
+        geometries: getQueryableGeometries(feature),
+      }

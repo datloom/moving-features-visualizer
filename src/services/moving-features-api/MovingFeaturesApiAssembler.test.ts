@@ -91,6 +91,13 @@ describe('MovingFeaturesApiAssembler', () => {
     expect(normalized.success).toBe(true)
     if (normalized.success) {
       expect(normalized.data.temporalGeometry.segments).toHaveLength(2)
+      // The server's geometrySequence[].id (tGeometryId) must survive the
+      // full pipeline — server response -> Assembler -> parser -> normalizer
+      // -> normalized TemporalGeometry segment — since it's required to
+      // target a TemporalGeometryQuery at a specific segment later.
+      expect(
+        normalized.data.temporalGeometry.segments.map(({ id }) => id),
+      ).toEqual(['tg-0', 'tg-2'])
       expect(
         normalized.data.temporalProperties.map(({ name }) => name),
       ).toEqual(['speed', 'status'])
