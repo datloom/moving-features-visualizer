@@ -1,4 +1,5 @@
 import { MovingFeaturesApiError } from './errors'
+import { validateTemporalGeometryMetricResponse } from './temporalGeometryMetricResponse'
 import type {
   ChildResourceQueryOptions,
   CollectionsResponse,
@@ -6,6 +7,8 @@ import type {
   FeatureQueryOptions,
   FeatureMetadata,
   FeaturesResponse,
+  TemporalGeometryMetricResponse,
+  TemporalGeometryQueryRequest,
   TemporalGeometrySequenceResponse,
   TemporalPropertiesResponse,
 } from './types'
@@ -226,5 +229,27 @@ export class MovingFeaturesApiClient {
         options,
       ),
     )
+  }
+
+  /**
+   * Fetches one TemporalGeometryQuery metric (velocity, acceleration, or
+   * distance) for exactly one TemporalGeometry. GET, matching every other
+   * read in this client — the API has no write/compute-trigger endpoint of
+   * its own; the metric is computed by the server on request.
+   */
+  async getTemporalGeometryMetric(
+    request: TemporalGeometryQueryRequest,
+  ): Promise<TemporalGeometryMetricResponse> {
+    const url = this.createUrl(
+      `/collections/${encodeURIComponent(request.collectionId)}/items/${encodeURIComponent(request.mFeatureId)}/tgsequence/${encodeURIComponent(request.tGeometryId)}/${request.metric}`,
+      {
+        datetime: {
+          start: new Date(request.startTime).toISOString(),
+          end: new Date(request.endTime).toISOString(),
+        },
+      },
+    )
+    const response = await this.request<unknown>(url)
+    return validateTemporalGeometryMetricResponse(response)
   }
 }

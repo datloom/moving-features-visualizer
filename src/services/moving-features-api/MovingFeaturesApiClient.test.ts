@@ -227,4 +227,150 @@ describe('MovingFeaturesApiClient', () => {
         'Moving Features API request could not start because the fetch adapter lost its browser invocation context.',
     })
   })
+
+  describe('getTemporalGeometryMetric', () => {
+    const validMetricResponse = (name: string) => ({
+      name,
+      type: 'TReal',
+      form: 'KMH',
+      valueSequence: [
+        {
+          datetimes: ['2026-01-01T10:00:00Z', '2026-01-01T10:01:00Z'],
+          values: [1, 2],
+          interpolation: 'Linear',
+        },
+      ],
+    })
+
+    const baseRequest = {
+      collectionId: 'routes',
+      mFeatureId: 'mf/1',
+      tGeometryId: 'tg-1',
+      startTime: Date.parse('2026-01-01T10:00:00Z'),
+      endTime: Date.parse('2026-01-01T10:05:00Z'),
+    } as const
+
+    it.each([
+      ['velocity', '/collections/routes/items/mf%2F1/tgsequence/tg-1/velocity'],
+      [
+        'acceleration',
+        '/collections/routes/items/mf%2F1/tgsequence/tg-1/acceleration',
+      ],
+      ['distance', '/collections/routes/items/mf%2F1/tgsequence/tg-1/distance'],
+    ] as const)('requests the %s endpoint via GET', async (metric, path) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(response(validMetricResponse(metric)))
+      const client = new MovingFeaturesApiClient(
+        'http://localhost:5050',
+        fetchMock,
+      )
+      await client.getTemporalGeometryMetric({ ...baseRequest, metric })
+
+      const [url, init] = fetchMock.mock.calls[0]! as [URL, RequestInit]
+      expect(url.pathname).toBe(path)
+      // GET is the implicit default here, matching every other read in this
+      // client — no `method` override, no request body.
+      expect(init.method).toBeUndefined()
+      expect(init).not.toHaveProperty('body')
+    })
+
+    it('sends the datetime interval as start/end with no literal quotes', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(response(validMetricResponse('velocity')))
+      const client = new MovingFeaturesApiClient(
+        'http://localhost:5050',
+        fetchMock,
+      )
+      await client.getTemporalGeometryMetric({
+        ...baseRequest,
+        metric: 'velocity',
+      })
+
+      const [url] = fetchMock.mock.calls[0]! as [URL]
+      const value = url.searchParams.get('datetime')
+      expect(value).toBe('2026-01-01T10:00:00.000Z/2026-01-01T10:05:00.000Z')
+      expect(value).not.toContain('"')
+    })
+
+    it('returns a validated response for a well-formed payload', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(response(validMetricResponse('acceleration')))
+      const client = new MovingFeaturesApiClient(
+        'http://localhost:5050',
+        fetchMock,
+      )
+      await expect(
+        client.getTemporalGeometryMetric({
+          ...baseRequest,
+          metric: 'acceleration',
+        }),
+      ).resolves.toEqual(validMetricResponse('acceleration'))
+    })
+
+    it.each([
+      ['missing name', { ...validMetricResponse('velocity'), name: undefined }],
+      [
+        'unrecognized type',
+        { ...validMetricResponse('velocity'), type: 'TText' },
+      ],
+      [
+        'non-array valueSequence',
+        { ...validMetricResponse('velocity'), valueSequence: 'nope' },
+      ],
+      [
+        'mismatched datetimes/values lengths',
+        {
+          ...validMetricResponse('velocity'),
+          valueSequence: [
+            {
+              datetimes: ['2026-01-01T10:00:00Z'],
+              values: [1, 2],
+              interpolation: 'Linear',
+            },
+          ],
+        },
+      ],
+      [
+        'non-numeric values',
+        {
+          ...validMetricResponse('velocity'),
+          valueSequence: [
+            {
+              datetimes: ['2026-01-01T10:00:00Z'],
+              values: ['fast'],
+              interpolation: 'Linear',
+            },
+          ],
+        },
+      ],
+      [
+        'unrecognized interpolation',
+        {
+          ...validMetricResponse('velocity'),
+          valueSequence: [
+            {
+              datetimes: ['2026-01-01T10:00:00Z', '2026-01-01T10:01:00Z'],
+              values: [1, 2],
+              interpolation: 'Quadratic',
+            },
+          ],
+        },
+      ],
+    ])('rejects a malformed response: %s', async (_name, malformed) => {
+      const fetchMock = vi.fn().mockResolvedValue(response(malformed))
+      const client = new MovingFeaturesApiClient(
+        'http://localhost:5050',
+        fetchMock,
+      )
+      await expect(
+        client.getTemporalGeometryMetric({
+          ...baseRequest,
+          metric: 'velocity',
+        }),
+      ).rejects.toMatchObject({ kind: 'invalid-response' })
+    })
+  })
 })

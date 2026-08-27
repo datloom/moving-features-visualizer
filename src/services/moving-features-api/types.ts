@@ -133,3 +133,47 @@ export interface CollectionLoadResult {
   readonly pagination: PaginationMetadata
   readonly temporalPagination?: readonly FeatureTemporalPaginationSeed[]
 }
+
+/**
+ * TemporalGeometryQuery metrics computed server-side for one TemporalGeometry.
+ * Kept as a closed set matching `ComputeMetric` in `mfjson/computeQuery.ts`
+ * one-for-one — this file stays dependency-free (a pure DTO/request leaf
+ * module), so the union is repeated here rather than imported.
+ */
+export const TEMPORAL_GEOMETRY_METRICS = [
+  'velocity',
+  'acceleration',
+  'distance',
+] as const
+export type TemporalGeometryMetric = (typeof TEMPORAL_GEOMETRY_METRICS)[number]
+
+/** Request for one TemporalGeometryQuery metric, targeting exactly one TemporalGeometry. */
+export interface TemporalGeometryQueryRequest {
+  readonly collectionId: string
+  readonly mFeatureId: string
+  readonly tGeometryId: string
+  readonly metric: TemporalGeometryMetric
+  /** Unix epoch milliseconds, matching the app's internal `Timestamp` convention. */
+  readonly startTime: number
+  readonly endTime: number
+}
+
+/**
+ * One raw server-supplied value sequence within a TemporalGeometryMetric
+ * response. Deliberately untyped against the app's `MeasureTemporalProperty`
+ * — this is the external API's own DTO shape, validated on arrival, and
+ * normalized into the application model only at the point of use.
+ */
+export interface TemporalGeometryMetricValueSequence {
+  readonly datetimes: readonly string[]
+  readonly values: readonly number[]
+  readonly interpolation: string
+}
+
+/** Raw TemporalGeometryQuery response for velocity/acceleration/distance. */
+export interface TemporalGeometryMetricResponse {
+  readonly name: string
+  readonly type: string
+  readonly form?: string
+  readonly valueSequence: readonly TemporalGeometryMetricValueSequence[]
+}
