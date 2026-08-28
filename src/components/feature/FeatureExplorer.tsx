@@ -15,6 +15,8 @@ export interface FeatureExplorerProps {
   readonly onSelect: (featureId: string) => void
   readonly open: boolean
   readonly selectedFeatureId?: string
+  /** Collapsed from the workspace layout (freeing map width) — distinct from the mobile drawer's `open`. */
+  readonly collapsed?: boolean
 }
 
 export function FeatureExplorer({
@@ -23,6 +25,7 @@ export function FeatureExplorer({
   onSelect,
   open,
   selectedFeatureId,
+  collapsed = false,
 }: FeatureExplorerProps) {
   const [query, setQuery] = useState('')
   const filteredFeatures = features.filter((feature) =>
@@ -33,8 +36,10 @@ export function FeatureExplorer({
 
   return (
     <aside
+      aria-hidden={collapsed}
       aria-label="Feature Explorer"
       className={`feature-explorer ${open ? 'is-open' : ''}`}
+      inert={collapsed}
     >
       <header className="panel-heading">
         <div>

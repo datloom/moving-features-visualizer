@@ -80,9 +80,18 @@ export function CesiumMap({
       viewer.clock.currentTime = timestampToJulianDate(state.currentTime)
     })
 
+    // Cesium only resizes its canvas on `window` resize events by default —
+    // toggling a workspace panel changes this container's size without the
+    // window itself resizing, so the viewer needs to be told explicitly.
+    const resizeObserver = new ResizeObserver(() => {
+      if (!viewer.isDestroyed()) viewer.resize()
+    })
+    resizeObserver.observe(container)
+
     return () => {
       removeImageryErrorListener()
       unsubscribe()
+      resizeObserver.disconnect()
       viewerRef.current = null
       featureEntities.clear()
       renderedSelection.clear()

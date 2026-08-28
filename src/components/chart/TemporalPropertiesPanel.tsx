@@ -27,8 +27,11 @@ const MAX_FEATURE_SERIES = 12
 
 export function TemporalPropertiesPanel({
   feature,
+  collapsed = false,
 }: {
   readonly feature: MovingFeature
+  /** Collapsed from the workspace layout (freeing map height) — the panel stays mounted so its comparison/selection state survives. */
+  readonly collapsed?: boolean
 }) {
   const features = useFeatureStore((state) => state.features)
   const selectedFeatureId = useFeatureStore((state) => state.selectedFeatureId)
@@ -294,8 +297,10 @@ export function TemporalPropertiesPanel({
 
   return (
     <section
+      aria-hidden={collapsed}
       aria-label="Temporal Properties"
       className="temporal-panel temporal-comparison-panel"
+      inert={collapsed}
     >
       <header className="temporal-panel-heading">
         <div>

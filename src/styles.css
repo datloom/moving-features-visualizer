@@ -191,6 +191,12 @@ select {
   grid-template-columns: 248px minmax(0, 1fr);
   min-height: 0;
 }
+/* Collapsed rather than unmounted: the aside keeps its (trivial) local
+   search-query state, and `inert` (set in FeatureExplorer) keeps it out of
+   the tab order while the grid track that gave it width is gone. */
+.workspace-shell.explorer-collapsed {
+  grid-template-columns: 0px minmax(0, 1fr);
+}
 .feature-explorer {
   z-index: 8;
   display: grid;
@@ -201,6 +207,11 @@ select {
   padding: 14px 10px;
   border-right: 1px solid var(--border);
   background: var(--surface);
+}
+.workspace-shell.explorer-collapsed .feature-explorer {
+  padding: 0;
+  overflow: hidden;
+  border-right: 0;
 }
 .panel-heading {
   justify-content: space-between;
@@ -351,6 +362,13 @@ select {
   min-width: 0;
   min-height: 0;
 }
+/* Collapsed rather than unmounted: TemporalPropertiesPanel owns meaningful
+   local state (comparison mode, selected features/properties, pending chart
+   navigation) that would be lost on unmount. `inert` (set on the panel
+   itself) keeps it out of the tab order while its row is 0-height. */
+.primary-workspace.temporal-collapsed {
+  grid-template-rows: minmax(260px, 1fr) 0px;
+}
 .map-workspace {
   position: relative;
   min-width: 0;
@@ -479,6 +497,10 @@ select {
   color: var(--primary);
   border-color: #35635f;
 }
+.panel-visibility-control {
+  display: flex;
+  gap: 5px;
+}
 .map-mode-control,
 .visualization-mode-control {
   display: grid;
@@ -585,6 +607,10 @@ select {
   min-height: 0;
   border-top: 1px solid var(--border);
   background: var(--surface);
+}
+.primary-workspace.temporal-collapsed .temporal-panel {
+  overflow: hidden;
+  border-top: 0;
 }
 .temporal-panel-heading {
   justify-content: space-between;

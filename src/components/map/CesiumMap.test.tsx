@@ -14,6 +14,7 @@ const {
   OpenStreetMapImageryProvider,
   removeImageryErrorListener,
   remove,
+  resize,
   setView,
   timestampToJulianDate,
   Viewer,
@@ -47,6 +48,7 @@ const {
     },
   )
   const remove = vi.fn()
+  const resize = vi.fn()
   const setView = vi.fn()
   const timestampToJulianDate = vi.fn((timestamp: number) => timestamp)
   const zoomTo = vi.fn(() => Promise.resolve(true))
@@ -57,6 +59,7 @@ const {
       destroy,
       entities: { add, remove },
       isDestroyed,
+      resize,
       scene: { morphTo2D, morphTo3D },
       zoomTo,
     }
@@ -74,6 +77,7 @@ const {
     OpenStreetMapImageryProvider,
     removeImageryErrorListener,
     remove,
+    resize,
     setView,
     timestampToJulianDate,
     Viewer,
@@ -158,13 +162,28 @@ const feature: MovingFeature = {
   properties: {},
 }
 
+let resizeObserverCallbacks: ResizeObserverCallback[] = []
+
 describe('CesiumMap', () => {
   beforeEach(() => {
     useTimeStore.setState(initialTimeState)
+    resizeObserverCallbacks = []
+    vi.stubGlobal(
+      'ResizeObserver',
+      vi.fn((callback: ResizeObserverCallback) => {
+        resizeObserverCallbacks.push(callback)
+        return {
+          disconnect: vi.fn(),
+          observe: vi.fn(),
+          unobserve: vi.fn(),
+        }
+      }),
+    )
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('creates one Viewer on mount and destroys it on unmount', () => {
@@ -191,6 +210,14 @@ describe('CesiumMap', () => {
     unmount()
     expect(removeImageryErrorListener).toHaveBeenCalledTimes(1)
     expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('resizes the viewer when its container is observed to change size (e.g. a workspace panel toggle)', () => {
+    render(<CesiumMap />)
+    expect(resize).not.toHaveBeenCalled()
+
+    act(() => resizeObserverCallbacks.forEach((callback) => callback([], {} as ResizeObserver)))
+    expect(resize).toHaveBeenCalledTimes(1)
   })
 
   it('reports OpenStreetMap imagery loading failures without removing the map', () => {

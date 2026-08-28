@@ -37,6 +37,13 @@ const feature: MovingFeature = {
   properties: {},
 }
 
+const panelVisibilityProps = () => ({
+  onToggleFeatureExplorer: vi.fn(),
+  onToggleTemporalProperties: vi.fn(),
+  showFeatureExplorer: true,
+  showTemporalProperties: true,
+})
+
 describe('MapWorkspace map mode control', () => {
   afterEach(() => {
     cleanup()
@@ -44,7 +51,13 @@ describe('MapWorkspace map mode control', () => {
   })
 
   it('defaults to 3D and switches between 2D and 3D', () => {
-    render(<MapWorkspace feature={feature} features={[feature]} />)
+    render(
+      <MapWorkspace
+        feature={feature}
+        features={[feature]}
+        {...panelVisibilityProps()}
+      />,
+    )
 
     expect(screen.getByTestId('cesium-map-mode')).toHaveTextContent('3d')
     expect(screen.getByRole('button', { name: '3D' })).toHaveAttribute(
@@ -61,7 +74,13 @@ describe('MapWorkspace map mode control', () => {
   })
 
   it('mounts only the selected Cesium visualization', () => {
-    render(<MapWorkspace feature={feature} features={[feature]} />)
+    render(
+      <MapWorkspace
+        feature={feature}
+        features={[feature]}
+        {...panelVisibilityProps()}
+      />,
+    )
     expect(screen.getByTestId('cesium-map-mode')).toBeInTheDocument()
     expect(screen.queryByTestId('space-time-map')).not.toBeInTheDocument()
 
@@ -77,5 +96,41 @@ describe('MapWorkspace map mode control', () => {
       target: { value: '8' },
     })
     expect(screen.getByTestId('space-time-map')).toHaveTextContent('8')
+  })
+})
+
+describe('MapWorkspace panel visibility controls', () => {
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  it('labels each toggle by current visibility and invokes its callback', () => {
+    const onToggleFeatureExplorer = vi.fn()
+    const onToggleTemporalProperties = vi.fn()
+    render(
+      <MapWorkspace
+        feature={feature}
+        features={[feature]}
+        onToggleFeatureExplorer={onToggleFeatureExplorer}
+        onToggleTemporalProperties={onToggleTemporalProperties}
+        showFeatureExplorer={true}
+        showTemporalProperties={false}
+      />,
+    )
+
+    const explorerToggle = screen.getByRole('button', {
+      name: 'Hide Feature Explorer',
+    })
+    const temporalToggle = screen.getByRole('button', {
+      name: 'Show Temporal Properties',
+    })
+    expect(explorerToggle).toHaveAttribute('aria-pressed', 'true')
+    expect(temporalToggle).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(explorerToggle)
+    fireEvent.click(temporalToggle)
+    expect(onToggleFeatureExplorer).toHaveBeenCalledTimes(1)
+    expect(onToggleTemporalProperties).toHaveBeenCalledTimes(1)
   })
 })

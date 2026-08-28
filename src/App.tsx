@@ -25,6 +25,8 @@ export function App() {
   const [datasetName, setDatasetName] = useState('Tokyo field survey')
   const [explorerOpen, setExplorerOpen] = useState(false)
   const [fileLoaderOpen, setFileLoaderOpen] = useState(false)
+  const [showFeatureExplorer, setShowFeatureExplorer] = useState(true)
+  const [showTemporalProperties, setShowTemporalProperties] = useState(true)
   const features = useFeatureStore((state) => state.features)
   const selectedFeatureId = useFeatureStore((state) => state.selectedFeatureId)
   const selectedFeature =
@@ -41,8 +43,11 @@ export function App() {
         onOpenData={() => setFileLoaderOpen(true)}
         onToggleExplorer={() => setExplorerOpen((open) => !open)}
       />
-      <div className="workspace-shell">
+      <div
+        className={`workspace-shell ${!showFeatureExplorer ? 'explorer-collapsed' : ''}`}
+      >
         <FeatureExplorer
+          collapsed={!showFeatureExplorer}
           features={features}
           onClose={() => setExplorerOpen(false)}
           onSelect={(featureId) => {
@@ -60,11 +65,27 @@ export function App() {
             type="button"
           />
         ) : null}
-        <div className="primary-workspace">
+        <div
+          className={`primary-workspace ${!showTemporalProperties ? 'temporal-collapsed' : ''}`}
+        >
           {mode === 'demo' ? (
             <>
-              <MapWorkspace feature={selectedFeature} features={features} />
-              <TemporalPropertiesPanel feature={selectedFeature} />
+              <MapWorkspace
+                feature={selectedFeature}
+                features={features}
+                onToggleFeatureExplorer={() =>
+                  setShowFeatureExplorer((visible) => !visible)
+                }
+                onToggleTemporalProperties={() =>
+                  setShowTemporalProperties((visible) => !visible)
+                }
+                showFeatureExplorer={showFeatureExplorer}
+                showTemporalProperties={showTemporalProperties}
+              />
+              <TemporalPropertiesPanel
+                collapsed={!showTemporalProperties}
+                feature={selectedFeature}
+              />
             </>
           ) : (
             <WorkspaceState kind={mode} />

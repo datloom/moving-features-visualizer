@@ -15,9 +15,17 @@ type VisualizationMode = 'map' | 'space-time'
 export function MapWorkspace({
   feature,
   features,
+  showFeatureExplorer,
+  onToggleFeatureExplorer,
+  showTemporalProperties,
+  onToggleTemporalProperties,
 }: {
   readonly feature: MovingFeature
   readonly features: readonly MovingFeature[]
+  readonly showFeatureExplorer: boolean
+  readonly onToggleFeatureExplorer: () => void
+  readonly showTemporalProperties: boolean
+  readonly onToggleTemporalProperties: () => void
 }) {
   const [focusRevision, setFocusRevision] = useState(0)
   const [mapMode, setMapMode] = useState<MapMode>('3d')
@@ -54,6 +62,40 @@ export function MapWorkspace({
               {mode === 'map' ? 'Map' : 'Space-Time'}
             </button>
           ))}
+        </div>
+        <div aria-label="Workspace panels" className="panel-visibility-control" role="group">
+          <button
+            aria-label={
+              showFeatureExplorer ? 'Hide Feature Explorer' : 'Show Feature Explorer'
+            }
+            aria-pressed={showFeatureExplorer}
+            className={`map-tool-button ${showFeatureExplorer ? 'is-active' : ''}`}
+            onClick={onToggleFeatureExplorer}
+            title={
+              showFeatureExplorer ? 'Hide Feature Explorer' : 'Show Feature Explorer'
+            }
+            type="button"
+          >
+            <Icon name="menu" />
+          </button>
+          <button
+            aria-label={
+              showTemporalProperties
+                ? 'Hide Temporal Properties'
+                : 'Show Temporal Properties'
+            }
+            aria-pressed={showTemporalProperties}
+            className={`map-tool-button ${showTemporalProperties ? 'is-active' : ''}`}
+            onClick={onToggleTemporalProperties}
+            title={
+              showTemporalProperties
+                ? 'Hide Temporal Properties'
+                : 'Show Temporal Properties'
+            }
+            type="button"
+          >
+            <Icon name="activity" />
+          </button>
         </div>
         {visualizationMode === 'map' ? (
           <>

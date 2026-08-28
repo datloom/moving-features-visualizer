@@ -4,13 +4,37 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 
 vi.mock('./components/map/MapWorkspace', () => ({
-  MapWorkspace: ({ feature }: { feature: { id: string } }) => (
-    <div aria-label="Moving features map">{feature.id}</div>
+  MapWorkspace: ({
+    feature,
+    showFeatureExplorer,
+    onToggleFeatureExplorer,
+    showTemporalProperties,
+    onToggleTemporalProperties,
+  }: {
+    feature: { id: string }
+    showFeatureExplorer: boolean
+    onToggleFeatureExplorer: () => void
+    showTemporalProperties: boolean
+    onToggleTemporalProperties: () => void
+  }) => (
+    <div aria-label="Moving features map">
+      {feature.id}
+      <button onClick={onToggleFeatureExplorer} type="button">
+        {showFeatureExplorer ? 'Hide Feature Explorer' : 'Show Feature Explorer'}
+      </button>
+      <button onClick={onToggleTemporalProperties} type="button">
+        {showTemporalProperties
+          ? 'Hide Temporal Properties'
+          : 'Show Temporal Properties'}
+      </button>
+    </div>
   ),
 }))
 
 vi.mock('./components/chart/TemporalPropertiesPanel', () => ({
-  TemporalPropertiesPanel: () => <div aria-label="Temporal Properties" />,
+  TemporalPropertiesPanel: ({ collapsed }: { collapsed?: boolean }) => (
+    <div aria-hidden={collapsed} aria-label="Temporal Properties" />
+  ),
 }))
 
 describe('App', () => {
@@ -43,5 +67,121 @@ describe('App', () => {
     expect(
       screen.getByText('MF-JSON validation found 4 issues.'),
     ).toBeInTheDocument()
+  })
+})
+
+describe('App workspace panel visibility', () => {
+  afterEach(cleanup)
+
+  it('shows Feature Explorer, Temporal Properties, and Timeline and playback by default', () => {
+    render(<App />)
+
+    expect(screen.getByLabelText('Feature Explorer')).toHaveAttribute(
+      'aria-hidden',
+      'false',
+    )
+    expect(screen.getByLabelText('Temporal Properties')).toHaveAttribute(
+      'aria-hidden',
+      'false',
+    )
+    expect(screen.getByLabelText('Timeline and playback')).toBeInTheDocument()
+  })
+
+  it('hides Feature Explorer without hiding Temporal Properties or Timeline and playback, and restores it', () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Feature Explorer' }))
+    expect(screen.getByLabelText('Feature Explorer')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
+    expect(screen.getByLabelText('Temporal Properties')).toHaveAttribute(
+      'aria-hidden',
+      'false',
+    )
+    expect(screen.getByLabelText('Timeline and playback')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show Feature Explorer' }))
+    expect(screen.getByLabelText('Feature Explorer')).toHaveAttribute(
+      'aria-hidden',
+      'false',
+    )
+  })
+
+  it('hides Temporal Properties without hiding Feature Explorer or Timeline and playback, and restores it', () => {
+    render(<App />)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Hide Temporal Properties' }),
+    )
+    expect(screen.getByLabelText('Temporal Properties')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
+    expect(screen.getByLabelText('Feature Explorer')).toHaveAttribute(
+      'aria-hidden',
+      'false',
+    )
+    expect(screen.getByLabelText('Timeline and playback')).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Show Temporal Properties' }),
+    )
+    expect(screen.getByLabelText('Temporal Properties')).toHaveAttribute(
+      'aria-hidden',
+      'false',
+    )
+  })
+
+  it('hides both panels simultaneously and restores them independently', () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Feature Explorer' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Hide Temporal Properties' }),
+    )
+    expect(screen.getByLabelText('Feature Explorer')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
+    expect(screen.getByLabelText('Temporal Properties')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
+    expect(screen.getByLabelText('Timeline and playback')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show Feature Explorer' }))
+    expect(screen.getByLabelText('Feature Explorer')).toHaveAttribute(
+      'aria-hidden',
+      'false',
+    )
+    expect(screen.getByLabelText('Temporal Properties')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Show Temporal Properties' }),
+    )
+    expect(screen.getByLabelText('Temporal Properties')).toHaveAttribute(
+      'aria-hidden',
+      'false',
+    )
+  })
+
+  it('preserves the selected feature across a Feature Explorer visibility toggle', () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByLabelText('Select Yokohama inspection'))
+    expect(screen.getByLabelText('Moving features map')).toHaveTextContent(
+      'yokohama-inspection-02',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Feature Explorer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show Feature Explorer' }))
+
+    expect(screen.getByLabelText('Moving features map')).toHaveTextContent(
+      'yokohama-inspection-02',
+    )
   })
 })

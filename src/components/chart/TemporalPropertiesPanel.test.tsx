@@ -254,4 +254,35 @@ describe('TemporalPropertiesPanel', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'status · Text' }))
     expect(screen.queryByTestId('text-chart')).toBeNull()
   })
+
+  it('collapses without losing selected-property state, and restores visibly', () => {
+    const mixed = featureWith('mixed', [
+      speed(),
+      { type: 'Text', name: 'status', interpolation: 'Step', samples: [] },
+    ])
+    useFeatureStore.getState().replaceFeatures([mixed])
+    const view = render(<TemporalPropertiesPanel feature={mixed} />)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'status · Text' }))
+    expect(
+      screen.getByRole('checkbox', { name: 'status · Text' }),
+    ).toBeChecked()
+
+    view.rerender(<TemporalPropertiesPanel collapsed feature={mixed} />)
+    expect(screen.getByLabelText('Temporal Properties')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
+
+    view.rerender(<TemporalPropertiesPanel feature={mixed} />)
+    expect(screen.getByLabelText('Temporal Properties')).toHaveAttribute(
+      'aria-hidden',
+      'false',
+    )
+    // The checked property survived collapsing — proof the panel stayed
+    // mounted (its local selection state intact) rather than being torn down.
+    expect(
+      screen.getByRole('checkbox', { name: 'status · Text' }),
+    ).toBeChecked()
+  })
 })
