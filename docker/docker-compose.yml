@@ -1,0 +1,72 @@
+services:
+  visualizer:
+    build:
+      # This Compose file is under ./docker, while the Vite project is one level up.
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: moving-features-visualizer
+    ports:
+      - "${VISUALIZER_PORT:-9000}:80"
+    restart: unless-stopped
+    depends_on:
+      mf-api:
+        condition: service_healthy
+    networks:
+      - mf-workshop
+
+  mf-api:
+    image: ghcr.io/taehoonk/pygeoapi-mf-api:latest
+    container_name: pygeoapi-mf-api
+    ports:
+      # The MF-API image listens on port 80 internally.
+      - "${MF_API_PORT:-5050}:80"
+    # The image contains /pygeoapi/mf-api.config.yml. Copy the workshop
+    # configuration into the path consumed by the image entrypoint, then run it.
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      cp /pygeoapi/mf-api.config.yml /pygeoapi/local.config.yml &&
+      exec /entrypoint.sh run
+    restart: unless-stopped
+    depends_on:
+      mobilitydb:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:80/collections', timeout=3).read()"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    networks:
+      - mf-workshop
+
+  mobilitydb:
+    image: ghcr.io/taehoonk/pygeoapi-mf-api-mobilitydb:latest
+    container_name: mobilitydb
+    ports:
+      - "${MOBILITYDB_PORT:-25432}:5432"
+    environment:
+      POSTGRES_DB: mobilitydb
+      POSTGRES_USER: docker
+      POSTGRES_PASSWORD: docker
+    volumes:
+      - mobilitydb-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docker -d mobilitydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    restart: on-failure
+    networks:
+      - mf-workshop
+
+volumes:
+  mobilitydb-data:
+
+networks:
+  mf-workshop:
+    driver: bridge
