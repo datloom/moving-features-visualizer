@@ -1,14 +1,26 @@
-import { useEffect, useMemo, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { normalizeImageSource } from '../../mfjson/imageSource'
+import type { TemporalWindow } from '../../mfjson/temporalWindow'
 import type { ImageTemporalProperty } from '../../mfjson/types'
 import { useImageViewerStore } from '../../store/imageViewerStore'
 import { useTimeStore } from '../../store/timeStore'
 import {
   getVisibleImageSamples,
   resolveImageSample,
-  timeToDomainRatio,
+  type ImageSample,
 } from '../../visualization/chart/imageChartAdapter'
+import {
+  computeRailWidth,
+  computeVisibleSampleRange,
+  sampleRailPosition,
+} from '../../visualization/chart/imageTimelineWindow'
 import { Icon } from '../ui/Icon'
 import { PropertyChartHeader } from './PropertyChartHeader'
 
@@ -47,6 +59,7 @@ function ImageFrame({
           alt=""
           aria-hidden="true"
           className={status === 'loaded' ? 'is-loaded' : 'is-hidden'}
+          decoding="async"
           loading="lazy"
           onError={() => setStatus('error')}
           onLoad={() => setStatus('loaded')}
@@ -69,6 +82,175 @@ function ImageFrame({
   )
 }
 
+/**
+ * Current-time-dependent header actions (time readout + View Image),
+ * isolated into their own component so a playback tick only re-renders this
+ * small subtree — never the (potentially large) thumbnail strip below.
+ */
+function ImageTimelineHeaderActions({
+  propertyName,
+  properties,
+}: {
+  readonly propertyName: string
+  readonly properties: readonly ImageTemporalProperty[]
+}) {
+  const currentTime = useTimeStore((state) => state.currentTime)
+  const playbackRate = useTimeStore((state) => state.playbackRate)
+  const currentSample = resolveImageSample(properties, currentTime, playbackRate)
+
+  return (
+    <div className="image-header-actions">
+      <time
+        className="image-current-time"
+        dateTime={new Date(currentTime).toISOString()}
+      >
+        {formatTimestamp(currentTime)}
+      </time>
+      <button
+        aria-label={
+          currentSample
+            ? `View image: ${propertyName} at ${formatTimestamp(currentSample.time)}`
+            : 'View image'
+        }
+        className="image-view-trigger"
+        disabled={!currentSample}
+        onClick={() =>
+          useImageViewerStore.getState().open(propertyName, properties)
+        }
+        title={currentSample ? undefined : 'No image at current time'}
+        type="button"
+      >
+        <Icon name="search" size={13} />
+        View Image
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The thumbnail rail: virtualized so only samples within the scrolled
+ * viewport (plus a small overscan) get a real `<img>` in the DOM — a
+ * property with thousands of samples still only ever mounts a bounded
+ * number of thumbnails. Positions stay proportional to each sample's real
+ * timestamp (`sampleRailPosition`), never to its index, so temporal
+ * spacing is preserved exactly regardless of which slice is rendered.
+ */
+function ImageThumbnailStrip({
+  propertyName,
+  properties,
+  samples,
+  domain,
+}: {
+  readonly propertyName: string
+  readonly properties: readonly ImageTemporalProperty[]
+  readonly samples: readonly ImageSample[]
+  readonly domain: TemporalWindow
+}) {
+  const currentTime = useTimeStore((state) => state.currentTime)
+  const playbackRate = useTimeStore((state) => state.playbackRate)
+  const currentSample = resolveImageSample(properties, currentTime, playbackRate)
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+  const [scrollLeft, setScrollLeft] = useState(0)
+
+  // Measured before paint to avoid a one-frame flash of the wrong window,
+  // then kept in sync via the same ResizeObserver pattern used elsewhere in
+  // this app (e.g. CesiumMap) — recalculates when Temporal Properties is
+  // collapsed/reopened, the Feature Explorer toggles, or the browser resizes.
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    if (!container) return undefined
+    setContainerWidth(container.clientWidth)
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) setContainerWidth(entry.contentRect.width)
+    })
+    resizeObserver.observe(container)
+    return () => resizeObserver.disconnect()
+  }, [])
+
+  // rAF-throttled: scroll fires far more often than a frame can usefully
+  // apply a new virtualized window.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return undefined
+    let frame = 0
+    const handleScroll = () => {
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        setScrollLeft(container.scrollLeft)
+      })
+    }
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      container.removeEventListener('scroll', handleScroll)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [])
+
+  const railWidth = computeRailWidth(samples.length, containerWidth)
+  // The expensive part (a binary search that scales with sample count) is
+  // memoized independent of currentTime, so a playback tick never
+  // recomputes it — only the cheap current-sample comparison below does.
+  const visibleRange = useMemo(
+    () =>
+      computeVisibleSampleRange(
+        samples,
+        domain,
+        railWidth,
+        scrollLeft,
+        containerWidth,
+      ),
+    [samples, domain, railWidth, scrollLeft, containerWidth],
+  )
+  const visibleWindow = samples.slice(
+    visibleRange.startIndex,
+    visibleRange.endIndex,
+  )
+
+  return (
+    <div
+      aria-label={`${propertyName} thumbnail timeline`}
+      className="image-thumbnail-track"
+      ref={containerRef}
+    >
+      {samples.length === 0 ? (
+        <p className="image-empty-state image-empty-state-compact">
+          No image samples in the selected range
+        </p>
+      ) : (
+        <div className="image-thumbnail-rail" style={{ width: railWidth }}>
+          {visibleWindow.map((sample) => (
+            <div
+              className="image-thumbnail-slot"
+              key={sample.time}
+              style={{ left: sampleRailPosition(sample.time, domain, railWidth) }}
+            >
+              <ImageFrame
+                className={`image-frame image-thumbnail ${
+                  currentSample?.time === sample.time ? 'is-current' : ''
+                }`}
+                label={`Jump to ${propertyName} at ${formatTimestamp(sample.time)}`}
+                onActivate={() =>
+                  useTimeStore.getState().setCurrentTime(sample.time)
+                }
+                src={sample.value}
+              />
+            </div>
+          ))}
+          <div
+            aria-hidden="true"
+            className="image-current-cursor"
+            style={{ left: sampleRailPosition(currentTime, domain, railWidth) }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function ImagePropertyTimeline({
   propertyName,
   properties,
@@ -79,15 +261,13 @@ export function ImagePropertyTimeline({
   /** Identifies which MovingFeature these samples belong to, so the shared floating viewer closes rather than silently re-attributing itself if this changes. */
   readonly featureId: string
 }) {
-  const currentTime = useTimeStore((state) => state.currentTime)
   const domainStart = useTimeStore((state) => state.startTime)
   const domainEnd = useTimeStore((state) => state.endTime)
-  const playbackRate = useTimeStore((state) => state.playbackRate)
 
   // Recomputed only when the property data or active window changes — not on
-  // every currentTime tick, which only needs to resolve the current sample.
-  // Thumbnails are unaffected by the Discrete visual window: they always
-  // list every real source sample, independent of the current value.
+  // every currentTime tick. Thumbnails are unaffected by the Discrete visual
+  // window: they always list every real source sample, independent of the
+  // current value.
   const domain = useMemo(
     () => ({ start: domainStart, end: domainEnd }),
     [domainStart, domainEnd],
@@ -96,7 +276,6 @@ export function ImagePropertyTimeline({
     () => getVisibleImageSamples(properties, domain),
     [properties, domain],
   )
-  const currentSample = resolveImageSample(properties, currentTime, playbackRate)
   const interpolation = properties[0]?.interpolation ?? 'Discrete'
 
   // The floating viewer is a single shared window owned by imageViewerStore,
@@ -116,75 +295,20 @@ export function ImagePropertyTimeline({
       <PropertyChartHeader
         properties={[{ name: propertyName, type: 'Image', interpolation }]}
         trailing={
-          <div className="image-header-actions">
-            <time
-              className="image-current-time"
-              dateTime={new Date(currentTime).toISOString()}
-            >
-              {formatTimestamp(currentTime)}
-            </time>
-            <button
-              aria-label={
-                currentSample
-                  ? `View image: ${propertyName} at ${formatTimestamp(currentSample.time)}`
-                  : 'View image'
-              }
-              className="image-view-trigger"
-              disabled={!currentSample}
-              onClick={() =>
-                useImageViewerStore.getState().open(propertyName, properties)
-              }
-              title={currentSample ? undefined : 'No image at current time'}
-              type="button"
-            >
-              <Icon name="search" size={13} />
-              View Image
-            </button>
-          </div>
+          <ImageTimelineHeaderActions
+            properties={properties}
+            propertyName={propertyName}
+          />
         }
       />
       <div className="image-timeline-body">
         <div className="image-thumbnail-section">
-          <div
-            aria-label={`${propertyName} thumbnail timeline`}
-            className="image-thumbnail-track"
-          >
-            {visibleSamples.length === 0 ? (
-              <p className="image-empty-state image-empty-state-compact">
-                No image samples in the selected range
-              </p>
-            ) : (
-              <div className="image-thumbnail-rail">
-                {visibleSamples.map((sample) => (
-                  <div
-                    className="image-thumbnail-slot"
-                    key={sample.time}
-                    style={{
-                      left: `${timeToDomainRatio(sample.time, domain) * 100}%`,
-                    }}
-                  >
-                    <ImageFrame
-                      className={`image-frame image-thumbnail ${
-                        currentSample?.time === sample.time ? 'is-current' : ''
-                      }`}
-                      label={`Jump to ${propertyName} at ${formatTimestamp(sample.time)}`}
-                      onActivate={() =>
-                        useTimeStore.getState().setCurrentTime(sample.time)
-                      }
-                      src={sample.value}
-                    />
-                  </div>
-                ))}
-                <div
-                  aria-hidden="true"
-                  className="image-current-cursor"
-                  style={{
-                    left: `${timeToDomainRatio(currentTime, domain) * 100}%`,
-                  }}
-                />
-              </div>
-            )}
-          </div>
+          <ImageThumbnailStrip
+            domain={domain}
+            properties={properties}
+            propertyName={propertyName}
+            samples={visibleSamples}
+          />
         </div>
       </div>
     </section>

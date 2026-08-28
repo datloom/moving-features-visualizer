@@ -918,6 +918,8 @@ select {
 }
 .image-thumbnail-track {
   min-height: 48px;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .image-thumbnail-rail {
   position: relative;
