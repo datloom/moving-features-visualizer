@@ -2,6 +2,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from './App'
+import {
+  initialImageViewerState,
+  useImageViewerStore,
+} from './store/imageViewerStore'
 
 vi.mock('./components/map/MapWorkspace', () => ({
   MapWorkspace: ({
@@ -183,5 +187,29 @@ describe('App workspace panel visibility', () => {
     expect(screen.getByLabelText('Moving features map')).toHaveTextContent(
       'yokohama-inspection-02',
     )
+  })
+})
+
+describe('App floating Image viewer placement', () => {
+  afterEach(() => {
+    cleanup()
+    useImageViewerStore.setState(initialImageViewerState)
+  })
+
+  it('renders the floating image viewer outside the collapsible Temporal Properties subtree', () => {
+    useImageViewerStore.getState().open('camera', [])
+    render(<App />)
+
+    const viewer = screen.getByRole('dialog', { name: 'camera image viewer' })
+    const temporalProperties = screen.getByLabelText('Temporal Properties')
+    expect(temporalProperties.contains(viewer)).toBe(false)
+
+    // Collapsing Temporal Properties must not affect the floating viewer.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Hide Temporal Properties' }),
+    )
+    expect(
+      screen.getByRole('dialog', { name: 'camera image viewer' }),
+    ).toBeInTheDocument()
   })
 })

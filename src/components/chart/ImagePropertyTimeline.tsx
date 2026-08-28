@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { normalizeImageSource } from '../../mfjson/imageSource'
 import type { ImageTemporalProperty } from '../../mfjson/types'
+import { useImageViewerStore } from '../../store/imageViewerStore'
 import { useTimeStore } from '../../store/timeStore'
 import {
   getVisibleImageSamples,
   resolveImageSample,
   timeToDomainRatio,
-  type ImageSample,
 } from '../../visualization/chart/imageChartAdapter'
 import { Icon } from '../ui/Icon'
 import { PropertyChartHeader } from './PropertyChartHeader'
@@ -69,73 +69,20 @@ function ImageFrame({
   )
 }
 
-function ImagePreviewDialog({
-  onClose,
-  propertyName,
-  sample,
-}: {
-  readonly onClose: () => void
-  readonly propertyName: string
-  readonly sample: ImageSample
-}) {
-  const normalized = normalizeImageSource(sample.value)
-  return (
-    <div
-      className="image-preview-backdrop"
-      onClick={onClose}
-      role="presentation"
-    >
-      <section
-        aria-labelledby="image-preview-title"
-        aria-modal="true"
-        className="image-preview-dialog"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <header className="image-preview-header">
-          <div>
-            <span>{propertyName}</span>
-            <h2 id="image-preview-title">{formatTimestamp(sample.time)}</h2>
-          </div>
-          <button
-            aria-label="Close image preview"
-            className="icon-button"
-            onClick={onClose}
-            type="button"
-          >
-            <Icon name="x" />
-          </button>
-        </header>
-        <div className="image-preview-body">
-          {normalized ? (
-            <img
-              alt={`${propertyName} at ${formatTimestamp(sample.time)}`}
-              src={normalized.src}
-            />
-          ) : (
-            <span className="image-frame-status image-frame-error">
-              <Icon name="alert" size={14} />
-              Image unavailable
-            </span>
-          )}
-        </div>
-      </section>
-    </div>
-  )
-}
-
 export function ImagePropertyTimeline({
   propertyName,
   properties,
+  featureId,
 }: {
   readonly propertyName: string
   readonly properties: readonly ImageTemporalProperty[]
+  /** Identifies which MovingFeature these samples belong to, so the shared floating viewer closes rather than silently re-attributing itself if this changes. */
+  readonly featureId: string
 }) {
   const currentTime = useTimeStore((state) => state.currentTime)
   const domainStart = useTimeStore((state) => state.startTime)
   const domainEnd = useTimeStore((state) => state.endTime)
   const playbackRate = useTimeStore((state) => state.playbackRate)
-  const [previewOpen, setPreviewOpen] = useState(false)
 
   // Recomputed only when the property data or active window changes — not on
   // every currentTime tick, which only needs to resolve the current sample.
@@ -152,9 +99,14 @@ export function ImagePropertyTimeline({
   const currentSample = resolveImageSample(properties, currentTime, playbackRate)
   const interpolation = properties[0]?.interpolation ?? 'Discrete'
 
+  // The floating viewer is a single shared window owned by imageViewerStore,
+  // not this component — so if it's showing *this* property and either the
+  // property or its owning Feature goes away (unmount) or changes identity
+  // (a same-named property from a newly selected Feature), close it rather
+  // than let it silently keep showing stale/misattributed content.
   useEffect(() => {
-    setPreviewOpen(false)
-  }, [propertyName])
+    return () => useImageViewerStore.getState().closeIfShowing(propertyName)
+  }, [propertyName, featureId])
 
   return (
     <section
@@ -179,7 +131,9 @@ export function ImagePropertyTimeline({
               }
               className="image-view-trigger"
               disabled={!currentSample}
-              onClick={() => setPreviewOpen(true)}
+              onClick={() =>
+                useImageViewerStore.getState().open(propertyName, properties)
+              }
               title={currentSample ? undefined : 'No image at current time'}
               type="button"
             >
@@ -233,13 +187,6 @@ export function ImagePropertyTimeline({
           </div>
         </div>
       </div>
-      {previewOpen && currentSample ? (
-        <ImagePreviewDialog
-          onClose={() => setPreviewOpen(false)}
-          propertyName={propertyName}
-          sample={currentSample}
-        />
-      ) : null}
     </section>
   )
 }

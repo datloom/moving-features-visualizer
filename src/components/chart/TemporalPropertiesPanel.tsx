@@ -467,6 +467,7 @@ export function TemporalPropertiesPanel({
                     <MeasureComparisonChart group={entry.group} />
                   ) : entry.kind === 'image' ? (
                     <ImagePropertyTimeline
+                      featureId={selectedFeature.id}
                       propertyName={entry.name}
                       properties={entry.segments}
                     />

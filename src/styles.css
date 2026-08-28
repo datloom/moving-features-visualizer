@@ -946,52 +946,59 @@ select {
   background: var(--warning);
   pointer-events: none;
 }
-.image-preview-backdrop {
+/* Modeless floating window — no backdrop, so the map/timeline/playback stay
+   visible and interactive while it's open. Position is applied inline
+   (`left`/`top`/`width`/`height`), driven by imageViewerStore. */
+.image-floating-viewer {
   position: fixed;
-  z-index: 50;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  background: rgb(2 5 7 / 62%);
-}
-.image-preview-dialog {
+  z-index: 40;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(720px, 100%);
-  max-height: calc(100vh - 64px);
   border: 1px solid var(--border-strong);
   background: var(--surface);
   box-shadow: 0 18px 60px rgb(0 0 0 / 48%);
 }
-.image-preview-header {
+.image-floating-viewer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border);
+  cursor: grab;
+  touch-action: none;
 }
-.image-preview-header span {
+.image-floating-viewer-header span {
   color: var(--primary);
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
-.image-preview-header h2 {
+.image-floating-viewer-header h2 {
   margin: 2px 0 0;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
 }
-.image-preview-body {
+.image-floating-viewer-body {
   display: grid;
   place-items: center;
   min-height: 0;
-  padding: 14px;
+  padding: 10px;
 }
-.image-preview-body img {
+.image-floating-viewer-body img {
   max-width: 100%;
-  max-height: calc(100vh - 160px);
+  max-height: 100%;
   object-fit: contain;
+}
+.image-floating-viewer-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  border-bottom: 2px solid var(--border-strong);
+  border-right: 2px solid var(--border-strong);
+  cursor: nwse-resize;
+  touch-action: none;
 }
 .compute-backdrop {
   position: fixed;

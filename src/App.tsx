@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { FloatingImageViewer } from './components/chart/FloatingImageViewer'
 import { TemporalPropertiesPanel } from './components/chart/TemporalPropertiesPanel'
 import { LocalFileLoader } from './components/data/LocalFileLoader'
 import { FeatureExplorer } from './components/feature/FeatureExplorer'
@@ -92,6 +93,7 @@ export function App() {
           )}
         </div>
       </div>
+      <FloatingImageViewer />
       <TimelineControls />
       <PlaybackController />
       <LocalFileLoader

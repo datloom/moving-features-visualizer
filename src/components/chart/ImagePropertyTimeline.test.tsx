@@ -1,14 +1,11 @@
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { ImageTemporalProperty } from '../../mfjson/types'
+import {
+  initialImageViewerState,
+  useImageViewerStore,
+} from '../../store/imageViewerStore'
 import { initialTimeState, useTimeStore } from '../../store/timeStore'
 import { ImagePropertyTimeline } from './ImagePropertyTimeline'
 
@@ -34,13 +31,20 @@ describe('ImagePropertyTimeline', () => {
   beforeEach(() => {
     useTimeStore.setState(initialTimeState)
     useTimeStore.getState().setRange(t0, t2)
+    useImageViewerStore.setState(initialImageViewerState)
   })
 
   afterEach(cleanup)
 
   it('no longer renders a permanent current-frame preview, but keeps the thumbnail timeline and a View Image button', () => {
     useTimeStore.getState().setCurrentTime(t0)
-    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
+    render(
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
 
     expect(
       screen.queryByRole('button', { name: /^View larger image:/ }),
@@ -53,7 +57,13 @@ describe('ImagePropertyTimeline', () => {
 
   it('enables View Image with an accessible label naming the current sample', () => {
     useTimeStore.getState().setCurrentTime(t0)
-    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
+    render(
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
 
     const button = screen.getByRole('button', {
       name: 'View image: camera at 1970-01-01 00:00:01 UTC',
@@ -69,6 +79,7 @@ describe('ImagePropertyTimeline', () => {
     useTimeStore.getState().setCurrentTime(t0 + 500)
     render(
       <ImagePropertyTimeline
+        featureId="feature-1"
         propertyName="camera"
         properties={[discreteCamera]}
       />,
@@ -91,6 +102,7 @@ describe('ImagePropertyTimeline', () => {
     useTimeStore.getState().setCurrentTime(t0 + 500)
     render(
       <ImagePropertyTimeline
+        featureId="feature-1"
         propertyName="camera"
         properties={[discreteCamera]}
       />,
@@ -112,7 +124,13 @@ describe('ImagePropertyTimeline', () => {
 
   it('keeps View Image enabled for a held Step value at a time between samples', () => {
     useTimeStore.getState().setCurrentTime(t0 + 500)
-    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
+    render(
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
     expect(
       screen.getByRole('button', {
         name: 'View image: camera at 1970-01-01 00:00:01 UTC',
@@ -122,7 +140,13 @@ describe('ImagePropertyTimeline', () => {
 
   it('clicking a thumbnail updates TimeStore.currentTime without touching the active window', () => {
     useTimeStore.getState().setCurrentTime(t0)
-    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
+    render(
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
 
     fireEvent.click(
       screen.getByRole('button', {
@@ -136,7 +160,13 @@ describe('ImagePropertyTimeline', () => {
 
   it('clips the thumbnail timeline to an active Time Query window', () => {
     act(() => useTimeStore.getState().applyTimeQuery(t0 + 1, t2 - 1))
-    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
+    render(
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
 
     // Only the middle sample (t1) falls inside (t0+1, t2-1).
     expect(
@@ -159,7 +189,11 @@ describe('ImagePropertyTimeline', () => {
   it('restores the full thumbnail range after Reset', () => {
     act(() => useTimeStore.getState().applyTimeQuery(t0 + 1, t2 - 1))
     const view = render(
-      <ImagePropertyTimeline propertyName="camera" properties={[camera]} />,
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
     )
     expect(
       screen.queryByRole('button', {
@@ -169,7 +203,11 @@ describe('ImagePropertyTimeline', () => {
 
     act(() => useTimeStore.getState().resetTimeQuery())
     view.rerender(
-      <ImagePropertyTimeline propertyName="camera" properties={[camera]} />,
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
     )
     expect(
       screen.getByRole('button', {
@@ -184,7 +222,13 @@ describe('ImagePropertyTimeline', () => {
     // legitimately contains none of the camera samples.
     useTimeStore.getState().setRange(0, 100_000)
     act(() => useTimeStore.getState().applyTimeQuery(50_000, 60_000))
-    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
+    render(
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
     expect(
       screen.getByText('No image samples in the selected range'),
     ).toBeInTheDocument()
@@ -200,14 +244,24 @@ describe('ImagePropertyTimeline', () => {
     }
     useTimeStore.getState().setCurrentTime(t0)
     render(
-      <ImagePropertyTimeline propertyName="camera" properties={[badCamera]} />,
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[badCamera]}
+      />,
     )
     expect(screen.getAllByText('Image unavailable').length).toBeGreaterThan(0)
   })
 
   it('shows an unavailable state when a thumbnail image fails to load', () => {
     useTimeStore.getState().setCurrentTime(t0)
-    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
+    render(
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
     const thumbnail = screen.getByRole('button', {
       name: thumbnailName('1970-01-01 00:00:01 UTC'),
     })
@@ -216,53 +270,74 @@ describe('ImagePropertyTimeline', () => {
     expect(screen.getAllByText('Image unavailable').length).toBeGreaterThan(0)
   })
 
-  it('opens the existing image viewer from View Image, showing the current evaluated sample', () => {
-    useTimeStore.getState().setCurrentTime(t0 + 500)
-    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
-
-    fireEvent.click(screen.getByRole('button', { name: viewImageName }))
-
-    const dialog = screen.getByRole('dialog')
-    expect(dialog).toBeInTheDocument()
-    expect(
-      within(dialog).getByText('1970-01-01 00:00:01 UTC'),
-    ).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close image preview' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  it('does not open the viewer when View Image is disabled', () => {
-    const discreteCamera: ImageTemporalProperty = {
-      ...camera,
-      interpolation: 'Discrete',
-    }
+  it('clicking View Image opens the shared floating viewer on this property, with its live source properties', () => {
     useTimeStore.getState().setCurrentTime(t0 + 500)
     render(
       <ImagePropertyTimeline
+        featureId="feature-1"
         propertyName="camera"
-        properties={[discreteCamera]}
+        properties={[camera]}
       />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: viewImageName }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    expect(useImageViewerStore.getState()).toMatchObject({
+      propertyName: 'camera',
+      properties: [camera],
+    })
   })
 
-  it('View Image always reflects the latest currentTime, never a stale earlier sample', () => {
-    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
-
-    act(() => useTimeStore.getState().setCurrentTime(t0))
+  it('closes the shared viewer on unmount if it was showing this property', () => {
+    useTimeStore.getState().setCurrentTime(t0)
+    const view = render(
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
     fireEvent.click(screen.getByRole('button', { name: viewImageName }))
-    expect(
-      within(screen.getByRole('dialog')).getByText('1970-01-01 00:00:01 UTC'),
-    ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Close image preview' }))
+    expect(useImageViewerStore.getState().propertyName).toBe('camera')
 
-    act(() => useTimeStore.getState().setCurrentTime(t2))
+    view.unmount()
+    expect(useImageViewerStore.getState().propertyName).toBeUndefined()
+  })
+
+  it('does not close the shared viewer if it is showing a different property', () => {
+    useImageViewerStore.getState().open('thermal', [])
+    const view = render(
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
+
+    view.unmount()
+    expect(useImageViewerStore.getState().propertyName).toBe('thermal')
+  })
+
+  it('closes the shared viewer when the owning Feature changes while it was showing this property', () => {
+    const view = render(
+      <ImagePropertyTimeline
+        featureId="feature-1"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
     fireEvent.click(screen.getByRole('button', { name: viewImageName }))
-    expect(
-      within(screen.getByRole('dialog')).getByText('1970-01-01 00:00:03 UTC'),
-    ).toBeInTheDocument()
+    expect(useImageViewerStore.getState().propertyName).toBe('camera')
+
+    // Same logical property name, but now sourced from a different Feature —
+    // must not silently keep showing the previous Feature's images.
+    view.rerender(
+      <ImagePropertyTimeline
+        featureId="feature-2"
+        propertyName="camera"
+        properties={[camera]}
+      />,
+    )
+    expect(useImageViewerStore.getState().propertyName).toBeUndefined()
   })
 })
