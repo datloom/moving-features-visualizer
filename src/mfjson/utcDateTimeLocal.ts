@@ -7,9 +7,9 @@
  *
  * These helpers instead treat the datetime-local value as canonical UTC —
  * required wherever it becomes a literal server query parameter (e.g. the
- * TemporalGeometryQuery `datetime` interval), as opposed to a purely local
- * display convenience like `TimeQueryControls`'s own (intentionally local)
- * formatting, which is unrelated and untouched.
+ * TemporalGeometryQuery `datetime` interval) or otherwise needs to match the
+ * app-wide UTC display convention shared by the Selected Feature, Temporal
+ * Properties, and Playback surfaces (e.g. `TimeQueryControls`).
  */
 
 const pad = (value: number): string => String(value).padStart(2, '0')

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { formatUtcDateTimeLocal, parseUtcDateTimeLocal } from '../../mfjson/utcDateTimeLocal'
 import { initialTimeState, useTimeStore } from '../../store/timeStore'
 import { TimeQueryControls } from './TimeQueryControls'
 
@@ -37,15 +38,15 @@ describe('TimeQueryControls', () => {
     useTimeStore.getState().setRange(fullStart, fullEnd)
     render(<TimeQueryControls />)
 
-    const from = screen.getByLabelText('From')
-    const to = screen.getByLabelText('To')
+    const from = screen.getByLabelText('From (UTC)')
+    const to = screen.getByLabelText('To (UTC)')
     fireEvent.change(from, { target: { value: '2026-08-24T09:05' } })
     fireEvent.change(to, { target: { value: '2026-08-24T09:15' } })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
     expect(useTimeStore.getState()).toMatchObject({
-      startTime: new Date('2026-08-24T09:05').getTime(),
-      endTime: new Date('2026-08-24T09:15').getTime(),
+      startTime: Date.parse('2026-08-24T09:05:00Z'),
+      endTime: Date.parse('2026-08-24T09:15:00Z'),
       queryActive: true,
     })
     // The full extent must remain untouched by the query.
@@ -59,10 +60,10 @@ describe('TimeQueryControls', () => {
     useTimeStore.getState().setRange(fullStart, fullEnd)
     render(<TimeQueryControls />)
 
-    fireEvent.change(screen.getByLabelText('From'), {
+    fireEvent.change(screen.getByLabelText('From (UTC)'), {
       target: { value: '2026-08-24T09:15' },
     })
-    fireEvent.change(screen.getByLabelText('To'), {
+    fireEvent.change(screen.getByLabelText('To (UTC)'), {
       target: { value: '2026-08-24T09:05' },
     })
 
@@ -70,6 +71,21 @@ describe('TimeQueryControls', () => {
       screen.getByText('From must be on or before To.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+  })
+
+  it('defaults From/To to the UTC instant of the active window, not the host timezone', () => {
+    const tokyoStart = Date.parse('2026-08-24T09:00:00Z')
+    const tokyoEnd = Date.parse('2026-08-24T09:06:00Z')
+    useTimeStore.getState().setRange(tokyoStart, tokyoEnd)
+    render(<TimeQueryControls />)
+
+    const from = screen.getByLabelText<HTMLInputElement>('From (UTC)')
+    const to = screen.getByLabelText<HTMLInputElement>('To (UTC)')
+
+    expect(from.value).toBe('2026-08-24T09:00')
+    expect(to.value).toBe('2026-08-24T09:06')
+    expect(from.value).not.toBe('2026-08-24T18:00')
+    expect(to.value).not.toBe('2026-08-24T18:06')
   })
 
   it('restores the full extent and re-enables Reset-disabled state on Reset', () => {
@@ -89,5 +105,17 @@ describe('TimeQueryControls', () => {
       queryActive: false,
     })
     expect(screen.getByRole('button', { name: 'Reset' })).toBeDisabled()
+  })
+
+  it('represents the same instant as the shared UTC time-of-day formatting used by Selected Feature/Graph/Playback', () => {
+    const timestamp = Date.parse('2026-08-24T09:00:00Z')
+    // Selected Feature / graph x-axis / playback all format via
+    // `new Date(timestamp).toISOString().slice(11, 19)` -> 'HH:MM:SS' in UTC.
+    const sharedTimeOfDay = new Date(timestamp).toISOString().slice(11, 16)
+
+    const timeQueryValue = formatUtcDateTimeLocal(timestamp)
+
+    expect(timeQueryValue.slice(11)).toBe(sharedTimeOfDay)
+    expect(parseUtcDateTimeLocal(timeQueryValue)).toBe(timestamp)
   })
 })
