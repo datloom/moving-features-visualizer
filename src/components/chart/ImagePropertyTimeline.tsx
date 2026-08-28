@@ -164,27 +164,32 @@ export function ImagePropertyTimeline({
       <PropertyChartHeader
         properties={[{ name: propertyName, type: 'Image', interpolation }]}
         trailing={
-          <time
-            className="image-current-time"
-            dateTime={new Date(currentTime).toISOString()}
-          >
-            {formatTimestamp(currentTime)}
-          </time>
+          <div className="image-header-actions">
+            <time
+              className="image-current-time"
+              dateTime={new Date(currentTime).toISOString()}
+            >
+              {formatTimestamp(currentTime)}
+            </time>
+            <button
+              aria-label={
+                currentSample
+                  ? `View image: ${propertyName} at ${formatTimestamp(currentSample.time)}`
+                  : 'View image'
+              }
+              className="image-view-trigger"
+              disabled={!currentSample}
+              onClick={() => setPreviewOpen(true)}
+              title={currentSample ? undefined : 'No image at current time'}
+              type="button"
+            >
+              <Icon name="search" size={13} />
+              View Image
+            </button>
+          </div>
         }
       />
       <div className="image-timeline-body">
-        <div className="image-current-frame-wrapper">
-          {currentSample ? (
-            <ImageFrame
-              className="image-frame image-current-frame"
-              label={`View larger image: ${propertyName} at ${formatTimestamp(currentSample.time)}`}
-              onActivate={() => setPreviewOpen(true)}
-              src={currentSample.value}
-            />
-          ) : (
-            <p className="image-empty-state">No image at current time</p>
-          )}
-        </div>
         <div className="image-thumbnail-section">
           <div
             aria-label={`${propertyName} thumbnail timeline`}

@@ -27,8 +27,7 @@ const camera: ImageTemporalProperty = {
   ],
 }
 
-const currentFrameName = (timestamp: string) =>
-  `View larger image: camera at ${timestamp}`
+const viewImageName = /^View image/
 const thumbnailName = (timestamp: string) => `Jump to camera at ${timestamp}`
 
 describe('ImagePropertyTimeline', () => {
@@ -39,21 +38,30 @@ describe('ImagePropertyTimeline', () => {
 
   afterEach(cleanup)
 
-  it('renders the current Image and a thumbnail per source sample', () => {
+  it('no longer renders a permanent current-frame preview, but keeps the thumbnail timeline and a View Image button', () => {
     useTimeStore.getState().setCurrentTime(t0)
     render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
 
     expect(
-      screen.getByRole('button', {
-        name: currentFrameName('1970-01-01 00:00:01 UTC'),
-      }),
-    ).toBeInTheDocument()
+      screen.queryByRole('button', { name: /^View larger image:/ }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: viewImageName })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /^Jump to camera at/ })).toHaveLength(
       3,
     )
   })
 
-  it('shows "No image at current time" for Discrete between samples, without suppressing the thumbnail track', () => {
+  it('enables View Image with an accessible label naming the current sample', () => {
+    useTimeStore.getState().setCurrentTime(t0)
+    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
+
+    const button = screen.getByRole('button', {
+      name: 'View image: camera at 1970-01-01 00:00:01 UTC',
+    })
+    expect(button).toBeEnabled()
+  })
+
+  it('disables View Image for Discrete between samples, without suppressing the thumbnail track', () => {
     const discreteCamera: ImageTemporalProperty = {
       ...camera,
       interpolation: 'Discrete',
@@ -65,15 +73,17 @@ describe('ImagePropertyTimeline', () => {
         properties={[discreteCamera]}
       />,
     )
-    expect(screen.getByText('No image at current time')).toBeInTheDocument()
-    // The current-frame empty state must not gate the thumbnail timeline: all
-    // three source samples stay visible even though none is the current one.
+    const button = screen.getByRole('button', { name: viewImageName })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('title', 'No image at current time')
+    // Disabling View Image must not gate the thumbnail timeline: all three
+    // source samples stay visible even though none is the current one.
     expect(
       screen.getAllByRole('button', { name: /^Jump to camera at/ }),
     ).toHaveLength(3)
   })
 
-  it('Discrete: clicking a thumbnail lands exactly on that sample so Current Frame shows it immediately', () => {
+  it('Discrete: clicking a thumbnail lands exactly on that sample and re-enables View Image', () => {
     const discreteCamera: ImageTemporalProperty = {
       ...camera,
       interpolation: 'Discrete',
@@ -85,7 +95,7 @@ describe('ImagePropertyTimeline', () => {
         properties={[discreteCamera]}
       />,
     )
-    expect(screen.getByText('No image at current time')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: viewImageName })).toBeDisabled()
 
     fireEvent.click(
       screen.getByRole('button', {
@@ -94,22 +104,20 @@ describe('ImagePropertyTimeline', () => {
     )
 
     expect(useTimeStore.getState().currentTime).toBe(t1)
-    expect(
-      screen.getByRole('button', {
-        name: currentFrameName('1970-01-01 00:00:02 UTC'),
-      }),
-    ).toBeInTheDocument()
-    expect(screen.queryByText('No image at current time')).not.toBeInTheDocument()
+    const button = screen.getByRole('button', {
+      name: 'View image: camera at 1970-01-01 00:00:02 UTC',
+    })
+    expect(button).toBeEnabled()
   })
 
-  it('shows a held Step value at a time between samples', () => {
+  it('keeps View Image enabled for a held Step value at a time between samples', () => {
     useTimeStore.getState().setCurrentTime(t0 + 500)
     render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
     expect(
       screen.getByRole('button', {
-        name: currentFrameName('1970-01-01 00:00:01 UTC'),
+        name: 'View image: camera at 1970-01-01 00:00:01 UTC',
       }),
-    ).toBeInTheDocument()
+    ).toBeEnabled()
   })
 
   it('clicking a thumbnail updates TimeStore.currentTime without touching the active window', () => {
@@ -170,7 +178,7 @@ describe('ImagePropertyTimeline', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows an empty-range message when the query misses every sample', () => {
+  it('disables View Image when the query misses every sample', () => {
     // A dataset extent wider than this Image property's own samples (e.g.
     // driven by other geometry/properties), queried in a sub-range that
     // legitimately contains none of the camera samples.
@@ -180,7 +188,7 @@ describe('ImagePropertyTimeline', () => {
     expect(
       screen.getByText('No image samples in the selected range'),
     ).toBeInTheDocument()
-    expect(screen.getByText('No image at current time')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: viewImageName })).toBeDisabled()
   })
 
   it('shows an unavailable state for an unsupported image value without crashing', () => {
@@ -197,26 +205,22 @@ describe('ImagePropertyTimeline', () => {
     expect(screen.getAllByText('Image unavailable').length).toBeGreaterThan(0)
   })
 
-  it('shows an unavailable state when the image element fails to load', () => {
+  it('shows an unavailable state when a thumbnail image fails to load', () => {
     useTimeStore.getState().setCurrentTime(t0)
     render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
-    const currentFrame = screen.getByRole('button', {
-      name: currentFrameName('1970-01-01 00:00:01 UTC'),
+    const thumbnail = screen.getByRole('button', {
+      name: thumbnailName('1970-01-01 00:00:01 UTC'),
     })
-    const img = currentFrame.querySelector('img')!
+    const img = thumbnail.querySelector('img')!
     fireEvent.error(img)
     expect(screen.getAllByText('Image unavailable').length).toBeGreaterThan(0)
   })
 
-  it('opens an expanded preview showing the actual source timestamp for a held Step value', () => {
+  it('opens the existing image viewer from View Image, showing the current evaluated sample', () => {
     useTimeStore.getState().setCurrentTime(t0 + 500)
     render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
 
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: currentFrameName('1970-01-01 00:00:01 UTC'),
-      }),
-    )
+    fireEvent.click(screen.getByRole('button', { name: viewImageName }))
 
     const dialog = screen.getByRole('dialog')
     expect(dialog).toBeInTheDocument()
@@ -226,5 +230,39 @@ describe('ImagePropertyTimeline', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close image preview' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('does not open the viewer when View Image is disabled', () => {
+    const discreteCamera: ImageTemporalProperty = {
+      ...camera,
+      interpolation: 'Discrete',
+    }
+    useTimeStore.getState().setCurrentTime(t0 + 500)
+    render(
+      <ImagePropertyTimeline
+        propertyName="camera"
+        properties={[discreteCamera]}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: viewImageName }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('View Image always reflects the latest currentTime, never a stale earlier sample', () => {
+    render(<ImagePropertyTimeline propertyName="camera" properties={[camera]} />)
+
+    act(() => useTimeStore.getState().setCurrentTime(t0))
+    fireEvent.click(screen.getByRole('button', { name: viewImageName }))
+    expect(
+      within(screen.getByRole('dialog')).getByText('1970-01-01 00:00:01 UTC'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close image preview' }))
+
+    act(() => useTimeStore.getState().setCurrentTime(t2))
+    fireEvent.click(screen.getByRole('button', { name: viewImageName }))
+    expect(
+      within(screen.getByRole('dialog')).getByText('1970-01-01 00:00:03 UTC'),
+    ).toBeInTheDocument()
   })
 })
