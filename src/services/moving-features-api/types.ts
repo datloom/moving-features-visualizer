@@ -2,8 +2,8 @@ export const DEFAULT_API_BASE_URL = 'http://localhost:5050'
 export const DEFAULT_FEATURE_LIMIT = 100
 export const MIN_FEATURE_LIMIT = 1
 export const MAX_FEATURE_LIMIT = 1000
-export const CHILD_RESOURCE_LIMIT = 1000
-export const DEFAULT_FEATURE_CONCURRENCY = 6
+export const CHILD_RESOURCE_LIMIT = 5
+export const DEFAULT_FEATURE_CONCURRENCY = 100
 
 export interface DateTimeInterval {
   readonly start: string
