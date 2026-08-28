@@ -78,7 +78,7 @@ describe('TimelineControls', () => {
     })
   })
 
-  it.each([0.5, 1, 2, 4, 10])('selects the %sx playback rate', (rate) => {
+  it.each([0.5, 1, 2, 4, 10, 20, 40, 60, 80, 100])('selects the %sx playback rate', (rate) => {
     render(<TimelineControls />)
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Playback speed' }), {
