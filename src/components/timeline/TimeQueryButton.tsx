@@ -1,11 +1,39 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { useFeatureStore } from '../../store/featureStore'
 import { useTimeStore } from '../../store/timeStore'
 import { TimeQueryPopover } from './TimeQueryPopover'
 
+/** Gap between the trigger button and the popover, and viewport-edge breathing room. */
+const GAP = 8
+const VIEWPORT_PADDING = 12
+/** Below this much room above the button, prefer flipping below if that side genuinely has more space. */
+const MIN_PREFERRED_SPACE = 160
+
+interface Placement {
+  side: 'above' | 'below'
+  maxHeight: number
+}
+
+const computePlacement = (anchorRect: DOMRect): Placement => {
+  const spaceAbove = anchorRect.top - GAP - VIEWPORT_PADDING
+  const spaceBelow =
+    window.innerHeight - anchorRect.bottom - GAP - VIEWPORT_PADDING
+
+  const side =
+    spaceAbove >= MIN_PREFERRED_SPACE || spaceAbove >= spaceBelow
+      ? 'above'
+      : 'below'
+
+  return { side, maxHeight: Math.max(side === 'above' ? spaceAbove : spaceBelow, 120) }
+}
+
 export function TimeQueryButton() {
   const [isOpen, setIsOpen] = useState(false)
+  const [placement, setPlacement] = useState<Placement>({
+    side: 'above',
+    maxHeight: 480,
+  })
   const anchorRef = useRef<HTMLDivElement>(null)
 
   const startTime = useTimeStore((state) => state.startTime)
@@ -21,6 +49,22 @@ export function TimeQueryButton() {
   useEffect(() => {
     setIsOpen(false)
   }, [selectedFeatureId])
+
+  // Positioned before paint so the panel never visibly flashes on the wrong
+  // side, and recomputed on resize so it stays reachable if the viewport
+  // shrinks while it's open.
+  useLayoutEffect(() => {
+    if (!isOpen) return undefined
+
+    const updatePlacement = () => {
+      const rect = anchorRef.current?.getBoundingClientRect()
+      if (rect) setPlacement(computePlacement(rect))
+    }
+
+    updatePlacement()
+    window.addEventListener('resize', updatePlacement)
+    return () => window.removeEventListener('resize', updatePlacement)
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -60,7 +104,13 @@ export function TimeQueryButton() {
           </>
         ) : null}
       </button>
-      {isOpen ? <TimeQueryPopover onClose={() => setIsOpen(false)} /> : null}
+      {isOpen ? (
+        <TimeQueryPopover
+          maxHeight={placement.maxHeight}
+          onClose={() => setIsOpen(false)}
+          placement={placement.side}
+        />
+      ) : null}
     </div>
   )
 }

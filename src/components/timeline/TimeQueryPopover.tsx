@@ -8,9 +8,17 @@ import { useTimeStore } from '../../store/timeStore'
 
 interface TimeQueryPopoverProps {
   onClose: () => void
+  /** Which side of the trigger button to open on — 'above' unless there's genuinely more room below. */
+  placement: 'above' | 'below'
+  /** The measured space available on the chosen `placement` side, in pixels — keeps the panel from ever extending past the viewport edge. */
+  maxHeight: number
 }
 
-export function TimeQueryPopover({ onClose }: TimeQueryPopoverProps) {
+export function TimeQueryPopover({
+  onClose,
+  placement,
+  maxHeight,
+}: TimeQueryPopoverProps) {
   const startTime = useTimeStore((state) => state.startTime)
   const endTime = useTimeStore((state) => state.endTime)
   const fullStartTime = useTimeStore((state) => state.fullStartTime)
@@ -45,7 +53,13 @@ export function TimeQueryPopover({ onClose }: TimeQueryPopoverProps) {
   }
 
   return (
-    <div aria-label="Time Query" className="time-query-panel" role="dialog">
+    <div
+      aria-label="Time Query"
+      className="time-query-panel"
+      data-placement={placement}
+      role="dialog"
+      style={{ maxHeight }}
+    >
       <h3 className="time-query-heading">Time Query</h3>
       <div className="time-query-fields">
         <label className="time-query-field">

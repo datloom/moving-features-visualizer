@@ -1172,17 +1172,28 @@ select {
 }
 .time-query-panel {
   position: absolute;
-  top: calc(100% + 8px);
   right: 0;
+  bottom: calc(100% + 8px);
   z-index: 30;
   display: grid;
+  align-content: start;
   gap: 10px;
-  width: min(280px, 90vw);
+  width: min(320px, calc(100vw - 24px));
   padding: 12px 14px;
+  overflow-y: auto;
   border: 1px solid var(--border-strong);
   border-radius: 4px;
   background: var(--surface);
   box-shadow: 0 18px 60px rgb(0 0 0 / 48%);
+}
+/* The default above-anchored position is flipped only when the trigger
+   button genuinely has more usable room below it (see TimeQueryButton's
+   `computePlacement`) — the panel otherwise always opens upward, since the
+   timeline toolbar sits at the bottom of the viewport and opening downward
+   would push most of the form past the visible page. */
+.time-query-panel[data-placement='below'] {
+  top: calc(100% + 8px);
+  bottom: auto;
 }
 .time-query-heading {
   margin: 0;

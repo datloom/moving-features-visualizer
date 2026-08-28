@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { initialFeatureState, useFeatureStore } from '../../store/featureStore'
 import { initialTimeState, useTimeStore } from '../../store/timeStore'
@@ -13,7 +13,10 @@ const openPopover = () => {
 }
 
 describe('TimeQueryButton', () => {
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
 
   beforeEach(() => {
     useTimeStore.setState(initialTimeState)
@@ -210,6 +213,89 @@ describe('TimeQueryButton', () => {
     expect(
       screen.getByText('(range filtered)', { exact: false }),
     ).toBeInTheDocument()
+  })
+
+  it('opens above the button (not clipped downward) when there is ample room above it', () => {
+    vi.spyOn(
+      HTMLDivElement.prototype,
+      'getBoundingClientRect',
+    ).mockReturnValue({
+      top: 700,
+      bottom: 740,
+      left: 200,
+      right: 260,
+      width: 60,
+      height: 40,
+      x: 200,
+      y: 700,
+      toJSON: () => ({}),
+    })
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800)
+
+    render(<TimeQueryButton />)
+    openPopover()
+
+    const dialog = screen.getByRole('dialog', { name: 'Time Query' })
+    expect(dialog).toHaveAttribute('data-placement', 'above')
+    // All controls remain present and reachable regardless of which side it opened on.
+    expect(screen.getByLabelText('Start (UTC)')).toBeVisible()
+    expect(screen.getByLabelText('End (UTC)')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeVisible()
+  })
+
+  it('flips to open below the button when there is genuinely more room below it', () => {
+    vi.spyOn(
+      HTMLDivElement.prototype,
+      'getBoundingClientRect',
+    ).mockReturnValue({
+      top: 20,
+      bottom: 60,
+      left: 200,
+      right: 260,
+      width: 60,
+      height: 40,
+      x: 20,
+      y: 20,
+      toJSON: () => ({}),
+    })
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800)
+
+    render(<TimeQueryButton />)
+    openPopover()
+
+    const dialog = screen.getByRole('dialog', { name: 'Time Query' })
+    expect(dialog).toHaveAttribute('data-placement', 'below')
+    expect(screen.getByLabelText('Start (UTC)')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeVisible()
+  })
+
+  it('constrains the panel to a positive, finite viewport-derived max height', () => {
+    vi.spyOn(
+      HTMLDivElement.prototype,
+      'getBoundingClientRect',
+    ).mockReturnValue({
+      top: 700,
+      bottom: 740,
+      left: 200,
+      right: 260,
+      width: 60,
+      height: 40,
+      x: 200,
+      y: 700,
+      toJSON: () => ({}),
+    })
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800)
+
+    render(<TimeQueryButton />)
+    openPopover()
+
+    const dialog = screen.getByRole('dialog', { name: 'Time Query' })
+    const maxHeight = parseFloat(dialog.style.maxHeight)
+    expect(Number.isFinite(maxHeight)).toBe(true)
+    expect(maxHeight).toBeGreaterThan(0)
+    expect(maxHeight).toBeLessThanOrEqual(700)
   })
 
   it('keeps the Tokyo survey route default at 09:00-09:06, not 18:00-18:06', () => {
