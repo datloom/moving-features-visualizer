@@ -16,3 +16,4 @@ pnpm-debug.log*
 !.env.example
 .claude
 .codex
+res

@@ -1,3 +1,5 @@
+name: moving-features-visualizer
+
 services:
   visualizer:
     build:
@@ -6,7 +8,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: moving-features-visualizer
     ports:
-      - "${VISUALIZER_PORT:-9000}:80"
+      - "${VISUALIZER_PORT:-9090}:80"
     restart: unless-stopped
     depends_on:
       mf-api:
@@ -16,35 +18,44 @@ services:
 
   mf-api:
     image: ghcr.io/taehoonk/pygeoapi-mf-api:latest
+    # For MacOS #
+    platform: linux/amd64
+    # # # # # # #
     container_name: pygeoapi-mf-api
+
+    volumes:
+      - ./mf-api.config.yml:/pygeoapi/local.config.yml:ro
+
     ports:
-      # The MF-API image listens on port 80 internally.
       - "${MF_API_PORT:-5050}:80"
-    # The image contains /pygeoapi/mf-api.config.yml. Copy the workshop
-    # configuration into the path consumed by the image entrypoint, then run it.
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      cp /pygeoapi/mf-api.config.yml /pygeoapi/local.config.yml &&
-      exec /entrypoint.sh run
-    restart: unless-stopped
+
     depends_on:
       mobilitydb:
         condition: service_healthy
+
     healthcheck:
       test:
-        - CMD
-        - python3
-        - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:80/collections', timeout=3).read()"
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:80/collections', timeout=3).read()"
+        ]
       interval: 5s
       timeout: 5s
       retries: 30
-      start_period: 10s
+      start_period: 20s
+
+    restart: unless-stopped
+
     networks:
       - mf-workshop
 
   mobilitydb:
     image: ghcr.io/taehoonk/pygeoapi-mf-api-mobilitydb:latest
+    # For MacOS #
+    platform: linux/amd64
+    # # # # # # #
     container_name: mobilitydb
     ports:
       - "${MOBILITYDB_PORT:-25432}:5432"

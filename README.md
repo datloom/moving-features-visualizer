@@ -1,7 +1,18 @@
-# MF-JSON Visualizer
+# STINUUM (Spatio-Temporal continua on Cesium)
 
-A React and TypeScript application for visualizing OGC Moving Features JSON
-across synchronized spatial and temporal views.
+STINUUM is a JavaScript library to visualize and analyze moving objects on [Cesium](https://cesiumjs.org).
+STINUUM imports OGC Moving Features JSON data and supports animated maps as well as static maps and a space-time cube for navigating the trajectory of moving objects over space and time. The main characteristics of STINUUM are as follows:
+
+- Diverse geometry types to represent movements
+- Multiscale data analysis in space and time
+- Highly accessibility and lightweight deployment
+
+## OGC Moving Features Encoding Extension - JSON
+
+The current version of STINUUM supports only the [OGC Moving Features JSON format](https://docs.opengeospatial.org/is/19-045r3/19-045r3.html).
+
+The OGC Moving Features JSON format is described in [OGC 19-045r3 Section 7](https://docs.opengeospatial.org/is/19-045r3/19-045r3.html#_moving_features_json_encodings).
+- - -
 
 ## Development
 
