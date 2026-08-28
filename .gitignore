@@ -9,3 +9,5 @@ test-results
 .DS_Store
 .codex/
 .claude/
+.agents/
+AGENTS.md
