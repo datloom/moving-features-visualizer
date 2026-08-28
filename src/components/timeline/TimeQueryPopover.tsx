@@ -1,28 +1,29 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
-import { formatUtcDateTimeLocal, parseUtcDateTimeLocal } from '../../mfjson/utcDateTimeLocal'
+import {
+  formatUtcDateTimeLocal,
+  parseUtcDateTimeLocal,
+} from '../../mfjson/utcDateTimeLocal'
 import { useTimeStore } from '../../store/timeStore'
 
-const formatDisplayTime = (timestamp: number): string =>
-  `${new Date(timestamp).toISOString().slice(0, 16).replace('T', ' ')} UTC`
+interface TimeQueryPopoverProps {
+  onClose: () => void
+}
 
-export function TimeQueryControls() {
-  const fullStartTime = useTimeStore((state) => state.fullStartTime)
-  const fullEndTime = useTimeStore((state) => state.fullEndTime)
+export function TimeQueryPopover({ onClose }: TimeQueryPopoverProps) {
   const startTime = useTimeStore((state) => state.startTime)
   const endTime = useTimeStore((state) => state.endTime)
-  const queryActive = useTimeStore((state) => state.queryActive)
+  const fullStartTime = useTimeStore((state) => state.fullStartTime)
+  const fullEndTime = useTimeStore((state) => state.fullEndTime)
   const rangeIsEmpty = fullStartTime === fullEndTime
 
-  const [fromInput, setFromInput] = useState(() => formatUtcDateTimeLocal(startTime))
+  // This component is only ever mounted while the popover is open, so these
+  // initializers run fresh every time it opens — seeding the draft from the
+  // *active* range (not the full extent) without a resync effect.
+  const [fromInput, setFromInput] = useState(() =>
+    formatUtcDateTimeLocal(startTime),
+  )
   const [toInput, setToInput] = useState(() => formatUtcDateTimeLocal(endTime))
-
-  // Re-sync the drafts whenever the active window itself changes (Apply,
-  // Reset, or a newly loaded dataset) — not on every keystroke.
-  useEffect(() => {
-    setFromInput(formatUtcDateTimeLocal(startTime))
-    setToInput(formatUtcDateTimeLocal(endTime))
-  }, [startTime, endTime])
 
   const parsedFrom = parseUtcDateTimeLocal(fromInput)
   const parsedTo = parseUtcDateTimeLocal(toInput)
@@ -31,22 +32,24 @@ export function TimeQueryControls() {
     Number.isFinite(parsedTo) &&
     parsedFrom <= parsedTo
 
+  // Resets the draft only — the active range is untouched until Apply.
+  const handleReset = () => {
+    setFromInput(formatUtcDateTimeLocal(fullStartTime))
+    setToInput(formatUtcDateTimeLocal(fullEndTime))
+  }
+
+  const handleApply = () => {
+    if (!inputIsValid) return
+    useTimeStore.getState().applyTimeQuery(parsedFrom, parsedTo)
+    onClose()
+  }
+
   return (
-    <section aria-label="Time Query" className="time-query-panel">
+    <div aria-label="Time Query" className="time-query-panel" role="dialog">
       <h3 className="time-query-heading">Time Query</h3>
-      <p className="time-query-available-range">
-        <span>Available Range</span>
-        {rangeIsEmpty ? (
-          <span>No data loaded</span>
-        ) : (
-          <span>
-            {formatDisplayTime(fullStartTime)} – {formatDisplayTime(fullEndTime)}
-          </span>
-        )}
-      </p>
       <div className="time-query-fields">
         <label className="time-query-field">
-          <span>From (UTC)</span>
+          <span>Start (UTC)</span>
           <input
             disabled={rangeIsEmpty}
             max={formatUtcDateTimeLocal(fullEndTime)}
@@ -58,7 +61,7 @@ export function TimeQueryControls() {
           />
         </label>
         <label className="time-query-field">
-          <span>To (UTC)</span>
+          <span>End (UTC)</span>
           <input
             disabled={rangeIsEmpty}
             max={formatUtcDateTimeLocal(fullEndTime)}
@@ -72,28 +75,25 @@ export function TimeQueryControls() {
       </div>
       {!inputIsValid ? (
         <p className="time-query-error" role="alert">
-          From must be on or before To.
+          Start must be on or before End.
         </p>
       ) : null}
       <div className="time-query-actions">
+        <button disabled={rangeIsEmpty} onClick={handleReset} type="button">
+          Reset
+        </button>
+        <button onClick={onClose} type="button">
+          Cancel
+        </button>
         <button
           className="time-query-apply"
           disabled={rangeIsEmpty || !inputIsValid}
-          onClick={() =>
-            useTimeStore.getState().applyTimeQuery(parsedFrom, parsedTo)
-          }
+          onClick={handleApply}
           type="button"
         >
           Apply
         </button>
-        <button
-          disabled={!queryActive}
-          onClick={() => useTimeStore.getState().resetTimeQuery()}
-          type="button"
-        >
-          Reset
-        </button>
       </div>
-    </section>
+    </div>
   )
 }

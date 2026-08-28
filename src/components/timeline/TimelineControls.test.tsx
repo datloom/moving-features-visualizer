@@ -16,6 +16,14 @@ describe('TimelineControls', () => {
     useTimeStore.getState().setRange(startTime, endTime)
   })
 
+  it('includes the Time Query control in the timeline toolbar', () => {
+    render(<TimelineControls />)
+
+    expect(
+      screen.getByRole('button', { name: /Time Query/ }),
+    ).toBeInTheDocument()
+  })
+
   it('displays the current time and configured extent', () => {
     useTimeStore.getState().setCurrentTime(middleTime)
     render(<TimelineControls />)

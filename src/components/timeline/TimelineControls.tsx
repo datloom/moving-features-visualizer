@@ -1,5 +1,6 @@
 import { useTimeStore } from '../../store/timeStore'
 import { Icon } from '../ui/Icon'
+import { TimeQueryButton } from './TimeQueryButton'
 
 const PLAYBACK_RATES = [0.5, 1, 2, 4, 10] as const
 
@@ -62,24 +63,27 @@ export function TimelineControls() {
           {formatCurrentTime(currentTime)}
         </time>
 
-        <label className="playback-rate-control">
-          <span>Speed</span>
-          <select
-            aria-label="Playback speed"
-            onChange={(event) =>
-              useTimeStore
-                .getState()
-                .setPlaybackRate(Number(event.currentTarget.value))
-            }
-            value={playbackRate}
-          >
-            {PLAYBACK_RATES.map((rate) => (
-              <option key={rate} value={rate}>
-                {rate}x
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="timeline-toolbar-end">
+          <label className="playback-rate-control">
+            <span>Speed</span>
+            <select
+              aria-label="Playback speed"
+              onChange={(event) =>
+                useTimeStore
+                  .getState()
+                  .setPlaybackRate(Number(event.currentTarget.value))
+              }
+              value={playbackRate}
+            >
+              {PLAYBACK_RATES.map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate}x
+                </option>
+              ))}
+            </select>
+          </label>
+          <TimeQueryButton />
+        </div>
       </div>
 
       <div className="timeline-track">

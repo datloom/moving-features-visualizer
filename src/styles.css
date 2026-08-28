@@ -74,6 +74,7 @@ select {
 .feature-row,
 .transport-controls,
 .playback-rate-control,
+.timeline-toolbar-end,
 .temporal-panel-heading,
 .selection-kicker {
   display: flex;
@@ -1128,8 +1129,11 @@ select {
   font-variant-numeric: tabular-nums;
   font-weight: 650;
 }
-.playback-rate-control {
+.timeline-toolbar-end {
   justify-self: end;
+  gap: 10px;
+}
+.playback-rate-control {
   gap: 7px;
   color: var(--muted);
   font-size: 0.68rem;
@@ -1154,13 +1158,31 @@ select {
   font-family: ui-monospace, monospace;
   font-size: 0.62rem;
 }
+.time-query-anchor {
+  position: relative;
+}
+.time-query-trigger {
+  position: relative;
+}
+.time-query-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
 .time-query-panel {
-  z-index: 12;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
   display: grid;
-  gap: 6px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border);
+  gap: 10px;
+  width: min(280px, 90vw);
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
   background: var(--surface);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 48%);
 }
 .time-query-heading {
   margin: 0;
@@ -1170,23 +1192,8 @@ select {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.time-query-available-range {
-  display: flex;
-  gap: 6px;
-  margin: 0;
-  color: var(--muted);
-  font-family: ui-monospace, monospace;
-  font-size: 0.62rem;
-}
-.time-query-available-range span:first-child {
-  color: var(--muted-strong);
-  font-family: inherit;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
 .time-query-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 .time-query-field {
@@ -1197,6 +1204,7 @@ select {
   font-size: 0.62rem;
 }
 .time-query-field input {
+  width: 100%;
   min-height: 30px;
   padding: 0 8px;
   border: 1px solid var(--border);
@@ -1695,14 +1703,14 @@ select {
     justify-self: center;
   }
   .transport-controls,
-  .playback-rate-control {
+  .timeline-toolbar-end {
     grid-row: 2;
   }
   .transport-button {
     min-width: 43px;
     padding: 0 6px;
   }
-  .transport-button:not(.transport-button-primary) {
+  .transport-button:not(.transport-button-primary):not(.time-query-trigger) {
     font-size: 0;
     gap: 0;
   }
