@@ -1,121 +1,105 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  computeRailWidth,
-  computeVisibleSampleRange,
-  MIN_THUMBNAIL_SPACING_PX,
   sampleRailPosition,
+  selectRepresentativeSamples,
+  slotIndexForTime,
+  THUMBNAIL_SLOT_PX,
 } from './imageTimelineWindow'
 
 const domain = { start: 0, end: 1_000 }
+const trackWidth = 800
 
-describe('computeRailWidth', () => {
-  it('uses the container width when samples are sparse', () => {
-    expect(computeRailWidth(5, 800)).toBe(800)
+describe('sampleRailPosition', () => {
+  it('maps the range start to x = 0', () => {
+    expect(sampleRailPosition(domain.start, domain, trackWidth)).toBe(0)
   })
 
-  it('grows past the container width once samples are dense', () => {
-    expect(computeRailWidth(1_000, 800)).toBe(1_000 * MIN_THUMBNAIL_SPACING_PX)
+  it('maps the range end to x = trackWidth', () => {
+    expect(sampleRailPosition(domain.end, domain, trackWidth)).toBe(trackWidth)
+  })
+
+  it('maps the midpoint to the middle of the track', () => {
+    const mid = (domain.start + domain.end) / 2
+    expect(sampleRailPosition(mid, domain, trackWidth)).toBe(trackWidth / 2)
+  })
+
+  it('never depends on how many other samples exist — only on domain/trackWidth', () => {
+    // Same timestamp, same domain, same trackWidth => identical position,
+    // regardless of anything about a surrounding sample list.
+    const a = sampleRailPosition(250, domain, trackWidth)
+    const b = sampleRailPosition(250, domain, trackWidth)
+    expect(a).toBe(b)
   })
 })
 
-describe('computeVisibleSampleRange', () => {
-  // 1000 samples evenly spread across the domain — a lightweight synthetic
-  // large-dataset fixture (no real images/Base64 involved).
-  const samples = Array.from({ length: 1_000 }, (_, index) => ({
-    time: (index / 999) * domain.end,
-  }))
-  const railWidth = computeRailWidth(samples.length, 800)
-
-  it('returns an empty range for an empty sample list', () => {
-    expect(computeVisibleSampleRange([], domain, railWidth, 0, 800)).toEqual({
-      startIndex: 0,
-      endIndex: 0,
-    })
+describe('selectRepresentativeSamples', () => {
+  it('returns nothing for an empty sample list', () => {
+    expect(selectRepresentativeSamples([], domain, trackWidth)).toEqual([])
   })
 
-  it('selects only a small bounded window out of 1000 logical samples', () => {
-    const range = computeVisibleSampleRange(samples, domain, railWidth, 0, 800, 320)
-    const count = range.endIndex - range.startIndex
-    // Viewport + overscan covers (800 + 2*320) px out of a much wider rail —
-    // nowhere near all 1000 samples should fall inside it.
-    expect(count).toBeGreaterThan(0)
-    expect(count).toBeLessThan(samples.length)
-  })
+  it('bounds the number of representative samples to roughly trackWidth / slotWidth, regardless of sample count', () => {
+    const oneHundred = Array.from({ length: 100 }, (_, index) => ({
+      time: (index / 99) * domain.end,
+    }))
+    const oneThousand = Array.from({ length: 1_000 }, (_, index) => ({
+      time: (index / 999) * domain.end,
+    }))
+    const maxSlots = Math.ceil(trackWidth / THUMBNAIL_SLOT_PX) + 1
 
-  it('every selected sample truly falls within the viewport + overscan bounds', () => {
-    const scrollLeft = 5_000
-    const viewportWidth = 800
-    const overscanPx = 320
-    const range = computeVisibleSampleRange(
-      samples,
+    const fromHundred = selectRepresentativeSamples(oneHundred, domain, trackWidth)
+    const fromThousand = selectRepresentativeSamples(
+      oneThousand,
       domain,
-      railWidth,
-      scrollLeft,
-      viewportWidth,
-      overscanPx,
+      trackWidth,
     )
-    const lower = scrollLeft - overscanPx
-    const upper = scrollLeft + viewportWidth + overscanPx
-    for (let index = range.startIndex; index < range.endIndex; index += 1) {
-      const x = sampleRailPosition(samples[index]!.time, domain, railWidth)
-      expect(x).toBeGreaterThanOrEqual(lower)
-      expect(x).toBeLessThanOrEqual(upper)
+
+    expect(fromHundred.length).toBeLessThanOrEqual(maxSlots)
+    expect(fromThousand.length).toBeLessThanOrEqual(maxSlots)
+    // The key property under test: 10x more logical samples over the same
+    // range does not roughly-10x the number of rendered thumbnails.
+    expect(fromThousand.length).toBeLessThan(oneThousand.length / 5)
+  })
+
+  it('preserves chronological order in its output', () => {
+    const samples = Array.from({ length: 50 }, (_, index) => ({
+      time: (index / 49) * domain.end,
+    }))
+    const representative = selectRepresentativeSamples(samples, domain, trackWidth)
+    const times = representative.map((entry) => entry.sample.time)
+    expect(times).toEqual([...times].sort((a, b) => a - b))
+  })
+
+  it('keeps the exact sample object identity (no synthesized/merged samples)', () => {
+    const samples = [{ time: 100, value: 'a' }, { time: 500, value: 'b' }]
+    const representative = selectRepresentativeSamples(samples, domain, trackWidth)
+    for (const entry of representative) {
+      expect(samples).toContain(entry.sample)
     }
   })
 
-  it('excludes samples just outside the window on both sides', () => {
-    const scrollLeft = 5_000
-    const viewportWidth = 800
-    const overscanPx = 320
-    const range = computeVisibleSampleRange(
-      samples,
-      domain,
-      railWidth,
-      scrollLeft,
-      viewportWidth,
-      overscanPx,
+  it('a single sample per slot is still represented (no accidental dropping)', () => {
+    // Three samples far enough apart in time to land in distinct slots.
+    const samples = [{ time: 0 }, { time: 500 }, { time: 1_000 }]
+    const representative = selectRepresentativeSamples(samples, domain, trackWidth)
+    expect(representative.map((entry) => entry.sample.time)).toEqual([
+      0, 500, 1_000,
+    ])
+  })
+})
+
+describe('slotIndexForTime', () => {
+  it('agrees with the slot a representative sample at the same time would occupy', () => {
+    const samples = [{ time: 500 }]
+    const representative = selectRepresentativeSamples(samples, domain, trackWidth)
+    expect(slotIndexForTime(500, domain, trackWidth)).toBe(
+      representative[0]!.slotIndex,
     )
-    if (range.startIndex > 0) {
-      const beforeX = sampleRailPosition(
-        samples[range.startIndex - 1]!.time,
-        domain,
-        railWidth,
-      )
-      expect(beforeX).toBeLessThan(scrollLeft - overscanPx)
-    }
-    if (range.endIndex < samples.length) {
-      const afterX = sampleRailPosition(
-        samples[range.endIndex]!.time,
-        domain,
-        railWidth,
-      )
-      expect(afterX).toBeGreaterThan(scrollLeft + viewportWidth + overscanPx)
-    }
   })
 
-  it('scrolling right shifts the visible index range forward', () => {
-    const atStart = computeVisibleSampleRange(samples, domain, railWidth, 0, 800)
-    const scrolled = computeVisibleSampleRange(
-      samples,
-      domain,
-      railWidth,
-      railWidth - 800,
-      800,
+  it('is stable for the same inputs regardless of other samples', () => {
+    expect(slotIndexForTime(250, domain, trackWidth)).toBe(
+      slotIndexForTime(250, domain, trackWidth),
     )
-    expect(scrolled.startIndex).toBeGreaterThan(atStart.startIndex)
-  })
-
-  it('covers the full sample list when the rail fits entirely in the viewport', () => {
-    const smallRailWidth = computeRailWidth(samples.length, 100_000)
-    const range = computeVisibleSampleRange(
-      samples,
-      domain,
-      smallRailWidth,
-      0,
-      100_000,
-      0,
-    )
-    expect(range).toEqual({ startIndex: 0, endIndex: samples.length })
   })
 })

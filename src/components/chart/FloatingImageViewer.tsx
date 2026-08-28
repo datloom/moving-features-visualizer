@@ -1,10 +1,17 @@
-import { useEffect, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useLayoutEffect,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+} from 'react'
 
 import { normalizeImageSource } from '../../mfjson/imageSource'
 import {
+  anchoredViewerPosition,
   clampViewerPosition,
   clampViewerSize,
   defaultViewerPosition,
+  type ViewerPosition,
 } from '../../services/imageViewerGeometry'
 import { useImageViewerStore } from '../../store/imageViewerStore'
 import { useTimeStore } from '../../store/timeStore'
@@ -28,10 +35,16 @@ const viewportSize = () => ({
  * TemporalPropertiesPanel, so it keeps working while that panel is
  * collapsed — no separate timer, no backdrop, no focus trap.
  */
-export function FloatingImageViewer() {
+export function FloatingImageViewer({
+  selectedFeatureRef,
+}: {
+  /** The rendered Selected Feature panel to anchor below — see App.tsx/MapWorkspace. */
+  readonly selectedFeatureRef: RefObject<HTMLElement | null>
+}) {
   const propertyName = useImageViewerStore((state) => state.propertyName)
   const properties = useImageViewerStore((state) => state.properties)
-  const position = useImageViewerStore((state) => state.position)
+  const positionMode = useImageViewerStore((state) => state.positionMode)
+  const manualPosition = useImageViewerStore((state) => state.manualPosition)
   const size = useImageViewerStore((state) => state.size)
   const currentTime = useTimeStore((state) => state.currentTime)
   const playbackRate = useTimeStore((state) => state.playbackRate)
@@ -41,17 +54,43 @@ export function FloatingImageViewer() {
     ? resolveImageSample(properties, currentTime, playbackRate)
     : undefined
 
-  // First-ever open: place it in an unobtrusive corner rather than (0, 0).
-  useEffect(() => {
-    if (!isOpen || position) return
-    useImageViewerStore
-      .getState()
-      .setPosition(defaultViewerPosition(size, viewportSize()))
-  }, [isOpen, position, size])
+  const [anchoredPosition, setAnchoredPosition] = useState<
+    ViewerPosition | undefined
+  >(undefined)
 
-  // A saved position/size must never strand the window off-screen if the
-  // browser is resized while it's open.
-  useEffect(() => {
+  // While anchored, track the Selected Feature panel's *actual* rendered
+  // bounds — never a hard-coded offset — so a taller server-loaded panel is
+  // respected automatically. Stops entirely once the user drags (manual).
+  useLayoutEffect(() => {
+    if (!isOpen || positionMode !== 'anchored') return undefined
+
+    const anchorElement = selectedFeatureRef.current
+    const recompute = () => {
+      const currentSize = useImageViewerStore.getState().size
+      const rect = anchorElement?.getBoundingClientRect()
+      setAnchoredPosition(
+        rect
+          ? anchoredViewerPosition(rect, currentSize, viewportSize())
+          : defaultViewerPosition(currentSize, viewportSize()),
+      )
+    }
+    recompute()
+
+    const resizeObserver = anchorElement
+      ? new ResizeObserver(recompute)
+      : undefined
+    if (anchorElement && resizeObserver) resizeObserver.observe(anchorElement)
+    window.addEventListener('resize', recompute)
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', recompute)
+    }
+  }, [isOpen, positionMode, selectedFeatureRef])
+
+  // A manual position must never strand the window off-screen if the
+  // browser is resized while it's open (anchored positioning re-derives
+  // itself above, so this only matters once positionMode is 'manual').
+  useLayoutEffect(() => {
     if (!isOpen) return undefined
     const handleResize = () =>
       useImageViewerStore.getState().clampToViewport(viewportSize())
@@ -59,21 +98,29 @@ export function FloatingImageViewer() {
     return () => window.removeEventListener('resize', handleResize)
   }, [isOpen])
 
+  const resolvedPosition =
+    positionMode === 'manual'
+      ? clampViewerPosition(
+          manualPosition ?? defaultViewerPosition(size, viewportSize()),
+          size,
+          viewportSize(),
+        )
+      : (anchoredPosition ?? defaultViewerPosition(size, viewportSize()))
+
   const startDrag = (event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault()
     let last = { x: event.clientX, y: event.clientY }
+    let basis = resolvedPosition
     const handleMove = (moveEvent: PointerEvent) => {
       const store = useImageViewerStore.getState()
-      const current = store.position ?? { x: 0, y: 0 }
       const dx = moveEvent.clientX - last.x
       const dy = moveEvent.clientY - last.y
       last = { x: moveEvent.clientX, y: moveEvent.clientY }
-      store.setPosition(
-        clampViewerPosition(
-          { x: current.x + dx, y: current.y + dy },
-          store.size,
-          viewportSize(),
-        ),
+      basis = { x: basis.x + dx, y: basis.y + dy }
+      // Any actual movement is an intentional drag — switches to manual
+      // positioning from here on, per setManualPosition.
+      store.setManualPosition(
+        clampViewerPosition(basis, store.size, viewportSize()),
       )
     }
     const handleUp = () => {
@@ -113,7 +160,6 @@ export function FloatingImageViewer() {
   const normalized = currentSample
     ? normalizeImageSource(currentSample.value)
     : undefined
-  const resolvedPosition = position ?? defaultViewerPosition(size, viewportSize())
 
   return (
     <div

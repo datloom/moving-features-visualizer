@@ -57,7 +57,7 @@ export const clampViewerPosition = (
   }
 }
 
-/** An unobtrusive default: near the top-right corner, clear of the app header. */
+/** An unobtrusive fallback: near the top-right corner, clear of the app header — used only when no Selected Feature bounds are available to anchor to. */
 export const defaultViewerPosition = (
   size: ViewerSize,
   viewport: Viewport,
@@ -66,6 +66,31 @@ export const defaultViewerPosition = (
     {
       x: viewport.width - size.width - DEFAULT_POSITION_MARGIN,
       y: DEFAULT_POSITION_TOP_OFFSET,
+    },
+    size,
+    viewport,
+  )
+
+/** Gap, in pixels, left between the Selected Feature panel and the anchored viewer below it. */
+export const SELECTED_FEATURE_ANCHOR_GAP = 12
+
+/**
+ * The preferred initial/anchored position: directly below the Selected
+ * Feature panel's *actual* rendered bounds (never a hard-coded offset), so a
+ * taller server-loaded Selected Feature is respected automatically. Clamped
+ * into the viewport like any other position — if there's genuinely no room
+ * below, this still keeps the whole window reachable rather than pushing
+ * most of it off-screen.
+ */
+export const anchoredViewerPosition = (
+  anchorRect: { readonly left: number; readonly bottom: number },
+  size: ViewerSize,
+  viewport: Viewport,
+): ViewerPosition =>
+  clampViewerPosition(
+    {
+      x: anchorRect.left,
+      y: anchorRect.bottom + SELECTED_FEATURE_ANCHOR_GAP,
     },
     size,
     viewport,

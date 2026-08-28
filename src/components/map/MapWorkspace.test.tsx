@@ -40,6 +40,7 @@ const feature: MovingFeature = {
 const panelVisibilityProps = () => ({
   onToggleFeatureExplorer: vi.fn(),
   onToggleTemporalProperties: vi.fn(),
+  selectedFeatureRef: { current: null },
   showFeatureExplorer: true,
   showTemporalProperties: true,
 })
@@ -114,6 +115,7 @@ describe('MapWorkspace panel visibility controls', () => {
         features={[feature]}
         onToggleFeatureExplorer={onToggleFeatureExplorer}
         onToggleTemporalProperties={onToggleTemporalProperties}
+        selectedFeatureRef={{ current: null }}
         showFeatureExplorer={true}
         showTemporalProperties={false}
       />,

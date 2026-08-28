@@ -1,3 +1,5 @@
+import type { Ref } from 'react'
+
 import type { MovingFeature } from '../../mfjson/types'
 import { FeatureTemporalDataStatus } from './FeatureTemporalDataStatus'
 
@@ -6,8 +8,11 @@ const formatTime = (timestamp: number) =>
 
 export function SelectedFeatureInfo({
   feature,
+  ref,
 }: {
   readonly feature: MovingFeature
+  /** Exposes the panel's rendered bounds — e.g. so the floating Image viewer can anchor directly below it. */
+  readonly ref?: Ref<HTMLElement>
 }) {
   const sampleTimes = feature.temporalGeometry.segments.flatMap((segment) =>
     segment.samples.map((sample) => sample.time),
@@ -28,6 +33,7 @@ export function SelectedFeatureInfo({
     <section
       aria-label="Selected feature information"
       className="selected-feature-overlay"
+      ref={ref}
     >
       <div className="selection-kicker">
         <span />

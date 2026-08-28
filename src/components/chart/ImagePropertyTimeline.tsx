@@ -17,9 +17,9 @@ import {
   type ImageSample,
 } from '../../visualization/chart/imageChartAdapter'
 import {
-  computeRailWidth,
-  computeVisibleSampleRange,
   sampleRailPosition,
+  selectRepresentativeSamples,
+  slotIndexForTime,
 } from '../../visualization/chart/imageTimelineWindow'
 import { Icon } from '../ui/Icon'
 import { PropertyChartHeader } from './PropertyChartHeader'
@@ -128,87 +128,56 @@ function ImageTimelineHeaderActions({
 }
 
 /**
- * The thumbnail rail: virtualized so only samples within the scrolled
- * viewport (plus a small overscan) get a real `<img>` in the DOM — a
- * property with thousands of samples still only ever mounts a bounded
- * number of thumbnails. Positions stay proportional to each sample's real
- * timestamp (`sampleRailPosition`), never to its index, so temporal
- * spacing is preserved exactly regardless of which slice is rendered.
+ * The thumbnail track: a FIXED width matching the same active temporal range
+ * as the Measure/Text graphs — never `sampleCount * thumbnailWidth` — so an
+ * Image property with thousands of samples takes up the same horizontal
+ * space as one with a handful, over the same range.
+ *
+ * Every sample gets a lightweight, always-clickable tick at its exact
+ * timestamp position (no image, negligible DOM/decode cost, so full
+ * navigability never depends on how dense the samples are). A bounded
+ * subset — one representative per occupied pixel "slot" — additionally
+ * gets a real thumbnail `<img>`, capping active image decodes to roughly
+ * `trackWidth / slotWidth` regardless of sample count. That selection is
+ * memoized independent of currentTime, so a playback tick never rebuilds
+ * it; only the (O(1)) "which slot is current" comparison below does.
  */
 function ImageThumbnailStrip({
   propertyName,
-  properties,
   samples,
   domain,
 }: {
   readonly propertyName: string
-  readonly properties: readonly ImageTemporalProperty[]
   readonly samples: readonly ImageSample[]
   readonly domain: TemporalWindow
 }) {
   const currentTime = useTimeStore((state) => state.currentTime)
-  const playbackRate = useTimeStore((state) => state.playbackRate)
-  const currentSample = resolveImageSample(properties, currentTime, playbackRate)
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const [containerWidth, setContainerWidth] = useState(0)
-  const [scrollLeft, setScrollLeft] = useState(0)
+  const [trackWidth, setTrackWidth] = useState(0)
 
-  // Measured before paint to avoid a one-frame flash of the wrong window,
+  // Measured before paint to avoid a one-frame flash of the wrong layout,
   // then kept in sync via the same ResizeObserver pattern used elsewhere in
   // this app (e.g. CesiumMap) — recalculates when Temporal Properties is
   // collapsed/reopened, the Feature Explorer toggles, or the browser resizes.
   useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) return undefined
-    setContainerWidth(container.clientWidth)
+    setTrackWidth(container.clientWidth)
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
-      if (entry) setContainerWidth(entry.contentRect.width)
+      if (entry) setTrackWidth(entry.contentRect.width)
     })
     resizeObserver.observe(container)
     return () => resizeObserver.disconnect()
   }, [])
 
-  // rAF-throttled: scroll fires far more often than a frame can usefully
-  // apply a new virtualized window.
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return undefined
-    let frame = 0
-    const handleScroll = () => {
-      if (frame) return
-      frame = requestAnimationFrame(() => {
-        frame = 0
-        setScrollLeft(container.scrollLeft)
-      })
-    }
-    container.addEventListener('scroll', handleScroll, { passive: true })
-    return () => {
-      container.removeEventListener('scroll', handleScroll)
-      if (frame) cancelAnimationFrame(frame)
-    }
-  }, [])
-
-  const railWidth = computeRailWidth(samples.length, containerWidth)
-  // The expensive part (a binary search that scales with sample count) is
-  // memoized independent of currentTime, so a playback tick never
-  // recomputes it — only the cheap current-sample comparison below does.
-  const visibleRange = useMemo(
-    () =>
-      computeVisibleSampleRange(
-        samples,
-        domain,
-        railWidth,
-        scrollLeft,
-        containerWidth,
-      ),
-    [samples, domain, railWidth, scrollLeft, containerWidth],
+  const representativeSamples = useMemo(
+    () => selectRepresentativeSamples(samples, domain, trackWidth),
+    [samples, domain, trackWidth],
   )
-  const visibleWindow = samples.slice(
-    visibleRange.startIndex,
-    visibleRange.endIndex,
-  )
+  const currentSlotIndex =
+    trackWidth > 0 ? slotIndexForTime(currentTime, domain, trackWidth) : undefined
 
   return (
     <div
@@ -221,18 +190,28 @@ function ImageThumbnailStrip({
           No image samples in the selected range
         </p>
       ) : (
-        <div className="image-thumbnail-rail" style={{ width: railWidth }}>
-          {visibleWindow.map((sample) => (
+        <div className="image-thumbnail-rail">
+          {samples.map((sample) => (
+            <button
+              aria-label={`Jump to ${propertyName} at ${formatTimestamp(sample.time)}`}
+              className="image-sample-tick"
+              key={sample.time}
+              onClick={() => useTimeStore.getState().setCurrentTime(sample.time)}
+              style={{ left: sampleRailPosition(sample.time, domain, trackWidth) }}
+              type="button"
+            />
+          ))}
+          {representativeSamples.map(({ slotIndex, sample }) => (
             <div
               className="image-thumbnail-slot"
               key={sample.time}
-              style={{ left: sampleRailPosition(sample.time, domain, railWidth) }}
+              style={{ left: sampleRailPosition(sample.time, domain, trackWidth) }}
             >
               <ImageFrame
                 className={`image-frame image-thumbnail ${
-                  currentSample?.time === sample.time ? 'is-current' : ''
+                  slotIndex === currentSlotIndex ? 'is-current' : ''
                 }`}
-                label={`Jump to ${propertyName} at ${formatTimestamp(sample.time)}`}
+                label={`Preview ${propertyName} near ${formatTimestamp(sample.time)}`}
                 onActivate={() =>
                   useTimeStore.getState().setCurrentTime(sample.time)
                 }
@@ -243,7 +222,7 @@ function ImageThumbnailStrip({
           <div
             aria-hidden="true"
             className="image-current-cursor"
-            style={{ left: sampleRailPosition(currentTime, domain, railWidth) }}
+            style={{ left: sampleRailPosition(currentTime, domain, trackWidth) }}
           />
         </div>
       )}
@@ -305,7 +284,6 @@ export function ImagePropertyTimeline({
         <div className="image-thumbnail-section">
           <ImageThumbnailStrip
             domain={domain}
-            properties={properties}
             propertyName={propertyName}
             samples={visibleSamples}
           />

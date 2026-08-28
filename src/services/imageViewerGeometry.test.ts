@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  anchoredViewerPosition,
   clampViewerPosition,
   clampViewerSize,
   defaultViewerPosition,
   IMAGE_VIEWER_MIN_HEIGHT,
   IMAGE_VIEWER_MIN_WIDTH,
+  SELECTED_FEATURE_ANCHOR_GAP,
 } from './imageViewerGeometry'
 
 const viewport = { width: 1200, height: 800 }
@@ -89,5 +91,42 @@ describe('defaultViewerPosition', () => {
     expect(position.x + size.width).toBeLessThanOrEqual(smallViewport.width)
     expect(position.y).toBeGreaterThanOrEqual(0)
     expect(position.y + size.height).toBeLessThanOrEqual(smallViewport.height)
+  })
+})
+
+describe('anchoredViewerPosition', () => {
+  const size = { width: 320, height: 260 }
+
+  it('sits directly below the Selected Feature panel, aligned to its left edge', () => {
+    const anchorRect = { left: 14, bottom: 180 }
+    const position = anchoredViewerPosition(anchorRect, size, viewport)
+
+    expect(position.x).toBe(14)
+    expect(position.y).toBe(180 + SELECTED_FEATURE_ANCHOR_GAP)
+  })
+
+  it('follows a taller Selected Feature panel (e.g. server-loaded metadata) to a lower position', () => {
+    const shortAnchor = { left: 14, bottom: 180 }
+    const tallAnchor = { left: 14, bottom: 420 }
+
+    const shortPosition = anchoredViewerPosition(shortAnchor, size, viewport)
+    const tallPosition = anchoredViewerPosition(tallAnchor, size, viewport)
+
+    expect(tallPosition.y).toBeGreaterThan(shortPosition.y)
+  })
+
+  it('clamps into the viewport rather than placing most of the window off-screen when there is no room below', () => {
+    const anchorRect = { left: 14, bottom: 780 }
+    const position = anchoredViewerPosition(anchorRect, size, viewport)
+
+    expect(position.y).toBeGreaterThanOrEqual(0)
+    expect(position.y + size.height).toBeLessThanOrEqual(viewport.height)
+  })
+
+  it('clamps horizontally so the window never extends past the right edge', () => {
+    const anchorRect = { left: viewport.width - 50, bottom: 100 }
+    const position = anchoredViewerPosition(anchorRect, size, viewport)
+
+    expect(position.x + size.width).toBeLessThanOrEqual(viewport.width)
   })
 })

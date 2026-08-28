@@ -11,6 +11,8 @@ import {
   type ViewerSize,
 } from '../services/imageViewerGeometry'
 
+export type ImageViewerPositionMode = 'anchored' | 'manual'
+
 /**
  * UI-only presentation state for the floating current-image viewer — which
  * Image TemporalProperty it's showing, and its window geometry. Deliberately
@@ -21,8 +23,16 @@ import {
 export interface ImageViewerState {
   readonly propertyName: string | undefined
   readonly properties: readonly ImageTemporalProperty[]
-  /** `undefined` until first positioned — the component computes an unobtrusive default. */
-  readonly position: ViewerPosition | undefined
+  /**
+   * 'anchored' (the default): position is derived live from the Selected
+   * Feature panel's actual rendered bounds, recomputed as that panel resizes
+   * — see FloatingImageViewer. 'manual': the user has dragged the viewer, so
+   * `manualPosition` is authoritative and Selected Feature resizing must
+   * never move it again.
+   */
+  readonly positionMode: ImageViewerPositionMode
+  /** Only meaningful once positionMode is 'manual'. */
+  readonly manualPosition: ViewerPosition | undefined
   readonly size: ViewerSize
 }
 
@@ -35,16 +45,18 @@ export interface ImageViewerActions {
   /** Closes the viewer only if it's currently showing `propertyName` — avoids one property's unmount/change closing another's open viewer. */
   closeIfShowing: (propertyName: string) => void
   close: () => void
-  setPosition: (position: ViewerPosition) => void
+  /** Records a user drag — switches positionMode to 'manual' from then on. */
+  setManualPosition: (position: ViewerPosition) => void
   setSize: (size: ViewerSize) => void
-  /** Re-clamps the current geometry into a (possibly resized) viewport. */
+  /** Re-clamps the current geometry into a (possibly resized) viewport. Anchored positioning re-derives itself instead — this only matters for a manual position. */
   clampToViewport: (viewport: Viewport) => void
 }
 
 export const initialImageViewerState: ImageViewerState = {
   propertyName: undefined,
   properties: [],
-  position: undefined,
+  positionMode: 'anchored',
+  manualPosition: undefined,
   size: {
     width: IMAGE_VIEWER_DEFAULT_WIDTH,
     height: IMAGE_VIEWER_DEFAULT_HEIGHT,
@@ -62,14 +74,15 @@ export const useImageViewerStore = create<
     }
   },
   close: () => set({ propertyName: undefined, properties: [] }),
-  setPosition: (position) => set({ position }),
+  setManualPosition: (position) =>
+    set({ positionMode: 'manual', manualPosition: position }),
   setSize: (size) => set({ size }),
   clampToViewport: (viewport) => {
     const state = get()
     const size = clampViewerSize(state.size, viewport)
-    const position = state.position
-      ? clampViewerPosition(state.position, size, viewport)
+    const manualPosition = state.manualPosition
+      ? clampViewerPosition(state.manualPosition, size, viewport)
       : undefined
-    set({ size, position })
+    set({ size, manualPosition })
   },
 }))

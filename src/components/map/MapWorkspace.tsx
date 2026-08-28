@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type RefObject } from 'react'
 
 import type { MovingFeature } from '../../mfjson/types'
 import {
@@ -19,6 +19,7 @@ export function MapWorkspace({
   onToggleFeatureExplorer,
   showTemporalProperties,
   onToggleTemporalProperties,
+  selectedFeatureRef,
 }: {
   readonly feature: MovingFeature
   readonly features: readonly MovingFeature[]
@@ -26,6 +27,8 @@ export function MapWorkspace({
   readonly onToggleFeatureExplorer: () => void
   readonly showTemporalProperties: boolean
   readonly onToggleTemporalProperties: () => void
+  /** Forwarded to SelectedFeatureInfo so the floating Image viewer can anchor below its actual rendered bounds. */
+  readonly selectedFeatureRef: RefObject<HTMLElement | null>
 }) {
   const [focusRevision, setFocusRevision] = useState(0)
   const [mapMode, setMapMode] = useState<MapMode>('3d')
@@ -44,7 +47,7 @@ export function MapWorkspace({
       ) : (
         <SpaceTimeMap timeAxisScale={timeAxisScale} />
       )}
-      <SelectedFeatureInfo feature={feature} />
+      <SelectedFeatureInfo feature={feature} ref={selectedFeatureRef} />
       <div className="map-toolbar">
         <div
           aria-label="Visualization"

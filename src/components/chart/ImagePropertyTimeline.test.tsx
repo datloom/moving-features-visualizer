@@ -25,7 +25,10 @@ const camera: ImageTemporalProperty = {
 }
 
 const viewImageName = /^View image/
-const thumbnailName = (timestamp: string) => `Jump to camera at ${timestamp}`
+/** Every source sample gets one of these (a lightweight tick) — full navigability regardless of thumbnail density-thinning. */
+const tickName = (timestamp: string) => `Jump to camera at ${timestamp}`
+/** Only a bounded, density-thinned subset gets an actual image preview. */
+const previewName = (timestamp: string) => `Preview camera near ${timestamp}`
 
 let resizeObserverCallbacks: ResizeObserverCallback[] = []
 
@@ -60,6 +63,27 @@ const reportContainerWidth = (container: Element, width: number) => {
   })
 }
 
+const renderTimeline = (
+  props: Partial<{
+    featureId: string
+    propertyName: string
+    properties: readonly ImageTemporalProperty[]
+  }> = {},
+) => {
+  const view = render(
+    <ImagePropertyTimeline
+      featureId={props.featureId ?? 'feature-1'}
+      propertyName={props.propertyName ?? 'camera'}
+      properties={props.properties ?? [camera]}
+    />,
+  )
+  const track = screen.getByLabelText(
+    `${props.propertyName ?? 'camera'} thumbnail timeline`,
+  )
+  reportContainerWidth(track, 800)
+  return { ...view, track }
+}
+
 describe('ImagePropertyTimeline', () => {
   beforeEach(() => {
     useTimeStore.setState(initialTimeState)
@@ -75,18 +99,14 @@ describe('ImagePropertyTimeline', () => {
 
   it('no longer renders a permanent current-frame preview, but keeps the thumbnail timeline and a View Image button', () => {
     useTimeStore.getState().setCurrentTime(t0)
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    renderTimeline()
 
     expect(
       screen.queryByRole('button', { name: /^View larger image:/ }),
     ).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: viewImageName })).toBeInTheDocument()
+    // Every source sample remains represented (as a tick) regardless of
+    // thumbnail-preview thinning.
     expect(screen.getAllByRole('button', { name: /^Jump to camera at/ })).toHaveLength(
       3,
     )
@@ -94,13 +114,7 @@ describe('ImagePropertyTimeline', () => {
 
   it('enables View Image with an accessible label naming the current sample', () => {
     useTimeStore.getState().setCurrentTime(t0)
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    renderTimeline()
 
     const button = screen.getByRole('button', {
       name: 'View image: camera at 1970-01-01 00:00:01 UTC',
@@ -114,13 +128,8 @@ describe('ImagePropertyTimeline', () => {
       interpolation: 'Discrete',
     }
     useTimeStore.getState().setCurrentTime(t0 + 500)
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[discreteCamera]}
-      />,
-    )
+    renderTimeline({ properties: [discreteCamera] })
+
     const button = screen.getByRole('button', { name: viewImageName })
     expect(button).toBeDisabled()
     expect(button).toHaveAttribute('title', 'No image at current time')
@@ -131,25 +140,17 @@ describe('ImagePropertyTimeline', () => {
     ).toHaveLength(3)
   })
 
-  it('Discrete: clicking a thumbnail lands exactly on that sample and re-enables View Image', () => {
+  it('Discrete: clicking a tick lands exactly on that sample and re-enables View Image', () => {
     const discreteCamera: ImageTemporalProperty = {
       ...camera,
       interpolation: 'Discrete',
     }
     useTimeStore.getState().setCurrentTime(t0 + 500)
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[discreteCamera]}
-      />,
-    )
+    renderTimeline({ properties: [discreteCamera] })
     expect(screen.getByRole('button', { name: viewImageName })).toBeDisabled()
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: thumbnailName('1970-01-01 00:00:02 UTC'),
-      }),
+      screen.getByRole('button', { name: tickName('1970-01-01 00:00:02 UTC') }),
     )
 
     expect(useTimeStore.getState().currentTime).toBe(t1)
@@ -161,13 +162,7 @@ describe('ImagePropertyTimeline', () => {
 
   it('keeps View Image enabled for a held Step value at a time between samples', () => {
     useTimeStore.getState().setCurrentTime(t0 + 500)
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    renderTimeline()
     expect(
       screen.getByRole('button', {
         name: 'View image: camera at 1970-01-01 00:00:01 UTC',
@@ -175,81 +170,64 @@ describe('ImagePropertyTimeline', () => {
     ).toBeEnabled()
   })
 
-  it('clicking a thumbnail updates TimeStore.currentTime without touching the active window', () => {
+  it('clicking a tick updates TimeStore.currentTime without touching the active window', () => {
     useTimeStore.getState().setCurrentTime(t0)
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    renderTimeline()
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: thumbnailName('1970-01-01 00:00:03 UTC'),
-      }),
+      screen.getByRole('button', { name: tickName('1970-01-01 00:00:03 UTC') }),
     )
 
     expect(useTimeStore.getState().currentTime).toBe(t2)
     expect(useTimeStore.getState().queryActive).toBe(false)
   })
 
+  it('clicking a preview thumbnail also updates TimeStore.currentTime', () => {
+    useTimeStore.getState().setCurrentTime(t0)
+    renderTimeline()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: previewName('1970-01-01 00:00:03 UTC'),
+      }),
+    )
+
+    expect(useTimeStore.getState().currentTime).toBe(t2)
+  })
+
   it('clips the thumbnail timeline to an active Time Query window', () => {
     act(() => useTimeStore.getState().applyTimeQuery(t0 + 1, t2 - 1))
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    renderTimeline()
 
     // Only the middle sample (t1) falls inside (t0+1, t2-1).
     expect(
-      screen.getByRole('button', {
-        name: thumbnailName('1970-01-01 00:00:02 UTC'),
-      }),
+      screen.getByRole('button', { name: tickName('1970-01-01 00:00:02 UTC') }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', {
-        name: thumbnailName('1970-01-01 00:00:01 UTC'),
+        name: tickName('1970-01-01 00:00:01 UTC'),
       }),
     ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', {
-        name: thumbnailName('1970-01-01 00:00:03 UTC'),
+        name: tickName('1970-01-01 00:00:03 UTC'),
       }),
     ).not.toBeInTheDocument()
   })
 
   it('restores the full thumbnail range after Reset', () => {
     act(() => useTimeStore.getState().applyTimeQuery(t0 + 1, t2 - 1))
-    const view = render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    const { track } = renderTimeline()
     expect(
       screen.queryByRole('button', {
-        name: thumbnailName('1970-01-01 00:00:01 UTC'),
+        name: tickName('1970-01-01 00:00:01 UTC'),
       }),
     ).not.toBeInTheDocument()
 
     act(() => useTimeStore.getState().resetTimeQuery())
-    view.rerender(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    reportContainerWidth(track, 800)
     expect(
-      screen.getByRole('button', {
-        name: thumbnailName('1970-01-01 00:00:01 UTC'),
-      }),
+      screen.getByRole('button', { name: tickName('1970-01-01 00:00:01 UTC') }),
     ).toBeInTheDocument()
   })
 
@@ -259,13 +237,7 @@ describe('ImagePropertyTimeline', () => {
     // legitimately contains none of the camera samples.
     useTimeStore.getState().setRange(0, 100_000)
     act(() => useTimeStore.getState().applyTimeQuery(50_000, 60_000))
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    renderTimeline()
     expect(
       screen.getByText('No image samples in the selected range'),
     ).toBeInTheDocument()
@@ -280,27 +252,15 @@ describe('ImagePropertyTimeline', () => {
       samples: [{ time: t0, value: 'not-a-supported-value' }],
     }
     useTimeStore.getState().setCurrentTime(t0)
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[badCamera]}
-      />,
-    )
+    renderTimeline({ properties: [badCamera] })
     expect(screen.getAllByText('Image unavailable').length).toBeGreaterThan(0)
   })
 
-  it('shows an unavailable state when a thumbnail image fails to load', () => {
+  it('shows an unavailable state when a preview thumbnail image fails to load', () => {
     useTimeStore.getState().setCurrentTime(t0)
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    renderTimeline()
     const thumbnail = screen.getByRole('button', {
-      name: thumbnailName('1970-01-01 00:00:01 UTC'),
+      name: previewName('1970-01-01 00:00:01 UTC'),
     })
     const img = thumbnail.querySelector('img')!
     fireEvent.error(img)
@@ -309,13 +269,7 @@ describe('ImagePropertyTimeline', () => {
 
   it('clicking View Image opens the shared floating viewer on this property, with its live source properties', () => {
     useTimeStore.getState().setCurrentTime(t0 + 500)
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    renderTimeline()
 
     fireEvent.click(screen.getByRole('button', { name: viewImageName }))
 
@@ -327,36 +281,24 @@ describe('ImagePropertyTimeline', () => {
 
   it('closes the shared viewer on unmount if it was showing this property', () => {
     useTimeStore.getState().setCurrentTime(t0)
-    const view = render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    const { unmount } = renderTimeline()
     fireEvent.click(screen.getByRole('button', { name: viewImageName }))
     expect(useImageViewerStore.getState().propertyName).toBe('camera')
 
-    view.unmount()
+    unmount()
     expect(useImageViewerStore.getState().propertyName).toBeUndefined()
   })
 
   it('does not close the shared viewer if it is showing a different property', () => {
     useImageViewerStore.getState().open('thermal', [])
-    const view = render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[camera]}
-      />,
-    )
+    const { unmount } = renderTimeline()
 
-    view.unmount()
+    unmount()
     expect(useImageViewerStore.getState().propertyName).toBe('thermal')
   })
 
   it('closes the shared viewer when the owning Feature changes while it was showing this property', () => {
-    const view = render(
+    const { rerender } = render(
       <ImagePropertyTimeline
         featureId="feature-1"
         propertyName="camera"
@@ -368,7 +310,7 @@ describe('ImagePropertyTimeline', () => {
 
     // Same logical property name, but now sourced from a different Feature —
     // must not silently keep showing the previous Feature's images.
-    view.rerender(
+    rerender(
       <ImagePropertyTimeline
         featureId="feature-2"
         propertyName="camera"
@@ -379,7 +321,7 @@ describe('ImagePropertyTimeline', () => {
   })
 })
 
-describe('ImagePropertyTimeline virtualization at scale', () => {
+describe('ImagePropertyTimeline temporal-width and density handling at scale', () => {
   // A lightweight synthetic large-dataset fixture — fake URLs, not real
   // images/Base64 — 1000 samples one second apart (so each has a distinct
   // formatted timestamp/label), evenly spread across the active range.
@@ -400,11 +342,6 @@ describe('ImagePropertyTimeline virtualization at scale', () => {
     useTimeStore.getState().setRange(t0, bigDomainEnd)
     useImageViewerStore.setState(initialImageViewerState)
     stubResizeObserver()
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      callback(0)
-      return 0
-    })
-    vi.stubGlobal('cancelAnimationFrame', () => {})
   })
 
   afterEach(() => {
@@ -412,33 +349,82 @@ describe('ImagePropertyTimeline virtualization at scale', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders only a small bounded window of active thumbnails out of 1000 logical samples', () => {
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[bigCamera]}
-      />,
-    )
-    const track = screen.getByLabelText('camera thumbnail timeline')
-    reportContainerWidth(track, 800)
+  it('total track width does not scale with source sample count — 100 vs 1000 samples use the same width', () => {
+    const oneHundredCamera: ImageTemporalProperty = {
+      ...bigCamera,
+      samples: bigCamera.samples.filter((_, index) => index % 10 === 0),
+    }
 
-    const images = track.querySelectorAll('img')
+    const first = renderTimeline({ properties: [bigCamera] })
+    const rail1000 = first.track.querySelector(
+      '.image-thumbnail-rail',
+    ) as HTMLElement
+    const width1000 = getComputedStyle(rail1000).width
+    first.unmount()
+
+    const second = renderTimeline({ properties: [oneHundredCamera] })
+    const rail100 = second.track.querySelector(
+      '.image-thumbnail-rail',
+    ) as HTMLElement
+    // Neither rail declares an explicit pixel width keyed to sample count —
+    // both simply fill the (identically stubbed, 800px) container.
+    expect(rail1000.style.width).toBe('')
+    expect(rail100.style.width).toBe('')
+    expect(width1000).toBe(getComputedStyle(rail100).width)
+  })
+
+  it('renders only a small bounded number of active preview thumbnails out of 1000 logical samples', () => {
+    renderTimeline({ properties: [bigCamera] })
+    const images = screen.getAllByRole('button', {
+      name: /^Preview camera near/,
+    })
     expect(images.length).toBeGreaterThan(0)
-    expect(images.length).toBeLessThan(sampleCount)
+    expect(images.length).toBeLessThan(sampleCount / 5)
+  })
+
+  it('every one of the 1000 source samples still gets its own tick — none are dropped', () => {
+    renderTimeline({ properties: [bigCamera] })
+    expect(
+      screen.getAllByRole('button', { name: /^Jump to camera at/ }),
+    ).toHaveLength(sampleCount)
+  })
+
+  it('the earliest sample sits at the start of the track and the latest at its end', () => {
+    const { track } = renderTimeline({ properties: [bigCamera] })
+    const first = screen.getByRole('button', {
+      name: tickName('1970-01-01 00:00:01 UTC'),
+    })
+    const last = screen.getByRole('button', {
+      name: tickName(
+        new Date(bigDomainEnd).toISOString().slice(0, 19).replace('T', ' ') +
+          ' UTC',
+      ),
+    })
+    const trackWidth = (track.querySelector('.image-thumbnail-rail') as HTMLElement)
+      .getBoundingClientRect().width
+
+    expect(parseFloat(first.style.left)).toBeCloseTo(0, 0)
+    expect(parseFloat(last.style.left)).toBeCloseTo(trackWidth || 800, 0)
+  })
+
+  it('a midpoint timestamp sits near the middle of the track', () => {
+    renderTimeline({ properties: [bigCamera] })
+    const midSample = bigCamera.samples[Math.floor(sampleCount / 2)]!
+    const midTick = screen.getByRole('button', {
+      name: tickName(
+        new Date(midSample.time).toISOString().slice(0, 19).replace('T', ' ') +
+          ' UTC',
+      ),
+    })
+    expect(parseFloat(midTick.style.left)).toBeGreaterThan(300)
+    expect(parseFloat(midTick.style.left)).toBeLessThan(500)
   })
 
   it('all 1000 source samples remain logically navigable via the full active range', () => {
     useTimeStore.getState().setCurrentTime(t0)
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[bigCamera]}
-      />,
-    )
+    renderTimeline({ properties: [bigCamera] })
     // Jumping straight to the very last sample must work even though it was
-    // never rendered as a DOM thumbnail — proving no sample was dropped.
+    // never rendered as a preview thumbnail — proving no sample was dropped.
     act(() => useTimeStore.getState().setCurrentTime(bigDomainEnd))
     expect(
       screen.getByRole('button', {
@@ -447,108 +433,66 @@ describe('ImagePropertyTimeline virtualization at scale', () => {
     ).toBeEnabled()
   })
 
-  it('scrolling changes which thumbnails are mounted', () => {
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[bigCamera]}
-      />,
-    )
-    const track = screen.getByLabelText('camera thumbnail timeline')
-    reportContainerWidth(track, 800)
+  it('an active Time Query range repositions samples correctly and still bounds preview count', () => {
+    const queryStart = t0 + 400_000
+    const queryEnd = t0 + 600_000
+    act(() => useTimeStore.getState().applyTimeQuery(queryStart, queryEnd))
+    renderTimeline({ properties: [bigCamera] })
 
-    const initialSrcs = new Set(
-      [...track.querySelectorAll('img')].map((img) => img.getAttribute('src')),
-    )
+    // Roughly 200 of the 1000 samples fall in this narrower query window.
+    const ticks = screen.getAllByRole('button', { name: /^Jump to camera at/ })
+    expect(ticks.length).toBeGreaterThan(150)
+    expect(ticks.length).toBeLessThan(250)
 
-    Object.defineProperty(track, 'scrollLeft', {
-      configurable: true,
-      value: 20_000,
+    const previews = screen.getAllByRole('button', {
+      name: /^Preview camera near/,
     })
-    act(() => {
-      track.dispatchEvent(new Event('scroll'))
-    })
-
-    const scrolledSrcs = new Set(
-      [...track.querySelectorAll('img')].map((img) => img.getAttribute('src')),
-    )
-    expect(scrolledSrcs).not.toEqual(initialSrcs)
-    expect(scrolledSrcs.size).toBeGreaterThan(0)
-    expect(scrolledSrcs.size).toBeLessThan(sampleCount)
+    expect(previews.length).toBeLessThan(sampleCount / 5)
   })
 
-  it('currentTime changes alone do not change which thumbnails are mounted', () => {
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[bigCamera]}
-      />,
-    )
-    const track = screen.getByLabelText('camera thumbnail timeline')
-    reportContainerWidth(track, 800)
+  it('currentTime changes alone do not change which samples are selected as preview thumbnails', () => {
+    renderTimeline({ properties: [bigCamera] })
 
-    const before = [...track.querySelectorAll('img')].map((img) =>
-      img.getAttribute('src'),
-    )
+    const before = screen
+      .getAllByRole('button', { name: /^Preview camera near/ })
+      .map((button) => button.querySelector('img')?.getAttribute('src'))
 
-    act(() => useTimeStore.getState().setCurrentTime(t0 + 1))
-    act(() => useTimeStore.getState().setCurrentTime(t0 + 2))
-    act(() => useTimeStore.getState().setCurrentTime(t0 + 3))
+    act(() => useTimeStore.getState().setCurrentTime(t0 + 1_000))
+    act(() => useTimeStore.getState().setCurrentTime(t0 + 2_000))
+    act(() => useTimeStore.getState().setCurrentTime(t0 + 3_000))
 
-    const after = [...track.querySelectorAll('img')].map((img) =>
-      img.getAttribute('src'),
-    )
+    const after = screen
+      .getAllByRole('button', { name: /^Preview camera near/ })
+      .map((button) => button.querySelector('img')?.getAttribute('src'))
     expect(after).toEqual(before)
   })
 
-  it('the current-time indicator keeps moving even while the thumbnail window stays fixed', () => {
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[bigCamera]}
-      />,
-    )
-    const track = screen.getByLabelText('camera thumbnail timeline')
-    reportContainerWidth(track, 800)
+  it('the current-time cursor keeps moving even while the preview-thumbnail population stays fixed', () => {
+    const { track } = renderTimeline({ properties: [bigCamera] })
 
     const cursor = () => track.querySelector('.image-current-cursor') as HTMLElement
     act(() => useTimeStore.getState().setCurrentTime(t0))
     const firstLeft = cursor().style.left
 
-    act(() => useTimeStore.getState().setCurrentTime(t0 + 5))
+    act(() => useTimeStore.getState().setCurrentTime(t0 + 500_000))
     const secondLeft = cursor().style.left
 
     expect(secondLeft).not.toBe(firstLeft)
   })
 
-  it('thumbnail click resolves the correct source sample by its own timestamp, not by its position in the virtualized DOM', () => {
-    render(
-      <ImagePropertyTimeline
-        featureId="feature-1"
-        propertyName="camera"
-        properties={[bigCamera]}
-      />,
-    )
-    const track = screen.getByLabelText('camera thumbnail timeline')
-    reportContainerWidth(track, 800)
+  it('View Image stays outside the timeline track content (not one of its ticks/thumbnails)', () => {
+    const { track } = renderTimeline({ properties: [bigCamera] })
+    const viewImageButton = screen.getByRole('button', { name: viewImageName })
+    expect(track.contains(viewImageButton)).toBe(false)
+  })
 
-    // A sample from the middle of the range, well outside the initial
-    // (scrollLeft = 0) visible window — reachable only once scrolled into view.
+  it('tick click resolves the correct source sample by its own timestamp, not by DOM/thumbnail position', () => {
+    renderTimeline({ properties: [bigCamera] })
+
     const targetSample = bigCamera.samples[500]!
-    Object.defineProperty(track, 'scrollLeft', {
-      configurable: true,
-      value: 22_000,
-    })
-    act(() => {
-      track.dispatchEvent(new Event('scroll'))
-    })
-
     fireEvent.click(
       screen.getByRole('button', {
-        name: thumbnailName(
+        name: tickName(
           new Date(targetSample.time).toISOString().slice(0, 19).replace('T', ' ') +
             ' UTC',
         ),

@@ -913,17 +913,36 @@ select {
 }
 .image-thumbnail-section {
   flex: 0 0 auto;
-  min-height: 48px;
+  min-height: 58px;
   position: relative;
 }
 .image-thumbnail-track {
-  min-height: 48px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  min-height: 58px;
+  /* Fixed width matching the active temporal range like Measure/Text graphs
+     — the track never scrolls, regardless of sample count. */
+  overflow: hidden;
 }
 .image-thumbnail-rail {
   position: relative;
-  height: 48px;
+  height: 58px;
+}
+/* Every source sample: a lightweight, always-clickable tick — full
+   navigability never depends on how many samples were dense enough to be
+   thinned out of the thumbnail preview layer below. */
+.image-sample-tick {
+  position: absolute;
+  top: 44px;
+  width: 3px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  background: var(--border-strong);
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+.image-sample-tick:hover {
+  background: var(--primary);
 }
 .image-thumbnail-slot {
   position: absolute;

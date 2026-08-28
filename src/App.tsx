@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { FloatingImageViewer } from './components/chart/FloatingImageViewer'
 import { TemporalPropertiesPanel } from './components/chart/TemporalPropertiesPanel'
@@ -28,6 +28,7 @@ export function App() {
   const [fileLoaderOpen, setFileLoaderOpen] = useState(false)
   const [showFeatureExplorer, setShowFeatureExplorer] = useState(true)
   const [showTemporalProperties, setShowTemporalProperties] = useState(true)
+  const selectedFeatureRef = useRef<HTMLElement | null>(null)
   const features = useFeatureStore((state) => state.features)
   const selectedFeatureId = useFeatureStore((state) => state.selectedFeatureId)
   const selectedFeature =
@@ -80,6 +81,7 @@ export function App() {
                 onToggleTemporalProperties={() =>
                   setShowTemporalProperties((visible) => !visible)
                 }
+                selectedFeatureRef={selectedFeatureRef}
                 showFeatureExplorer={showFeatureExplorer}
                 showTemporalProperties={showTemporalProperties}
               />
@@ -93,7 +95,7 @@ export function App() {
           )}
         </div>
       </div>
-      <FloatingImageViewer />
+      <FloatingImageViewer selectedFeatureRef={selectedFeatureRef} />
       <TimelineControls />
       <PlaybackController />
       <LocalFileLoader
