@@ -6,7 +6,7 @@ services:
       # This Compose file is under ./docker, while the Vite project is one level up.
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: moving-features-visualizer
+#    container_name: moving-features-visualizer
     ports:
       - "${VISUALIZER_PORT:-9090}:80"
     restart: unless-stopped
@@ -19,9 +19,9 @@ services:
   mf-api:
     image: ghcr.io/taehoonk/pygeoapi-mf-api:latest
     # For MacOS #
-    platform: linux/amd64
+#    platform: linux/amd64
     # # # # # # #
-    container_name: pygeoapi-mf-api
+#    container_name: pygeoapi-mf-api
 
     volumes:
       - ./mf-api.config.yml:/pygeoapi/local.config.yml:ro
@@ -54,9 +54,9 @@ services:
   mobilitydb:
     image: ghcr.io/taehoonk/pygeoapi-mf-api-mobilitydb:latest
     # For MacOS #
-    platform: linux/amd64
+#    platform: linux/amd64
     # # # # # # #
-    container_name: mobilitydb
+#    container_name: mobilitydb
     ports:
       - "${MOBILITYDB_PORT:-25432}:5432"
     environment:

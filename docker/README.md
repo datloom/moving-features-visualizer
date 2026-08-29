@@ -25,6 +25,8 @@ moving-features-visualizer/
 The workshop assumes these images have already been pulled:
 
 ```bash
+docker pull node:22-alpine
+docker pull nginx:1.27-alpine
 docker pull ghcr.io/taehoonk/pygeoapi-mf-api:latest
 docker pull ghcr.io/taehoonk/pygeoapi-mf-api-mobilitydb:latest
 ```
