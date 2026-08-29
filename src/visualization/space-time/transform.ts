@@ -17,7 +17,7 @@ import type {
 
 export const DEFAULT_TIME_AXIS_HEIGHT = 100_000
 export const DEFAULT_TIME_TICK_COUNT = 6
-export const TIME_AXIS_SCALE_VALUES = [1, 2, 4, 8, 16] as const
+export const TIME_AXIS_SCALE_VALUES = [1, 2, 4, 8, 16, 32, 64, 128] as const
 export type ManualTimeAxisScale = (typeof TIME_AXIS_SCALE_VALUES)[number]
 export type TimeAxisScale = 'auto' | ManualTimeAxisScale
 
