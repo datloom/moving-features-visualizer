@@ -102,67 +102,67 @@ if __name__ == "__main__":
         #         print(each_coordi)
         # print(each_sq["numberMatched"], each_sq["numberReturned"])
 
-    # mf_collection_id = f"http://localhost:5050/collections/{temp_id}"
-    # mf_json_data_path = "/Users/wijaecho/Desktop/Foss4gAsia2024/2026/workshop/mf-cesium/StinuumWeb/data/MF-JSON_prism/PracticeDataSet/mfjson_point_from_mobilitytwin.json"  # Path of MF-JSON data
-    # sampling_size = 10
-    # with open(mf_json_data_path, "r") as fp:
-    #     mf_json_data = json.load(fp)
-    # fp.close()
-    # for each_key in mf_json_data:
-    #     if each_key != "features":
-    #         continue
-    #     for each_feature in mf_json_data[each_key]:
-    #         check = True
-    #         total_size = len(each_feature["temporalGeometry"]["coordinates"])
-    #         print(each_feature)
-    #         if total_size // 10 > 4:
-    #             store_url = ""
-    #             while (len(each_feature["temporalGeometry"]["coordinates"]) > 0):
-    #
-    #                 if check:
-    #                     tempFeature = {"type": "Feature", "properties": each_feature["properties"]}
-    #                     tempGeometry = {
-    #                         "type": each_feature["temporalGeometry"]["type"],
-    #                         "coordinates": each_feature["temporalGeometry"]["coordinates"][:sampling_size],
-    #                         "datetimes": each_feature["temporalGeometry"]["datetimes"][:sampling_size],
-    #                         "interpolation": each_feature["temporalGeometry"]["interpolation"]
-    #                     }
-    #
-    #                     tempFeature["temporalGeometry"] = tempGeometry
-    #                     tempFeature["id"] = each_feature["id"]
-    #                     result = mfapi_handler.post_mf_json(collection_id=mf_collection_id, json_data=tempFeature)
-    #                     store_url = result.headers.get("location")
-    #                     if result.status_code == 200 or result.status_code == 201:
-    #                         print(f"Successfully registered the MF-JSON to MovingFeatureCollection")
-    #                     else:
-    #                         print(f"Failed to register the MF-JSON")
-    #                     check = False
-    #                 else:
-    #                     each_sequence = {
-    #                         "type": each_feature["temporalGeometry"]["type"],
-    #                         "coordinates": each_feature["temporalGeometry"]["coordinates"][:sampling_size],
-    #                         "datetimes": each_feature["temporalGeometry"]["datetimes"][:sampling_size],
-    #                         "interpolation": each_feature["temporalGeometry"]["interpolation"]
-    #                     }
-    #                     tgsequence_url = f"{store_url}/tgsequence"
-    #                     result = mfapi_handler.post_mf_tgsequence(url=tgsequence_url, json_data=each_sequence)
-    #                     print(result.text)
-    #                     if result.status_code == 200 or result.status_code == 201:
-    #                         print(f"Successfully registered the MF-JSON to MovingFeatureCollection")
-    #                     else:
-    #                         print(f"Failed to register the MF-JSON")
-    #
-    #                 each_feature["temporalGeometry"]["coordinates"] = each_feature["temporalGeometry"][
-    #                     "coordinates"][sampling_size:]
-    #                 each_feature["temporalGeometry"]["datetimes"] = each_feature["temporalGeometry"]["datetimes"][
-    #                     sampling_size:]
-    #                 after_size_g = len(each_feature["temporalGeometry"]["coordinates"])
-    #                 after_size_t = len(each_feature["temporalGeometry"]["coordinates"])
-    #                 print(total_size, after_size_g, after_size_t)
+    mf_collection_id = f"http://localhost:5050/collections/{temp_id}"
+    mf_json_data_path = "/Users/wijaecho/Desktop/Foss4gAsia2024/2026/workshop/mf-cesium/StinuumWeb/data/MF-JSON_prism/PracticeDataSet/mfjson_point_from_mobilitytwin.json"  # Path of MF-JSON data
+    sampling_size = 10
+    with open(mf_json_data_path, "r") as fp:
+        mf_json_data = json.load(fp)
+    fp.close()
+    for each_key in mf_json_data:
+        if each_key != "features":
+            continue
+        for each_feature in mf_json_data[each_key]:
+            check = True
+            total_size = len(each_feature["temporalGeometry"]["coordinates"])
+            print(each_feature)
+            if total_size // 10 > 4:
+                store_url = ""
+                while (len(each_feature["temporalGeometry"]["coordinates"]) > 0):
 
-            # else:
-            #     result = mfapi_handler.post_mf_json(collection_id=mf_collection_id, json_data=mf_json_data[each_key])
-            #     if result.status_code == 200 or result.status_code == 201:
-            #         print(f"Successfully registered the MF-JSON to MovingFeatureCollection")
-            #     else:
-            #         print(f"Failed to register the MF-JSON")
+                    if check:
+                        tempFeature = {"type": "Feature", "properties": each_feature["properties"]}
+                        tempGeometry = {
+                            "type": each_feature["temporalGeometry"]["type"],
+                            "coordinates": each_feature["temporalGeometry"]["coordinates"][:sampling_size],
+                            "datetimes": each_feature["temporalGeometry"]["datetimes"][:sampling_size],
+                            "interpolation": each_feature["temporalGeometry"]["interpolation"]
+                        }
+
+                        tempFeature["temporalGeometry"] = tempGeometry
+                        tempFeature["id"] = each_feature["id"]
+                        result = mfapi_handler.post_mf_json(collection_id=mf_collection_id, json_data=tempFeature)
+                        store_url = result.headers.get("location")
+                        if result.status_code == 200 or result.status_code == 201:
+                            print(f"Successfully registered the MF-JSON to MovingFeatureCollection")
+                        else:
+                            print(f"Failed to register the MF-JSON")
+                        check = False
+                    else:
+                        each_sequence = {
+                            "type": each_feature["temporalGeometry"]["type"],
+                            "coordinates": each_feature["temporalGeometry"]["coordinates"][:sampling_size],
+                            "datetimes": each_feature["temporalGeometry"]["datetimes"][:sampling_size],
+                            "interpolation": each_feature["temporalGeometry"]["interpolation"]
+                        }
+                        tgsequence_url = f"{store_url}/tgsequence"
+                        result = mfapi_handler.post_mf_tgsequence(url=tgsequence_url, json_data=each_sequence)
+                        print(result.text)
+                        if result.status_code == 200 or result.status_code == 201:
+                            print(f"Successfully registered the MF-JSON to MovingFeatureCollection")
+                        else:
+                            print(f"Failed to register the MF-JSON")
+
+                    each_feature["temporalGeometry"]["coordinates"] = each_feature["temporalGeometry"][
+                        "coordinates"][sampling_size:]
+                    each_feature["temporalGeometry"]["datetimes"] = each_feature["temporalGeometry"]["datetimes"][
+                        sampling_size:]
+                    after_size_g = len(each_feature["temporalGeometry"]["coordinates"])
+                    after_size_t = len(each_feature["temporalGeometry"]["coordinates"])
+                    print(total_size, after_size_g, after_size_t)
+
+            else:
+                result = mfapi_handler.post_mf_json(collection_id=mf_collection_id, json_data=mf_json_data[each_key])
+                if result.status_code == 200 or result.status_code == 201:
+                    print(f"Successfully registered the MF-JSON to MovingFeatureCollection")
+                else:
+                    print(f"Failed to register the MF-JSON")
