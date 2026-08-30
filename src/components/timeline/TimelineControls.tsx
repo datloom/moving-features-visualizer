@@ -2,7 +2,7 @@ import { useTimeStore } from '../../store/timeStore'
 import { Icon } from '../ui/Icon'
 import { TimeQueryButton } from './TimeQueryButton'
 
-const PLAYBACK_RATES = [0.5, 1, 2, 4, 10, 20, 40, 60, 80, 100] as const
+const PLAYBACK_RATES = [0.5, 1, 2, 4, 10, 20, 40, 60, 80, 100, 1000, 2000, 4000, 6000, 8000, 10000] as const
 
 const formatCurrentTime = (timestamp: number): string =>
   `${new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ')} UTC`
